@@ -1,6 +1,7 @@
 # Audit Builder
 
-Offline replacement for `Audit.xlsm`. The whole app is one file: **`dist/AuditBuilder.html`**. Copy it anywhere and open it in Chrome or Edge; nothing needs installing.
+Offline replacement for `Audit.xlsm`. The whole app is one file: **`AuditBuilder.html`**. Copy it anywhere and open it in Chrome or Edge; nothing needs installing.
+Coworkers get it as a zip from the shared Drive folder; see `docs/How to use Audit Builder.txt`.
 
 ## Using it
 1. **Project setup** opens automatically: project number, end client, item prefix.
@@ -16,7 +17,8 @@ Work is also auto-saved in the browser, but the project file is the real record.
 ```
 npm install
 npm test        # rule tests + comparison with real Audit.xlsm output
-npm run build   # writes dist/AuditBuilder.html
+npm run build   # writes AuditBuilder.html
+npm run package # also writes dist/AuditBuilder <version>.zip (app + user guide) for the shared Drive folder
 ```
 - `src/engine/` – all calculation rules (one function per old formula), no browser code
 - `src/ui/` – screens, styles, file import/export

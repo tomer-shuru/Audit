@@ -40,7 +40,8 @@ code { font-family: var(--mono); background: var(--surface-2); padding: 0 4px; b
 
 /* top bar */
 .topbar { display: flex; align-items: center; gap: 8px; padding: 10px 20px; background: var(--surface); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
-.brand { font-weight: 700; font-size: 15px; margin-right: 8px; }
+.brand { font-weight: 700; font-size: 15px; margin-right: 8px; white-space: nowrap; }
+.version { font-weight: 400; font-size: 12px; color: var(--muted); margin-left: 4px; }
 .project-chip { display: flex; gap: 10px; align-items: baseline; border: 1px solid var(--border); background: var(--surface-2); color: var(--text);
   border-radius: 999px; padding: 4px 14px; cursor: pointer; font: inherit; }
 .project-chip span { color: var(--muted); }
@@ -176,7 +177,7 @@ dialog label input { font-weight: 400; }
 </head>
 <body>
 <header class="topbar">
-  <div class="brand">Audit Builder</div>
+  <div class="brand">Audit Builder <span class="version" title="Version of this app. Compare with the newest zip in the shared folder.">2026-10-07 1212</span></div>
   <button id="projectChip" class="project-chip" title="Edit project settings"></button>
   <span id="saveState" class="save-state"></span>
   <div class="spacer"></div>

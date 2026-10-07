@@ -7,6 +7,7 @@
   "scripts": {
     "test": "node --test \"test/**/*.test.mjs\"",
     "build": "node scripts/build.mjs",
+    "package": "node scripts/build.mjs --zip",
     "fixture": "node scripts/extract-fixture.mjs"
   },
   "devDependencies": {

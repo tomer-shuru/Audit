@@ -1,10 +1,10 @@
-// Minimal static server for previewing dist/ during development: node scripts/serve.mjs [port]
+// Minimal static server for previewing AuditBuilder.html during development: node scripts/serve.mjs [port]
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const dist = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'dist');
+const dist = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const port = Number(process.argv[2] || 5180);
 http.createServer((req, res) => {
   const name = decodeURIComponent(new URL(req.url, 'http://x').pathname).replace(/^\/+/, '') || 'AuditBuilder.html';

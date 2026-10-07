@@ -1,0 +1,98 @@
+AUDIT BUILDER - SETUP AND USE
+=============================
+
+Audit Builder replaces the old Audit.xlsm file. It runs in your web browser
+(Chrome or Edge), but nothing is uploaded anywhere: all your data stays on
+your computer.
+
+
+INSTALLING
+----------
+
+1. In the shared Google Drive folder, download the newest zip,
+   for example "AuditBuilder 2026-10-07 1530.zip".
+   The date and time in the name is the version.
+
+2. Find the zip in your Downloads folder, right-click it > Extract All...
+   Extract it to your Documents folder. You get a folder called
+   "Audit Builder" with the app inside.
+   (Always extract to this same place, so updates replace the old copy.)
+
+3. Make a desktop shortcut:
+   open the "Audit Builder" folder, right-click AuditBuilder.html >
+   Send to > Desktop (create shortcut).
+   (On Windows 11, click "Show more options" first to see "Send to".)
+
+4. Have Chrome or Edge ask where to save files (recommended):
+   - Chrome: Settings > Downloads > turn on "Ask where to save each file
+     before downloading".
+   - Edge: Settings > Downloads > turn on "Ask me where to save each file
+     before downloading".
+   This lets you choose where project files are saved instead of everything
+   going to Downloads.
+
+
+OPENING THE APP
+---------------
+
+Double-click the desktop shortcut. It opens in your browser, and works
+without internet.
+
+If it opens in Notepad or shows code instead: right-click AuditBuilder.html >
+Open with > Google Chrome (or Microsoft Edge), and tick "Always use this app".
+
+Don't open the app from the Google Drive website or straight from inside the
+zip. Extract it first.
+
+
+UPDATING
+--------
+
+The version is shown at the top left of the app, next to its name.
+If the shared Drive folder has a zip with a newer date and time:
+download it and extract it to the same place as before (Documents). When
+Windows asks, choose "Replace the files in the destination".
+Your desktop shortcut keeps working, and your current work is kept.
+
+
+DOING A PROJECT
+---------------
+
+1. New project: click "New" and fill in the project number, end client and
+   item code prefix (for example GG).
+2. Data tab: click "Add files..." and choose the Blancco exports (.csv, .xlsx
+   or .zip). You can choose several at once or drag them onto the box.
+   Paste the Mac report lines and the Windows report lines in their boxes.
+3. Manual entries tab: add devices the tools can't read (dead, locked, no
+   report). Click "Add item" and type the details.
+4. Review tab: check the "Checks" list at the top. Rows with a problem are
+   highlighted, and clicking a check jumps to its row. Click any cell to
+   correct it. Edited cells turn blue, and clearing a cell undoes your edit.
+5. Export tab: click "Copy rows" and paste into the Google Sheet. If there
+   are locked or faulty devices, copy that list too.
+
+
+SAVING AND SHARING PROJECTS
+---------------------------
+
+- The app keeps your current work automatically, so closing the window by
+  accident doesn't lose anything. That copy only exists on your computer
+  and in that browser, though.
+- To keep a project or pass it to someone else, click "Save project". It
+  saves a file named after the project number (e.g. SHR11734.audit.json).
+  Upload that file to the Projects folder in the shared Drive.
+- To continue a project, yours or someone else's: download its file from the
+  Projects folder in Drive, then click "Open..." in the app and choose it.
+- If two people work on the same project at the same time, their changes
+  don't merge. Agree who has it.
+- An old Audit.xlsm can be opened with "Open..." too.
+
+
+MODELS LIST
+-----------
+
+The "Models" button holds the model list, type mapping, weights and
+diagnostic codes. Changes you make there are saved on your computer only.
+To share a change, click Export and upload the file to the Models folder in
+Drive; others download it and click Import. Or ask Tomer to add it to the
+app, so everyone gets it in the next version.
