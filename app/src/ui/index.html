@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Audit Builder</title>
+<style>/*CSS*/</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">Audit Builder</div>
+  <button id="projectChip" class="project-chip" title="Edit project settings"></button>
+  <span id="saveState" class="save-state"></span>
+  <div class="spacer"></div>
+  <button class="btn ghost" id="btnNew">New</button>
+  <button class="btn ghost" id="btnOpen" title="Open a saved project (.audit.json) or import an old Audit.xlsm">Open…</button>
+  <button class="btn" id="btnSave">Save project</button>
+  <button class="btn ghost" id="btnModels">Models</button>
+  <input type="file" id="openFile" accept=".json,.xlsm,.xlsx" hidden>
+</header>
+
+<nav id="tabs" class="tabs">
+  <button data-tab="data"><span class="step">1</span>Data<span class="count"></span></button>
+  <button data-tab="manual"><span class="step">2</span>Manual entries<span class="count"></span></button>
+  <button data-tab="review"><span class="step">3</span>Review<span class="count"></span></button>
+  <button data-tab="export"><span class="step">4</span>Export<span class="count"></span></button>
+</nav>
+
+<main id="main"></main>
+
+<dialog id="setupDialog">
+  <form id="setupForm" method="dialog">
+    <h2>Project setup</h2>
+    <p class="hint">These are used for every item code and on the report. You can change them later by clicking the project name at the top.</p>
+    <label>Project number<input name="projectNumber" required placeholder="SHR11734" autocomplete="off"></label>
+    <label>End client<input name="endClient" required placeholder="Client name" autocomplete="off"></label>
+    <div class="row2">
+      <label>Item code prefix<input name="prefix" required placeholder="GG" pattern="[A-Za-z0-9]+" title="Letters and numbers only" autocomplete="off"></label>
+      <label>Start number<input name="startNumber" type="number" min="0" required value="1"></label>
+    </div>
+    <p id="setupPreview" class="preview"></p>
+    <div class="dialog-actions">
+      <button type="button" class="btn ghost" id="setupCancel">Cancel</button>
+      <button type="submit" class="btn primary">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="modelsDialog" class="wide">
+  <div class="dialog-head">
+    <h2>Models</h2>
+    <div class="actions">
+      <button class="btn ghost" id="modelsImport">Import…</button>
+      <button class="btn ghost" id="modelsExport">Export</button>
+      <button class="btn ghost" id="modelsReset">Reset to defaults</button>
+      <button class="btn primary" id="modelsClose">Done</button>
+    </div>
+    <input type="file" id="modelsFile" accept=".json" hidden>
+  </div>
+  <div id="modelsBody"></div>
+</dialog>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<script>/*JS*/</script>
+</body>
+</html>

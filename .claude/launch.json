@@ -1,0 +1,1 @@
+{ "version": "0.0.1", "configurations": [ { "name": "audit-builder", "runtimeExecutable": "node", "runtimeArgs": ["app/scripts/serve.mjs", "5180"], "port": 5180 } ] }

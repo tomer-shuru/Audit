@@ -1,0 +1,16 @@
+{
+  "name": "audit-app",
+  "version": "0.1.0",
+  "description": "Offline audit report builder (replaces Audit.xlsm)",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test \"test/**/*.test.mjs\"",
+    "build": "node scripts/build.mjs",
+    "fixture": "node scripts/extract-fixture.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+  }
+}
