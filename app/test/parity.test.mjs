@@ -2,10 +2,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildReport, REPORT_COLUMNS, LOCKED_COLUMNS } from '../src/engine/report.js';
+import { formatDiagnostics } from '../src/engine/rules.js';
 import { loadFixture, fixtureNames } from './fixture.js';
 import models from '../src/data/default-models.json' with { type: 'json' };
 
 const cell = v => (v == null ? '' : String(v));
+
+// Deliberate improvements over the workbook: the Excel value is passed through these before comparing
+const INTENTIONAL = {
+  diagnostics: formatDiagnostics, // capitalised phrases and grade letters
+};
 
 for (const name of fixtureNames()) {
   test(`Audit Report matches workbook (${name})`, () => {
@@ -17,7 +23,8 @@ for (const name of fixtureNames()) {
       const row = got.get(exp[0]);
       if (!row) { diffs.push(`${exp[0]}: missing from app output`); continue; }
       REPORT_COLUMNS.forEach(([key, label], j) => {
-        if (cell(row[key]) !== cell(exp[j])) diffs.push(`${exp[0]} ${label}: app=${JSON.stringify(cell(row[key]))} excel=${JSON.stringify(cell(exp[j]))}`);
+        const want = INTENTIONAL[key] ? INTENTIONAL[key](cell(exp[j])) : cell(exp[j]);
+        if (cell(row[key]) !== want) diffs.push(`${exp[0]} ${label}: app=${JSON.stringify(cell(row[key]))} excel=${JSON.stringify(want)}`);
       });
     }
     const extra = rows.filter(r => !expected.some(e => e[0] === r.itemLookup)).map(r => r.itemLookup);

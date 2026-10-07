@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import * as XLSX from 'xlsx';
-import { parsePastedTable, downloadXlsx, reportTsv } from '../src/ui/io.js';
+import { parsePastedTable, downloadXlsx, reportTsv, readTableFiles } from '../src/ui/io.js';
 import { buildReport } from '../src/engine/report.js';
 import { loadFixture, fixtureNames } from './fixture.js';
 import models from '../src/data/default-models.json' with { type: 'json' };
@@ -16,6 +16,22 @@ test('pasted Blancco rows keep serials and text as-is', () => {
   assert.deepEqual(t, [['System serial', 'Disk serial', 'Capacity', 'Erasure state'], ['0012345', '212730498071', '51', 'Successful']]);
   const c = parsePastedTable('System serial,Comment\nABC,"CD B, DI C"\n');
   assert.deepEqual(c[1], ['ABC', 'CD B, DI C']);
+});
+
+test('reads several files, including .zip files with CSVs in sub-folders', async () => {
+  const zip = XLSX.CFB.utils.cfb_new();
+  XLSX.CFB.utils.cfb_add(zip, 'a.csv', Buffer.from('System serial,Erasure state\nAAA,Successful\n'));
+  XLSX.CFB.utils.cfb_add(zip, 'sub/b.csv', Buffer.from('System serial,Erasure state\nBBB,Failed\n'));
+  XLSX.CFB.utils.cfb_add(zip, 'readme.pdf', Buffer.from('not a table'));
+  const zipBytes = XLSX.CFB.write(zip, { fileType: 'zip', type: 'buffer' });
+  const files = [
+    new File([zipBytes], 'export.zip'),
+    new File(['System serial,Erasure state\nCCC,Successful\n'], 'c.csv'),
+  ];
+  const out = await readTableFiles(files);
+  assert.deepEqual(out.map(f => f.name).sort(), ['c.csv', 'export.zip › a.csv', 'export.zip › sub/b.csv']);
+  assert.deepEqual(out.find(f => f.name.endsWith('b.csv')).table, [['System serial', 'Erasure state'], ['BBB', 'Failed']]);
+  await assert.rejects(readTableFiles([new File(['x'], 'notes.pdf')]), /isn't a \.csv/);
 });
 
 test('xlsx export has Audit Report and Locked and Faulty sheets', { skip: !fixtureNames().length }, () => {

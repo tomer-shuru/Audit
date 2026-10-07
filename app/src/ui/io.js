@@ -8,12 +8,35 @@ const trimTable = rows => {
   return out;
 };
 
-// Blancco export from a file (.csv / .xlsx / .xls); returns array of arrays incl. header row
-export async function readTableFile(file) {
-  const buf = await file.arrayBuffer();
-  const wb = XLSX.read(buf, { raw: /\.csv$|\.txt$/i.test(file.name), cellDates: false });
+const TABLE_EXT = /\.(csv|txt|xlsx|xls)$/i;
+
+function tableFromBytes(bytes, name) {
+  const wb = XLSX.read(bytes, { type: 'array', raw: /\.(csv|txt)$/i.test(name), cellDates: false });
   const ws = wb.Sheets[wb.SheetNames[0]];
   return trimTable(XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' }));
+}
+
+// Blancco exports from files (.csv / .xlsx / .xls, or .zip files containing them).
+// Returns [{ name, table }] where table is an array of arrays incl. the header row.
+export async function readTableFiles(files) {
+  const out = [];
+  for (const file of files) {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    if (/\.zip$/i.test(file.name)) {
+      const zip = XLSX.CFB.read(bytes, { type: 'array' });
+      zip.FileIndex.forEach((entry, i) => {
+        const inner = zip.FullPaths[i].replace(/^Root Entry\//, '').replace(/\\/g, '/');
+        const base = inner.split('/').pop();
+        if (entry.type !== 2 || !entry.size || !TABLE_EXT.test(base) || base.startsWith('.') || inner.startsWith('__MACOSX/')) return;
+        out.push({ name: `${file.name} › ${inner}`, table: tableFromBytes(new Uint8Array(entry.content), base) });
+      });
+    } else if (TABLE_EXT.test(file.name)) {
+      out.push({ name: file.name, table: tableFromBytes(bytes, file.name) });
+    } else {
+      throw new Error(`${file.name} isn't a .csv, .xlsx or .zip file`);
+    }
+  }
+  return out;
 }
 
 // Blancco data pasted from Excel / a CSV file (tab- or comma-separated, header row first)
@@ -43,12 +66,10 @@ export async function importWorkbook(file) {
     MY_AUDIT_FIELDS.forEach((f, j) => { if (f && r[j] !== '' && r[j] != null) rec[f] = String(r[j]); });
     if (Object.keys(rec).length && r[0]) manual[String(r[0])] = rec;
   }
+  const blancco = trimTable(input.map(r => r.slice(3, 33).map(v => (v == null ? '' : String(v)))));
   return {
-    settings: {
-      projectNumber: String(input[1]?.[0] ?? ''), prefix: String(input[3]?.[0] ?? ''),
-      endClient: String(input[5]?.[0] ?? ''), startNumber: Number(input[7]?.[0] || 1),
-    },
-    inputs: { mac: col(1), windows: col(2), blancco: trimTable(input.map(r => r.slice(3, 33).map(v => (v == null ? '' : String(v))))) },
+    settings: { projectNumber: String(input[1]?.[0] ?? ''), prefix: String(input[3]?.[0] ?? ''), endClient: String(input[5]?.[0] ?? '') },
+    inputs: { mac: col(1), windows: col(2), blanccoFiles: blancco.length > 1 ? [{ name: `${file.name} (Input sheet)`, table: blancco }] : [] },
     manual, overrides: {},
   };
 }

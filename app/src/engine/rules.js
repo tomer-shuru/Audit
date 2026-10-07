@@ -146,5 +146,15 @@ export function expandDiagCodes(txt, diagCodes) {
   return excelTrim(padded).split(' , ').join(', ');
 }
 
+// "display b, screen scratches b" -> "Display B, Screen scratches B":
+// each comma-separated part starts with a capital, and a trailing grade letter is upper-cased
+export function formatDiagnostics(txt) {
+  return str(txt).split(',').map(p => p.trim()).filter(p => p !== '').map(p => {
+    let s = p.charAt(0).toUpperCase() + p.slice(1);
+    s = s.replace(/(\s)([a-z])$/i, (m, sp, letter) => sp + letter.toUpperCase());
+    return s;
+  }).join(', ');
+}
+
 // Excel PROPER
 export const proper = s => str(s).toLowerCase().replace(/(^|[^a-z])([a-z])/g, (m, p, c) => p + c.toUpperCase());

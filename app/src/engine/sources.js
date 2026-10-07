@@ -53,6 +53,35 @@ export const BLANCCO_COLUMNS = {
   comment1: 'Comment', comment2: 'Comment2', comment3: 'Comment3', comment4: 'Comment4', comment5: 'Comment5', comment6: 'Comment6',
 };
 
+// Combines several exports (each an array of arrays with its own header row) into one table.
+// Columns are lined up by header name; rows that appear in more than one file are kept once.
+export function mergeTables(tables) {
+  const valid = tables.filter(t => t && t.length > 0);
+  if (valid.length === 0) return [];
+  const header = [];
+  const pos = new Map();
+  for (const t of valid) {
+    for (const h of t[0]) {
+      const k = str(h).trim().toLowerCase();
+      if (k !== '' && !pos.has(k)) { pos.set(k, header.length); header.push(str(h).trim()); }
+    }
+  }
+  const out = [header];
+  const seen = new Set();
+  for (const t of valid) {
+    const map = t[0].map(h => pos.get(str(h).trim().toLowerCase()));
+    for (const r of t.slice(1)) {
+      if (!r.some(v => !isBlank(v))) continue;
+      const row = new Array(header.length).fill('');
+      r.forEach((v, j) => { if (map[j] !== undefined) row[map[j]] = v ?? ''; });
+      const key = JSON.stringify(row);
+      if (seen.has(key)) continue;
+      seen.add(key); out.push(row);
+    }
+  }
+  return out;
+}
+
 // rows: array of arrays, first row = headers
 export function normalizeBlancco(table) {
   if (!table || table.length === 0) return { rows: [], missing: [] };

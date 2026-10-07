@@ -1,8 +1,8 @@
 // Merges every source into the final Audit Report and Locked and Faulty lists.
 // Replaces sheets: Audit Report, Locked and Faulty, My_Audit (manual entries).
-import { str, isBlank, joinNonEmpty, expandDiagCodes, proper } from './rules.js';
+import { str, isBlank, joinNonEmpty, expandDiagCodes, formatDiagnostics, proper } from './rules.js';
 import {
-  itemKey, makeLookups, parseMacLines, parseWindowsLines, normalizeBlancco, erasureSummary,
+  itemKey, makeLookups, mergeTables, parseMacLines, parseWindowsLines, normalizeBlancco, erasureSummary,
   macRecord, windowsRecord, blanccoRecords,
 } from './sources.js';
 
@@ -40,8 +40,8 @@ const first = (...vals) => { for (const v of vals) if (!isBlank(v)) return v; re
 
 /**
  * project = {
- *   settings: { projectNumber, prefix, endClient, startNumber },
- *   inputs: { mac: string, windows: string, blancco: string[][] (with header row) },
+ *   settings: { projectNumber, prefix, endClient },
+ *   inputs: { mac: string, windows: string, blanccoFiles: [{ name, table: string[][] (with header row) }] },
  *   manual: { [itemCode]: { field: value } },      // My_Audit-style entries (merged like the workbook)
  *   overrides: { [itemCode]: { field: value } },   // Review-table edits (replace the final value)
  * }
@@ -53,8 +53,9 @@ export function buildReport(project, models) {
 
   const macLines = parseMacLines(inputs.mac);
   const winLines = parseWindowsLines(inputs.windows);
-  const blanccoTable = normalizeBlancco(inputs.blancco);
-  if (blanccoTable.missing.length && (inputs.blancco || []).length > 1) {
+  const blanccoInput = inputs.blanccoFiles ? mergeTables(inputs.blanccoFiles.map(f => f.table)) : (inputs.blancco || []);
+  const blanccoTable = normalizeBlancco(blanccoInput);
+  if (blanccoTable.missing.length && blanccoInput.length > 1) {
     warnings.push({ level: 'error', text: `Blancco export is missing columns: ${blanccoTable.missing.join(', ')}` });
   }
   const blanccoResult = erasureSummary(blanccoTable.rows);
@@ -94,13 +95,13 @@ export function buildReport(project, models) {
     return a.localeCompare(b);
   });
 
-  const outside = sorted.filter(k => numOf(k) === null || numOf(k) < Number(settings.startNumber || 1));
-  if (outside.length) warnings.push({ level: 'warn', text: `Item codes outside this project's numbering (${settings.prefix}${String(settings.startNumber || 1).padStart(2, '0')}…): ${outside.join(', ')}` });
+  const outside = sorted.filter(k => numOf(k) === null);
+  for (const k of outside) warnings.push({ level: 'warn', item: k, text: `${k}: item code doesn't follow this project's numbering (${settings.prefix}01, ${settings.prefix}02…)` });
 
   const nums = sorted.map(numOf).filter(n => n !== null);
   if (nums.length) {
     const have = new Set(nums); const gaps = [];
-    for (let n = Math.max(Number(settings.startNumber || 1), Math.min(...nums)); n <= Math.max(...nums); n++) if (!have.has(n)) gaps.push(n);
+    for (let n = Math.min(...nums); n <= Math.max(...nums); n++) if (!have.has(n)) gaps.push(n);
     if (gaps.length) warnings.push({ level: 'info', text: `No data yet for: ${compressRanges(gaps).map(([a, b]) => a === b ? itemCode(settings, a) : `${itemCode(settings, a)}–${itemCode(settings, b)}`).join(', ')}` });
   }
 
@@ -119,7 +120,7 @@ export function buildReport(project, models) {
       // Screen: Mac, then Windows, then typed (blank Blancco screens are never used)
       screen: first(man.screen, m ? m.screen : (w ? w.screen : '')),
       year: pick('year'), cpu: pick('cpu'), ram: pick('ram'), disk: pick('disk'),
-      diagnostics: expandDiagCodes(joinNonEmpty(', ', man.locked, man.diagnostics, m?.diagnostics, w?.diagnostics, c?.diagnostics), lk.diagCodes),
+      diagnostics: formatDiagnostics(expandDiagCodes(joinNonEmpty(', ', man.locked, man.diagnostics, m?.diagnostics, w?.diagnostics, c?.diagnostics), lk.diagCodes)),
       blancco: pick('blancco'),
       snDataCarrier: str(man.snDataCarrier), noDataCarrier: str(man.noDataCarrier),
       comments: str(man.comments), powerSupply: str(man.powerSupply),
@@ -140,7 +141,8 @@ export function buildReport(project, models) {
     if (m?.unknownModel) warnings.push({ level: 'warn', item: code, text: `${code}: Mac model "${m.unknownModel}" isn't in the Models list` });
     if (c && isBlank(row.cpu) && !isBlank(c.rawCpu)) warnings.push({ level: 'warn', item: code, text: `${code}: couldn't shorten CPU "${c.rawCpu}"` });
     if (/fail/i.test(row.blancco)) warnings.push({ level: 'error', item: code, text: `${code}: erasure failed (${row.blancco})` });
-    if ((m || w) && isBlank(row.blancco) && !man.blancco) warnings.push({ level: 'warn', item: code, text: `${code}: no Blancco erasure found for S.N. ${row.sn}` });
+    if ((m || w) && isBlank(row.blancco)) warnings.push({ level: 'warn', item: code, text: `${code}: no Blancco erasure found for S.N. ${row.sn}` });
+    if (isBlank(row.diagnostics)) warnings.push({ level: 'warn', item: code, text: `${code}: Diagnostics is empty` });
     return row;
   });
 

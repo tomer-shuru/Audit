@@ -16,6 +16,7 @@
   <button class="btn ghost" id="btnOpen" title="Open a saved project (.audit.json) or import an old Audit.xlsm">Open…</button>
   <button class="btn" id="btnSave">Save project</button>
   <button class="btn ghost" id="btnModels">Models</button>
+  <button class="btn ghost theme-btn" id="btnTheme" aria-label="Toggle light or dark mode"></button>
   <input type="file" id="openFile" accept=".json,.xlsm,.xlsx" hidden>
 </header>
 
@@ -34,10 +35,7 @@
     <p class="hint">These are used for every item code and on the report. You can change them later by clicking the project name at the top.</p>
     <label>Project number<input name="projectNumber" required placeholder="SHR11734" autocomplete="off"></label>
     <label>End client<input name="endClient" required placeholder="Client name" autocomplete="off"></label>
-    <div class="row2">
-      <label>Item code prefix<input name="prefix" required placeholder="GG" pattern="[A-Za-z0-9]+" title="Letters and numbers only" autocomplete="off"></label>
-      <label>Start number<input name="startNumber" type="number" min="0" required value="1"></label>
-    </div>
+    <label>Item code prefix<input name="prefix" required placeholder="GG" pattern="[A-Za-z0-9]+" title="Letters and numbers only" autocomplete="off"></label>
     <p id="setupPreview" class="preview"></p>
     <div class="dialog-actions">
       <button type="button" class="btn ghost" id="setupCancel">Cancel</button>

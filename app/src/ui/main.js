@@ -1,9 +1,9 @@
 // Audit Builder - browser UI
 import { buildReport, REPORT_COLUMNS, LOCKED_COLUMNS, MANUAL_FIELDS, EDITABLE, itemCode } from '../engine/report.js';
-import { normalizeBlancco, parseMacLines, parseWindowsLines, itemKey } from '../engine/sources.js';
+import { normalizeBlancco, mergeTables, parseMacLines, parseWindowsLines, itemKey } from '../engine/sources.js';
 import defaultModels from '../data/default-models.json';
 import {
-  readTableFile, parsePastedTable, importWorkbook, downloadXlsx, reportTsv, lockedTsv,
+  readTableFiles, parsePastedTable, importWorkbook, downloadXlsx, reportTsv, lockedTsv,
   copyText, downloadJson, readJsonFile,
 } from './io.js';
 
@@ -13,12 +13,25 @@ const STORE_TAB = 'auditApp.tab';
 
 // ---------- state ----------
 const emptyProject = () => ({
-  version: 1,
-  settings: { projectNumber: '', prefix: '', endClient: '', startNumber: 1 },
-  inputs: { mac: '', windows: '', blancco: [], blanccoSource: '' },
+  version: 2,
+  settings: { projectNumber: '', prefix: '', endClient: '' },
+  inputs: { mac: '', windows: '', blanccoFiles: [] },
   manual: {}, overrides: {},
   savedToFile: true,
 });
+
+// bring projects saved by older versions up to date
+function migrate(p) {
+  const project = Object.assign(emptyProject(), p);
+  project.inputs = Object.assign(emptyProject().inputs, p.inputs);
+  const inp = project.inputs;
+  if (Array.isArray(inp.blancco)) {
+    if (!inp.blanccoFiles.length && inp.blancco.length > 1) inp.blanccoFiles = [{ name: inp.blanccoSource || 'Blancco export', table: inp.blancco }];
+    delete inp.blancco; delete inp.blanccoSource;
+  }
+  delete project.settings.startNumber;
+  return project;
+}
 
 const load = (key, fallback) => {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch { return fallback; }
@@ -26,15 +39,16 @@ const load = (key, fallback) => {
 const store = (key, val) => { try { localStorage.setItem(key, JSON.stringify(val)); } catch { /* storage unavailable */ } };
 
 const state = {
-  project: Object.assign(emptyProject(), load(STORE_PROJECT, {})),
+  project: migrate(load(STORE_PROJECT, {})),
   models: load(STORE_MODELS, null) || structuredClone(defaultModels),
   tab: load(STORE_TAB, 'data'),
   report: null,
   reviewFilter: '', reviewIssuesOnly: false,
   modelsTab: 'models',
+  manualSelected: new Set(),
 };
 
-const settingsComplete = s => s.projectNumber.trim() && s.prefix.trim() && s.endClient.trim() && Number(s.startNumber) >= 0;
+const settingsComplete = s => s.projectNumber.trim() && s.prefix.trim() && s.endClient.trim();
 
 function recompute() {
   state.report = buildReport(state.project, state.models);
@@ -52,23 +66,25 @@ const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 
 let toastTimer;
-function toast(msg, kind = 'ok') {
+function toast(msg, kind = 'ok', action = null) {
   const t = $('#toast');
-  t.textContent = msg; t.className = `toast show ${kind}`;
+  t.innerHTML = `<span>${esc(msg)}</span>${action ? `<button class="toast-action">${esc(action.label)}</button>` : ''}`;
+  t.className = `toast show ${kind}`;
+  if (action) t.querySelector('button').onclick = () => { t.className = 'toast'; action.run(); };
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { t.className = 'toast'; }, 2600);
+  toastTimer = setTimeout(() => { t.className = 'toast'; }, action ? 6000 : 2600);
 }
 
+// suggest the code after the highest one used so far (GG01 for an empty project)
 function nextFreeCode() {
   const p = state.project.settings;
-  const used = new Set([
-    ...Object.keys(state.project.manual).map(itemKey),
-    ...state.report.rows.map(r => itemKey(r.itemLookup)),
-  ]);
-  for (let n = Number(p.startNumber || 1); ; n++) {
-    const c = itemCode(p, n);
-    if (!used.has(itemKey(c))) return c;
+  const prefix = itemKey(p.prefix);
+  let max = 0;
+  for (const code of [...Object.keys(state.project.manual), ...state.report.rows.map(r => r.itemLookup)]) {
+    const k = itemKey(code);
+    if (k.startsWith(prefix) && /^\d+$/.test(k.slice(prefix.length))) max = Math.max(max, Number(k.slice(prefix.length)));
   }
+  return itemCode(p, max + 1);
 }
 
 // ---------- chrome (header + tabs) ----------
@@ -76,7 +92,7 @@ function renderChrome() {
   const s = state.project.settings;
   const r = state.report;
   $('#projectChip').innerHTML = settingsComplete(s)
-    ? `<b>${esc(s.projectNumber)}</b><span>${esc(s.endClient)}</span><span>${esc(itemCode(s, s.startNumber))}…</span>`
+    ? `<b>${esc(s.projectNumber)}</b><span>${esc(s.endClient)}</span><span>${esc(s.prefix)}</span>`
     : '<b>No project set up</b>';
   $('#saveState').textContent = state.project.savedToFile ? '' : 'Unsaved changes';
   const errors = r.warnings.filter(w => w.level === 'error').length;
@@ -96,34 +112,54 @@ function renderChrome() {
 function render() {
   renderChrome();
   const main = $('#main');
-  ({ data: renderData, manual: renderManual, review: renderReview, export: renderExport })[state.tab](main);
+  const views = { data: renderData, manual: renderManual, review: renderReview, export: renderExport };
+  keepScroll(main, () => views[state.tab](main));
+}
+
+// re-render without making tables jump back to the top-left
+function keepScroll(main, draw) {
+  const before = [...main.querySelectorAll('.table-wrap')].map(w => [w.scrollLeft, w.scrollTop]);
+  const tab = main.dataset.tab;
+  draw();
+  main.dataset.tab = state.tab;
+  if (tab !== state.tab) return;
+  main.querySelectorAll('.table-wrap').forEach((w, i) => { if (before[i]) [w.scrollLeft, w.scrollTop] = before[i]; });
 }
 
 // ---------- Data tab ----------
 function renderData(main) {
   const inp = state.project.inputs;
-  const bl = normalizeBlancco(inp.blancco);
-  const serials = new Set(bl.rows.map(r => r.serial).filter(Boolean));
+  const files = inp.blanccoFiles;
+  const merged = normalizeBlancco(mergeTables(files.map(f => f.table)));
+  const serials = new Set(merged.rows.map(r => r.serial).filter(Boolean));
   const mac = parseMacLines(inp.mac), win = parseWindowsLines(inp.windows);
   const noCode = list => list.filter(x => !x.item).length;
+  const fileInfo = f => {
+    const n = normalizeBlancco(f.table);
+    return { rows: n.rows.length, missing: n.missing };
+  };
 
   main.innerHTML = `
-  <section class="card">
+  <section class="card dropzone" id="blanccoCard">
     <div class="card-head">
-      <div><h2>Blancco export</h2><p class="hint">The erasure report exported from Blancco (.csv or .xlsx). Columns are found by their header names.</p></div>
+      <div><h2>Blancco exports</h2><p class="hint">Erasure reports exported from Blancco: .csv, .xlsx, or .zip files containing them. Choose several at once or drop them here.</p></div>
       <div class="actions">
-        <label class="btn primary">Choose file…<input type="file" id="blanccoFile" accept=".csv,.xlsx,.xls,.txt" hidden></label>
-        ${inp.blancco.length ? '<button class="btn ghost" id="blanccoClear">Clear</button>' : ''}
+        <label class="btn primary">Add files…<input type="file" id="blanccoFile" accept=".csv,.xlsx,.xls,.txt,.zip" multiple hidden></label>
+        ${files.length ? '<button class="btn ghost" id="blanccoClear">Remove all</button>' : ''}
       </div>
     </div>
-    ${inp.blancco.length > 1 ? `
-      <div class="status ${bl.missing.length ? 'bad' : 'good'}">
-        ${bl.missing.length ? `Missing columns: ${esc(bl.missing.join(', '))}` : '✓'}
-        ${plural(bl.rows.length, 'disk row')} · ${plural(serials.size, 'device')}
-        ${inp.blanccoSource ? `· from <b>${esc(inp.blanccoSource)}</b>` : ''}
-      </div>` : ''}
-    <details ${inp.blancco.length ? '' : 'open'}>
-      <summary>…or paste it here (copy the cells including the header row)</summary>
+    ${files.length ? `
+      <ul class="file-list">${files.map((f, i) => { const info = fileInfo(f); return `
+        <li><span class="file-name">${esc(f.name)}</span>
+          <span class="${info.missing.length ? 'bad-text' : 'muted'}">${info.missing.length ? `missing: ${esc(info.missing.join(', '))}` : plural(info.rows, 'row')}</span>
+          <button class="icon-btn" data-rmfile="${i}" title="Remove this file">✕</button></li>`; }).join('')}
+      </ul>
+      <div class="status ${merged.missing.length ? 'bad' : 'good'}">
+        ${merged.missing.length ? `Missing columns: ${esc(merged.missing.join(', '))} ·` : '✓'}
+        ${plural(files.length, 'file')} · ${plural(merged.rows.length, 'disk row')} · ${plural(serials.size, 'device')}
+      </div>` : '<p class="empty drop-hint">Drop Blancco files here</p>'}
+    <details>
+      <summary>…or paste rows instead (copy the cells including the header row)</summary>
       <textarea id="blanccoPaste" rows="4" placeholder="Paste Blancco rows with the header row"></textarea>
     </details>
   </section>
@@ -141,21 +177,38 @@ function renderData(main) {
     </section>
   </div>`;
 
-  $('#blanccoFile').onchange = async e => {
-    const f = e.target.files[0]; if (!f) return;
-    try {
-      inp.blancco = await readTableFile(f); inp.blanccoSource = f.name;
-      changed(); toast(`Loaded ${f.name}`);
-    } catch (err) { toast(`Couldn't read ${f.name}: ${err.message}`, 'bad'); }
+  // adding a file with the same name replaces the earlier copy
+  const addFiles = list => {
+    for (const f of list) {
+      const i = files.findIndex(x => x.name === f.name);
+      if (i >= 0) files[i] = f; else files.push(f);
+    }
   };
+  const loadFiles = async list => {
+    if (!list.length) return;
+    try {
+      const loaded = await readTableFiles(list);
+      if (!loaded.length) { toast('No .csv or .xlsx files found', 'bad'); return; }
+      addFiles(loaded);
+      changed(); toast(`Added ${plural(loaded.length, 'file')}`);
+    } catch (err) { toast(`Couldn't read the files: ${err.message}`, 'bad'); }
+  };
+  $('#blanccoFile').onchange = e => { const list = [...e.target.files]; e.target.value = ''; loadFiles(list); };
+  const card = $('#blanccoCard');
+  card.ondragover = e => { e.preventDefault(); card.classList.add('dragging'); };
+  card.ondragleave = e => { if (!card.contains(e.relatedTarget)) card.classList.remove('dragging'); };
+  card.ondrop = e => { e.preventDefault(); card.classList.remove('dragging'); loadFiles([...e.dataTransfer.files]); };
+
   $('#blanccoPaste').onpaste = e => setTimeout(() => {
     const table = parsePastedTable(e.target.value);
     if (table.length < 2) { toast('That doesn\'t look like a table with a header row', 'bad'); return; }
-    inp.blancco = table; inp.blanccoSource = 'pasted';
-    changed(); toast(`Pasted ${table.length - 1} rows`);
+    const n = files.filter(f => f.name.startsWith('Pasted rows')).length + 1;
+    addFiles([{ name: `Pasted rows ${n}`, table }]);
+    changed(); toast(`Pasted ${plural(table.length - 1, 'row')}`);
   });
+  main.querySelectorAll('[data-rmfile]').forEach(b => b.onclick = () => { files.splice(Number(b.dataset.rmfile), 1); changed(); });
   const clear = $('#blanccoClear');
-  if (clear) clear.onclick = () => { inp.blancco = []; inp.blanccoSource = ''; changed(); };
+  if (clear) clear.onclick = () => { if (confirm('Remove all Blancco files from this project?')) { files.length = 0; changed(); } };
 
   const bindLines = (id, key, statusId, parse) => {
     let t;
@@ -177,6 +230,10 @@ function renderData(main) {
 function renderManual(main) {
   const man = state.project.manual;
   const codes = Object.keys(man).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  const sel = state.manualSelected;
+  for (const c of [...sel]) if (!(c in man)) sel.delete(c);
+  const allSelected = codes.length > 0 && codes.every(c => sel.has(c));
+
   main.innerHTML = `
   <section class="card">
     <div class="card-head">
@@ -184,6 +241,7 @@ function renderManual(main) {
       <p class="hint">For devices the tools can't read (dead, locked, no report). Anything typed here takes priority over the tools' data;
       Diagnostics and Locked/Faulty are added to what the tools found.</p></div>
       <div class="actions">
+        ${sel.size ? `<button class="btn danger" id="delSelected">Delete ${plural(sel.size, 'selected item')}</button>` : ''}
         <input id="newCode" class="code-input" value="${esc(nextFreeCode())}" aria-label="Item code">
         <button class="btn primary" id="addManual">Add item</button>
       </div>
@@ -191,17 +249,40 @@ function renderManual(main) {
     ${codes.length ? `
     <div class="table-wrap">
       <table class="grid manual">
-        <thead><tr><th class="sticky">Item</th>${MANUAL_FIELDS.map(([, l]) => `<th>${esc(l)}</th>`).join('')}<th></th></tr></thead>
+        <thead><tr><th class="sticky item-col"><label class="row-pick"><input type="checkbox" id="selAll" ${allSelected ? 'checked' : ''} title="Select all"></label>Item</th>${MANUAL_FIELDS.map(([, l]) => `<th>${esc(l)}</th>`).join('')}</tr></thead>
         <tbody>${codes.map(code => `
-          <tr data-code="${esc(code)}">
-            <th class="sticky">${esc(code)}</th>
+          <tr data-code="${esc(code)}" class="${sel.has(code) ? 'selected' : ''}">
+            <th class="sticky item-col">
+              <label class="row-pick"><input type="checkbox" data-sel="${esc(code)}" ${sel.has(code) ? 'checked' : ''} title="Select ${esc(code)}"></label>
+              <button class="icon-btn" data-del="${esc(code)}" title="Delete ${esc(code)}">✕</button>
+              ${esc(code)}
+            </th>
             ${MANUAL_FIELDS.map(([f]) => `<td contenteditable="plaintext-only" data-field="${f}">${esc(man[code][f] ?? '')}</td>`).join('')}
-            <td><button class="icon-btn" data-del="${esc(code)}" title="Remove ${esc(code)}">✕</button></td>
           </tr>`).join('')}
         </tbody>
       </table>
     </div>` : '<p class="empty">No manual entries yet. Add an item for every device you have to fill in by hand.</p>'}
   </section>`;
+
+  // deleting is instant; the toast offers Undo
+  const remove = list => {
+    const removed = list.map(c => [c, man[c]]);
+    for (const c of list) { delete man[c]; sel.delete(c); }
+    changed();
+    toast(list.length === 1 ? `Deleted ${list[0]}` : `Deleted ${plural(list.length, 'item')}`, 'ok', {
+      label: 'Undo',
+      run: () => { for (const [c, rec] of removed) man[c] = rec; changed(); },
+    });
+  };
+  const delSel = $('#delSelected');
+  if (delSel) delSel.onclick = () => remove(codes.filter(c => sel.has(c)));
+  const selAll = $('#selAll');
+  if (selAll) selAll.onchange = e => { if (e.target.checked) codes.forEach(c => sel.add(c)); else sel.clear(); render(); };
+  main.querySelectorAll('[data-sel]').forEach(cb => cb.onchange = e => {
+    const c = cb.dataset.sel;
+    if (e.target.checked) sel.add(c); else sel.delete(c);
+    render();
+  });
 
   $('#addManual').onclick = () => {
     const code = $('#newCode').value.trim();
@@ -213,12 +294,7 @@ function renderManual(main) {
     cell?.scrollIntoView({ block: 'nearest' }); cell?.focus();
   };
   $('#newCode').onkeydown = e => { if (e.key === 'Enter') $('#addManual').click(); };
-  main.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
-    const code = b.dataset.del;
-    const filled = Object.values(man[code]).filter(v => String(v).trim()).length;
-    if (filled && !confirm(`Remove the manual entry for ${code}?`)) return;
-    delete man[code]; changed();
-  });
+  main.querySelectorAll('[data-del]').forEach(b => b.onclick = () => remove([b.dataset.del]));
   main.querySelectorAll('td[data-field]').forEach(td => {
     td.onblur = () => {
       const code = td.parentElement.dataset.code, f = td.dataset.field;
@@ -245,7 +321,16 @@ function gridKeys(e) {
 // ---------- Review tab ----------
 function renderReview(main) {
   const r = state.report;
-  const issueItems = new Set(r.warnings.filter(w => w.item).map(w => w.item));
+  // worst warning level per item, used to tint the row
+  const issues = new Map();
+  for (const w of r.warnings) {
+    if (!w.item) continue;
+    const cur = issues.get(w.item) || { level: 'warn', texts: [] };
+    if (w.level === 'error') cur.level = 'error';
+    cur.texts.push(w.text);
+    issues.set(w.item, cur);
+  }
+  const issueItems = new Set(issues.keys());
   const q = state.reviewFilter.trim().toLowerCase();
   const rows = r.rows.filter(row =>
     (!state.reviewIssuesOnly || issueItems.has(row.itemLookup) || row.locked) &&
@@ -259,7 +344,7 @@ function renderReview(main) {
       <summary><h2>Checks</h2>
         ${['error', 'warn', 'info'].map(l => { const n = r.warnings.filter(w => w.level === l).length; return n ? `<span class="pill ${l}">${n} ${l === 'error' ? 'problem' + (n > 1 ? 's' : '') : l === 'warn' ? 'warning' + (n > 1 ? 's' : '') : 'note' + (n > 1 ? 's' : '')}</span>` : ''; }).join('')}
       </summary>
-      <ul>${r.warnings.map(w => `<li class="${w.level}"><span class="lvl">${levelIcon[w.level]}</span>${esc(w.text)}</li>`).join('')}</ul>
+      <ul>${r.warnings.map(w => `<li class="${w.level}${w.item ? ' link' : ''}" ${w.item ? `data-goto-item="${esc(w.item)}" title="Show ${esc(w.item)} in the table"` : ''}><span class="lvl">${levelIcon[w.level]}</span>${esc(w.text)}</li>`).join('')}</ul>
     </details>
   </section>` : ''}
   <section class="card">
@@ -275,9 +360,9 @@ function renderReview(main) {
       <table class="grid review">
         <thead><tr>${REPORT_COLUMNS.map(([k, l], j) => `<th class="${j < 2 ? 'sticky s' + j : ''}">${esc(l)}</th>`).join('')}</tr></thead>
         <tbody>${rows.map(row => `
-          <tr data-code="${esc(row.itemLookup)}" class="${issueItems.has(row.itemLookup) ? 'has-issue' : ''}">
+          <tr data-code="${esc(row.itemLookup)}" class="${issues.has(row.itemLookup) ? 'issue-' + issues.get(row.itemLookup).level : ''}">
             ${REPORT_COLUMNS.map(([k], j) => {
-              if (!EDITABLE.has(k)) return `<th class="sticky s${j}">${esc(row[k])}${j === 0 ? sourceBadges(row) : ''}</th>`;
+              if (!EDITABLE.has(k)) return `<th class="sticky s${j}" ${j === 0 && issues.has(row.itemLookup) ? `title="${esc(issues.get(row.itemLookup).texts.join('\n'))}"` : ''}>${esc(row[k])}${j === 0 ? sourceBadges(row) : ''}</th>`;
               const edited = row._edited.includes(k);
               return `<td contenteditable="plaintext-only" data-field="${k}" class="${edited ? 'edited' : ''}" ${edited ? `title="Edited. Calculated value: ${esc(row._base[k] || '(empty)')}"` : ''}>${esc(row[k])}</td>`;
             }).join('')}
@@ -290,8 +375,8 @@ function renderReview(main) {
 
   const search = $('#reviewSearch');
   if (search) {
-    search.oninput = e => { state.reviewFilter = e.target.value; const pos = e.target.selectionStart; renderReview(main); const s = $('#reviewSearch'); s.focus(); s.setSelectionRange(pos, pos); };
-    $('#issuesOnly').onchange = e => { state.reviewIssuesOnly = e.target.checked; renderReview(main); };
+    search.oninput = e => { state.reviewFilter = e.target.value; const pos = e.target.selectionStart; render(); const s = $('#reviewSearch'); s.focus(); s.setSelectionRange(pos, pos); };
+    $('#issuesOnly').onchange = e => { state.reviewIssuesOnly = e.target.checked; render(); };
   }
   main.querySelectorAll('td[data-field]').forEach(td => {
     td.onblur = () => {
@@ -307,21 +392,25 @@ function renderReview(main) {
       if (next) ov[code][f] = next; else delete ov[code][f];
       if (!Object.keys(ov[code]).length) delete ov[code];
       changed({ rerender: false });
-      refreshReviewRow(td.parentElement);
+      // redraw after focus has moved on (Enter / Tab / click), then put focus back on that cell
+      setTimeout(() => {
+        const a = document.activeElement;
+        const target = a?.dataset?.field ? [a.parentElement.dataset.code, a.dataset.field] : null;
+        render();
+        if (target) main.querySelector(`tr[data-code="${CSS.escape(target[0])}"] td[data-field="${target[1]}"]`)?.focus();
+      });
     };
     td.onkeydown = gridKeys;
   });
-}
-
-// update one row in place so scroll position and focus are kept
-function refreshReviewRow(tr) {
-  const row = state.report.rows.find(x => x.itemLookup === tr.dataset.code);
-  if (!row) return;
-  tr.querySelectorAll('td[data-field]').forEach(td => {
-    const k = td.dataset.field, edited = row._edited.includes(k);
-    if (document.activeElement !== td) td.textContent = row[k] ?? '';
-    td.classList.toggle('edited', edited);
-    if (edited) td.title = `Edited. Calculated value: ${row._base[k] || '(empty)'}`; else td.removeAttribute('title');
+  main.querySelectorAll('[data-goto-item]').forEach(li => li.onclick = () => {
+    let tr = main.querySelector(`tr[data-code="${CSS.escape(li.dataset.gotoItem)}"]`);
+    if (!tr && (state.reviewFilter || state.reviewIssuesOnly)) {
+      state.reviewFilter = ''; state.reviewIssuesOnly = false; render();
+      tr = main.querySelector(`tr[data-code="${CSS.escape(li.dataset.gotoItem)}"]`);
+    }
+    if (!tr) return;
+    tr.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    tr.classList.remove('flash'); void tr.offsetWidth; tr.classList.add('flash');
   });
 }
 
@@ -386,7 +475,7 @@ function openSetup({ force = false } = {}) {
   const d = $('#setupDialog');
   const s = state.project.settings;
   const f = $('#setupForm');
-  f.projectNumber.value = s.projectNumber; f.prefix.value = s.prefix; f.endClient.value = s.endClient; f.startNumber.value = s.startNumber ?? 1;
+  f.projectNumber.value = s.projectNumber; f.prefix.value = s.prefix; f.endClient.value = s.endClient;
   $('#setupCancel').hidden = force;
   d.dataset.force = force ? '1' : '';
   updateSetupPreview();
@@ -395,8 +484,8 @@ function openSetup({ force = false } = {}) {
 }
 function updateSetupPreview() {
   const f = $('#setupForm');
-  const s = { projectNumber: f.projectNumber.value.trim(), prefix: f.prefix.value.trim().toUpperCase(), startNumber: Number(f.startNumber.value || 1) };
-  $('#setupPreview').textContent = s.prefix ? `First item: ${itemCode(s, s.startNumber)} → ITD-${s.projectNumber || '…'}-${itemCode(s, s.startNumber)}` : '';
+  const s = { projectNumber: f.projectNumber.value.trim(), prefix: f.prefix.value.trim().toUpperCase() };
+  $('#setupPreview').textContent = s.prefix ? `Items: ${itemCode(s, 1)}, ${itemCode(s, 2)}… → ITD-${s.projectNumber || '…'}-${itemCode(s, 1)}` : '';
 }
 
 // ---------- models editor ----------
@@ -462,7 +551,8 @@ async function openProjectFile(file) {
     let p;
     if (/\.xls[xm]$/i.test(file.name)) { p = await importWorkbook(file); toast(`Imported ${file.name}`); }
     else { p = await readJsonFile(file); toast(`Opened ${file.name}`); }
-    state.project = Object.assign(emptyProject(), p, { savedToFile: true });
+    state.project = Object.assign(migrate(p), { savedToFile: true });
+    state.manualSelected.clear();
     store(STORE_PROJECT, state.project);
     recompute(); render();
     if (!settingsComplete(state.project.settings)) openSetup({ force: true });
@@ -481,8 +571,26 @@ function saveProject() {
   renderChrome();
 }
 
+// ---------- light / dark mode ----------
+const STORE_THEME = 'auditApp.theme';
+const systemDark = () => window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+function applyTheme(theme) {
+  const t = theme || (systemDark() ? 'dark' : 'light');
+  document.documentElement.dataset.theme = t;
+  const b = $('#btnTheme');
+  const sun = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+  const moon = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
+  b.innerHTML = t === 'dark' ? sun : moon;
+  b.title = t === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
+}
+
 function init() {
   recompute();
+  applyTheme(load(STORE_THEME, null));
+  $('#btnTheme').onclick = () => {
+    const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    store(STORE_THEME, next); applyTheme(next);
+  };
 
   document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => setTab(b.dataset.tab));
   $('#projectChip').onclick = () => openSetup();
@@ -506,7 +614,6 @@ function init() {
     s.projectNumber = f.projectNumber.value.trim();
     s.prefix = f.prefix.value.trim().toUpperCase();
     s.endClient = f.endClient.value.trim();
-    s.startNumber = Number(f.startNumber.value || 1);
     $('#setupDialog').close();
     changed();
   };

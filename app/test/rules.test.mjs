@@ -2,9 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   shortCpu, formatRamMac, formatRamWindows, formatRamBlancco, formatDiskCapacity, diskKind,
-  batteryGrade, windowsBatteryPct, expandDiagCodes, cleanModelName, proper,
+  batteryGrade, windowsBatteryPct, expandDiagCodes, cleanModelName, proper, formatDiagnostics,
 } from '../src/engine/rules.js';
-import { erasureSummary } from '../src/engine/sources.js';
+import { erasureSummary, mergeTables } from '../src/engine/sources.js';
 import models from '../src/data/default-models.json' with { type: 'json' };
 
 test('shortCpu', () => {
@@ -68,6 +68,24 @@ test('diagnostic codes', () => {
   assert.equal(expandDiagCodes('Battery D, KBS, AID', models.diagCodes), 'Battery D, KB Sticky, Apple ID');
   assert.equal(expandDiagCodes('label marks d', models.diagCodes), 'label marks d');
   assert.equal(expandDiagCodes('', models.diagCodes), '');
+});
+
+test('diagnostics capitalisation', () => {
+  assert.equal(formatDiagnostics('display b, screen scratches b'), 'Display B, Screen scratches B');
+  assert.equal(formatDiagnostics('label marks d, kb sticky'), 'Label marks D, Kb sticky');
+  assert.equal(formatDiagnostics('Remote Locked, BIOS locked, Battery D'), 'Remote Locked, BIOS locked, Battery D');
+  assert.equal(formatDiagnostics(' ok ,, dead'), 'Ok, Dead');
+  assert.equal(formatDiagnostics(''), '');
+});
+
+test('merging several Blancco exports', () => {
+  const a = [['System serial', 'Erasure state'], ['AAA', 'Successful'], ['BBB', 'Failed']];
+  const b = [['Erasure state', 'System serial', 'Disk serial'], ['Successful', 'CCC', 'D1'], ['Failed', 'BBB', '']];
+  assert.deepEqual(mergeTables([a, b]), [
+    ['System serial', 'Erasure state', 'Disk serial'],
+    ['AAA', 'Successful', ''], ['BBB', 'Failed', ''], ['CCC', 'Successful', 'D1'],
+  ]);
+  assert.deepEqual(mergeTables([]), []);
 });
 
 test('model cleanup and PROPER', () => {
