@@ -2,52 +2,62 @@ AUDIT BUILDER - SETUP AND USE
 =============================
 
 Audit Builder replaces the old Audit.xlsm file. It runs in your web browser
-(Chrome or Edge), but nothing is uploaded anywhere: all your data stays on
-your computer.
+(Chrome or Edge), but nothing is uploaded anywhere: the app only reads and
+saves files on your computer and in this shared folder.
 
 
-INSTALLING
-----------
+ONE-TIME SETUP (about 5 minutes)
+--------------------------------
 
-1. In the shared Google Drive folder, download the newest zip,
-   for example "AuditBuilder 2026-10-07 1530.zip".
-   The date and time in the name is the version.
+1. Install Google Drive for desktop
+   - Download it from https://www.google.com/drive/download/
+   - Sign in with the Google account the Audit Builder folder was shared with.
+   - A "Google Drive" drive (usually G:) appears in File Explorer.
 
-2. Find the zip in your Downloads folder, right-click it > Extract All...
-   Extract it to your Documents folder. You get a folder called
-   "Audit Builder" with the app inside.
-   (Always extract to this same place, so updates replace the old copy.)
+2. Put the shared folder on your G: drive
+   - Open drive.google.com and go to "Shared with me".
+   - Right-click the "Audit Builder" folder > Organize > Add shortcut,
+     and choose My Drive.
+   - After a minute it appears in File Explorer at
+     G:\My Drive\Audit Builder
 
-3. Make a desktop shortcut:
-   open the "Audit Builder" folder, right-click AuditBuilder.html >
-   Send to > Desktop (create shortcut).
-   (On Windows 11, click "Show more options" first to see "Send to".)
+3. Make it work without internet (recommended)
+   - In File Explorer, right-click the Audit Builder folder >
+     Offline access > Available offline.
 
-4. Use Chrome or Edge. (Firefox works too, but there "Save project"
+4. Make a desktop shortcut
+   - Open G:\My Drive\Audit Builder, right-click AuditBuilder.html >
+     Send to > Desktop (create shortcut).
+     (On Windows 11, click "Show more options" first to see "Send to".)
+   - Always open the app from this shortcut.
+   - Do NOT copy AuditBuilder.html to your desktop or anywhere else.
+     A copy doesn't get updates.
+
+5. Use Chrome or Edge. (Firefox works too, but there "Save project"
    downloads a new copy each time instead of updating the same file.)
 
 
 OPENING THE APP
 ---------------
 
-Double-click the desktop shortcut. It opens in your browser, and works
-without internet.
+Double-click the desktop shortcut. It opens in your browser.
 
 If it opens in Notepad or shows code instead: right-click AuditBuilder.html >
 Open with > Google Chrome (or Microsoft Edge), and tick "Always use this app".
 
-Don't open the app from the Google Drive website or straight from inside the
-zip. Extract it first.
+Open it from File Explorer (the G: drive), not from the Google Drive website.
+The website can't run the app and only shows its code.
 
 
-UPDATING
---------
+UPDATES
+-------
 
-The version is shown at the top left of the app, next to its name.
-If the shared Drive folder has a zip with a newer date and time:
-download it and extract it to the same place as before (Documents). When
-Windows asks, choose "Replace the files in the destination".
-Your desktop shortcut keeps working, and your current work is kept.
+Updates are automatic. When a new version is published, Google Drive
+replaces AuditBuilder.html in the folder, and you get it the next time you
+open the app (or press F5 if it's already open). Your current work is kept.
+
+The version (date and time) is shown at the top left of the app, next to its
+name, in case you want to check you have the latest one.
 
 
 DOING A PROJECT
@@ -83,9 +93,10 @@ SAVING AND SHARING PROJECTS
   one used from then on.
 - Opening a project file with "Open..." also makes it the file that Save
   updates. Starting a "New" project asks again on the first save.
-- To pass a project to someone else, upload its file to the Projects folder
-  in the shared Drive. To continue someone else's project: download its file
-  from Drive, then click "Open..." in the app and choose it.
+- Save project files in G:\My Drive\Audit Builder\Projects. Google Drive
+  syncs them, so everyone can open them with "Open...", and continue each
+  other's projects. (This needs edit access to the shared folder; if saving
+  there fails, ask Tomer to give you Editor access.)
 - If two people work on the same project at the same time, their changes
   don't merge. Agree who has it.
 - An old Audit.xlsm can be opened with "Open..." too.
@@ -96,6 +107,7 @@ MODELS LIST
 
 The "Models" button holds the model list, type mapping, weights and
 diagnostic codes. Changes you make there are saved on your computer only.
-To share a change, click Export and upload the file to the Models folder in
-Drive; others download it and click Import. Or ask Tomer to add it to the
-app, so everyone gets it in the next version.
+To share a change, click Export and save the file in
+G:\My Drive\Audit Builder\Models; others click Import and choose it.
+Or ask Tomer to add it to the app, so everyone gets it automatically with
+the next update.

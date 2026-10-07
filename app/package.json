@@ -8,7 +8,7 @@
     "test": "node --test \"test/**/*.test.mjs\"",
     "build": "node scripts/build.mjs",
     "package": "node scripts/build.mjs --zip",
-    "release": "node scripts/build.mjs --zip --publish \"G:/My Drive/Audit Builder\"",
+    "release": "node scripts/build.mjs --publish \"G:/My Drive/Audit Builder\"",
     "fixture": "node scripts/extract-fixture.mjs"
   },
   "devDependencies": {
