@@ -17,6 +17,25 @@ test('warns when Diagnostics is empty, until it is filled in', () => {
   assert.ok(!texts(r2).some(t => t.includes('Diagnostics is empty')));
 });
 
+test('warns when the same asset tag is on more than one device', () => {
+  const r = buildReport(project({
+    manual: {
+      GG01: { asset: '4004012', diagnostics: 'ok' }, GG02: { asset: '4004012 ', diagnostics: 'ok' },
+      GG03: { asset: '4004099', diagnostics: 'ok' }, GG04: { asset: '-', diagnostics: 'ok' }, GG05: { asset: '-', diagnostics: 'ok' },
+    },
+    overrides: { GG03: { asset: '4004012' } },
+  }), models);
+  const dup = r.warnings.filter(w => /Asset/.test(w.text));
+  assert.deepEqual(dup.map(w => w.item), ['GG01', 'GG02', 'GG03']);
+  assert.equal(dup[0].text, 'GG01: Asset 4004012 is also used by GG02, GG03');
+});
+
+test('missing Blancco erasure: only a note for Windows reports, a warning for Macs', () => {
+  const r = buildReport(project({ inputs: { mac: 'GG02*MACSN*1*Laptop*Apple*MacBookPro18,3*M1*16 GB LPDDR5*500 GB SSD*Normal*Disabled***83*x*t*ok', windows: 'GG01*WINSN*2*Notebook*Dell Inc.*Latitude 5421*cpu*8 GB DDR4*NONE*90%*ok', blanccoFiles: [] } }), models);
+  const erasure = r.warnings.filter(w => /Blancco erasure/.test(w.text)).map(w => [w.item, w.level]);
+  assert.deepEqual(erasure, [['GG01', 'info'], ['GG02', 'warn']]);
+});
+
 test('item numbering: gaps and codes that do not fit', () => {
   const r = buildReport(project({ manual: { GG03: { diagnostics: 'ok' }, GG06: { diagnostics: 'ok' }, X9: { diagnostics: 'ok' } } }), models);
   assert.deepEqual(r.rows.map(x => x.itemLookup), ['GG03', 'GG06', 'X9']);

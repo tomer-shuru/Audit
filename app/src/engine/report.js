@@ -144,10 +144,31 @@ export function buildReport(project, models) {
     if (m?.unknownModel) warnings.push({ level: 'warn', item: code, text: `${code}: Mac model "${m.unknownModel}" isn't in the Models list` });
     if (c && isBlank(row.cpu) && !isBlank(c.rawCpu)) warnings.push({ level: 'warn', item: code, text: `${code}: couldn't shorten CPU "${c.rawCpu}"` });
     if (/fail/i.test(row.blancco)) warnings.push({ level: 'error', item: code, text: `${code}: erasure failed (${row.blancco})` });
-    if ((m || w) && isBlank(row.blancco)) warnings.push({ level: 'warn', item: code, text: `${code}: no Blancco erasure found for S.N. ${row.sn}` });
+    if ((m || w) && isBlank(row.blancco)) {
+      // Windows reports are used for devices without a disk (no erasure possible), so that's only a note
+      if (w && !m) warnings.push({ level: 'info', item: code, text: `${code}: no Blancco erasure (Windows report, S.N. ${row.sn})` });
+      else warnings.push({ level: 'warn', item: code, text: `${code}: no Blancco erasure found for S.N. ${row.sn}` });
+    }
     if (isBlank(row.diagnostics)) warnings.push({ level: 'warn', item: code, text: `${code}: Diagnostics is empty` });
     return row;
   });
+
+  // Asset tags are unique per device: flag any tag used by more than one item ("-" means no tag)
+  const byAsset = new Map();
+  for (const r of rows) {
+    const a = str(r.asset).trim();
+    if (a === '' || a === '-') continue;
+    const k = a.toLowerCase();
+    if (!byAsset.has(k)) byAsset.set(k, []);
+    byAsset.get(k).push(r);
+  }
+  for (const group of byAsset.values()) {
+    if (group.length < 2) continue;
+    for (const r of group) {
+      const others = group.filter(x => x !== r).map(x => x.itemLookup).join(', ');
+      warnings.push({ level: 'warn', item: r.itemLookup, text: `${r.itemLookup}: Asset ${r.asset} is also used by ${others}` });
+    }
+  }
 
   const lockedFaulty = rows.filter(r => !isBlank(r.locked)).map(r => ({
     itemLookup: r.itemLookup, sn: r.sn, type: r.type, make: r.make, model: r.model, issue: r.locked,

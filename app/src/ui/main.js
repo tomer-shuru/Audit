@@ -325,10 +325,10 @@ function gridKeys(e) {
 // ---------- Review tab ----------
 function renderReview(main) {
   const r = state.report;
-  // worst warning level per item, used to tint the row
+  // worst warning level per item, used to tint the row (notes don't tint)
   const issues = new Map();
   for (const w of r.warnings) {
-    if (!w.item) continue;
+    if (!w.item || w.level === 'info') continue;
     const cur = issues.get(w.item) || { level: 'warn', texts: [] };
     if (w.level === 'error') cur.level = 'error';
     cur.texts.push(w.text);
