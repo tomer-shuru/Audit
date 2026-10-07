@@ -106,8 +106,23 @@ MODELS LIST
 -----------
 
 The "Models" button holds the model list, type mapping, weights and
-diagnostic codes. Changes you make there are saved on your computer only.
-To share a change, click Export and save the file in
-G:\My Drive\Audit Builder\Models; others click Import and choose it.
-Or ask Tomer to add it to the app, so everyone gets it automatically with
-the next update.
+diagnostic codes. Everyone shares one list, stored in
+G:\My Drive\Audit Builder\Models\models.json.
+
+Connect to it once:
+  Models > "Connect shared file..." > choose
+  G:\My Drive\Audit Builder\Models\models.json
+The box at the top of the Models window then says "Shared".
+
+After that:
+- The app loads the shared list every time it opens.
+- Any change you make in Models is saved to the shared file, and coworkers
+  get it the next time they open the app or switch back to it.
+- After restarting the browser, a yellow bar may ask for your OK to load
+  the shared list. Click "Load shared Models". If the browser offers
+  "Allow on every visit", choose it and it won't ask again.
+- If you and a coworker change the list at the same moment, the app keeps
+  their version and asks you to redo your last change.
+
+If the Models window says "Not shared", your changes stay on your computer
+only. Connect to the shared file as above.
