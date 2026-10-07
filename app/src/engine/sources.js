@@ -51,12 +51,53 @@ export const BLANCCO_COLUMNS = {
   battery: 'Capacity', cpu: 'CPU model', memory: 'Total Memory', memoryType: 'Memory type',
   diskCapacity: 'Disk capacity', diskInterface: 'Disk interface type', diskSerial: 'Disk serial',
   comment1: 'Comment', comment2: 'Comment2', comment3: 'Comment3', comment4: 'Comment4', comment5: 'Comment5', comment6: 'Comment6',
+  comment7: 'Comment7', comment8: 'Comment8',
 };
+
+// Automatic messages Blancco writes into the comment columns, and what the report says instead.
+// Unlike typed comments these are picked up from any comment column (1-8).
+export const COMMENT_MESSAGES = [
+  { match: /could not connect to the configured network/i, text: 'WiFi defect' },
+];
+
+// Diagnostics text from a Blancco row: comments 1-6 as typed (like the workbook),
+// known automatic messages from any comment column, each finding listed once.
+export function blanccoComments(r) {
+  const typed = [r.comment1, r.comment2, r.comment3, r.comment4, r.comment5, r.comment6];
+  const extra = [r.comment7, r.comment8];
+  const out = [];
+  const add = text => { if (text && !out.some(x => x.toLowerCase() === text.toLowerCase())) out.push(text); };
+  const message = c => COMMENT_MESSAGES.find(m => m.match.test(c));
+  for (const c of typed) {
+    const s = c === 0 ? '' : str(c).trim();
+    if (s === '' || s === '0') continue;
+    const m = message(s);
+    if (m) { add(m.text); continue; }
+    // a typed comment may already say it (e.g. "CD C, WiFi defect, DI C") - keep it, but don't repeat later
+    for (const part of s.split(',').map(p => p.trim()).filter(Boolean)) add(part);
+  }
+  for (const c of extra) { const m = message(str(c)); if (m) add(m.text); }
+  return out;
+}
+
+// Some exports repeat a header ("Comment", "Comment", ...). Number the repeats the way older
+// exports did ("Comment", "Comment2", "Comment3", ...) so every column keeps its own data.
+export function uniqueHeaders(header) {
+  const seen = new Map();
+  return header.map(h => {
+    const name = str(h).trim();
+    const k = name.toLowerCase();
+    if (k === '') return name;
+    const n = (seen.get(k) || 0) + 1;
+    seen.set(k, n);
+    return n === 1 ? name : name + n;
+  });
+}
 
 // Combines several exports (each an array of arrays with its own header row) into one table.
 // Columns are lined up by header name; rows that appear in more than one file are kept once.
 export function mergeTables(tables) {
-  const valid = tables.filter(t => t && t.length > 0);
+  const valid = tables.filter(t => t && t.length > 0).map(t => [uniqueHeaders(t[0]), ...t.slice(1)]);
   if (valid.length === 0) return [];
   const header = [];
   const pos = new Map();
@@ -85,7 +126,7 @@ export function mergeTables(tables) {
 // rows: array of arrays, first row = headers
 export function normalizeBlancco(table) {
   if (!table || table.length === 0) return { rows: [], missing: [] };
-  const header = table[0].map(h => str(h).trim().toLowerCase());
+  const header = uniqueHeaders(table[0]).map(h => h.toLowerCase());
   const idx = {}; const missing = [];
   for (const [key, name] of Object.entries(BLANCCO_COLUMNS)) {
     idx[key] = header.indexOf(name.toLowerCase());
@@ -120,6 +161,9 @@ export function erasureSummary(blanccoRows) {
   };
 }
 
+// Mac / Windows reports write "NONE" when the device has no disk; the report shows "-"
+export const formatReportDisk = disk => (/^none$/i.test(str(disk).trim()) ? '-' : disk);
+
 // --- Output_Mac ---
 export function macRecord(m, lk, blanccoResult) {
   const model = lk.model(m.modelId);
@@ -133,7 +177,7 @@ export function macRecord(m, lk, blanccoResult) {
     source: 'mac', item: m.item, sn: m.sn, asset: m.asset, type: m.type, make: m.make,
     model: model ? str(model.name) : m.modelId,
     screen: model ? model.screen : '', year: model ? model.year : '',
-    cpu: m.cpu, ram: formatRamMac(m.ram), disk: m.disk,
+    cpu: m.cpu, ram: formatRamMac(m.ram), disk: formatReportDisk(m.disk),
     diagnostics: joinNonEmpty(', ', appleId, remote, grade, service, m.diagnostics),
     blancco, locked: joinNonEmpty(', ', appleId, remote),
     diskSnIfFailed: blancco === 'Fail' ? m.diskSn : '',
@@ -152,7 +196,7 @@ export function windowsRecord(w, lk, blanccoResult) {
     model: model ? str(model.name) : cleanModelName(w.model, lk.cleanupRules),
     screen: model ? model.screen : '', year: model ? model.year : '',
     cpu: shortCpu(w.cpu) || (w.cpu === '0' ? '' : w.cpu),
-    ram: formatRamWindows(w.ram), disk: w.disk,
+    ram: formatRamWindows(w.ram), disk: formatReportDisk(w.disk),
     diagnostics: joinNonEmpty(', ', grade, w.diagnostics),
     blancco: blanccoResult(w.sn), locked: '',
   };
@@ -168,13 +212,13 @@ export function blanccoRecords(blanccoRows, macSerials, lk, blanccoResult) {
     seen.add(k);
     const all = blanccoRows.filter(x => x.serial.toLowerCase() === k);
     const type = lk.mapType(r.chassis) ?? str(r.chassis);
-    const disks = all.filter(x => eqi(x.erasure, 'Successful'))
+    // a disk counts as wiped if any attempt succeeded ("Successful", or "Successful / Failed" after a retry)
+    const disks = all.filter(x => str(x.erasure).toLowerCase().includes('successful'))
       .map(x => formatDiskCapacity(x.diskCapacity) + ' ' + diskKind(x.diskInterface));
     const batteryRaw = str(r.battery);
     const [b1 = '', b2 = ''] = batteryRaw === '' ? [] : batteryRaw.split(' / ');
     const grade = v => (isBlank(v) ? '' : batteryGrade(toNumber(v)));
-    const comments = [r.comment1, r.comment2, r.comment3, r.comment4, r.comment5, r.comment6]
-      .map(c => (c === 0 || str(c) === '0' ? '' : str(c)));
+    const comments = blanccoComments(r);
     out.push({
       source: 'blancco', item: str(r.item), sn: r.serial, asset: str(r.asset), type, rawType: str(r.chassis),
       make: str(r.make),

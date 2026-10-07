@@ -4,7 +4,7 @@ import {
   shortCpu, formatRamMac, formatRamWindows, formatRamBlancco, formatDiskCapacity, diskKind,
   batteryGrade, windowsBatteryPct, expandDiagCodes, cleanModelName, proper, formatDiagnostics,
 } from '../src/engine/rules.js';
-import { erasureSummary, mergeTables } from '../src/engine/sources.js';
+import { erasureSummary, mergeTables, normalizeBlancco, blanccoComments, formatReportDisk } from '../src/engine/sources.js';
 import models from '../src/data/default-models.json' with { type: 'json' };
 
 test('shortCpu', () => {
@@ -37,6 +37,9 @@ test('disks', () => {
   assert.equal(diskKind('SATA/SSD'), 'SSD');
   assert.equal(diskKind('SATA'), 'HDD');
   assert.equal(diskKind('USB'), 'USB');
+  assert.equal(formatReportDisk('NONE'), '-');
+  assert.equal(formatReportDisk(' none '), '-');
+  assert.equal(formatReportDisk('500 GB SSD'), '500 GB SSD');
 });
 
 test('erasure summary', () => {
@@ -86,6 +89,23 @@ test('merging several Blancco exports', () => {
     ['AAA', 'Successful', ''], ['BBB', 'Failed', ''], ['CCC', 'Successful', 'D1'],
   ]);
   assert.deepEqual(mergeTables([]), []);
+});
+
+test('Blancco network message becomes "WiFi defect", from any comment column, listed once', () => {
+  const net = 'Could not connect to the configured network.';
+  assert.deepEqual(blanccoComments({ comment1: 'CD B, DI C', comment8: net }), ['CD B', 'DI C', 'WiFi defect']);
+  assert.deepEqual(blanccoComments({ comment1: net, comment2: 'KBS' }), ['WiFi defect', 'KBS']);
+  assert.deepEqual(blanccoComments({ comment1: 'CD C, WiFi defect, DI C', comment8: net }), ['CD C', 'WiFi defect', 'DI C']);
+  assert.deepEqual(blanccoComments({ comment1: 'DI C', comment7: 'something else' }), ['DI C']);
+  assert.deepEqual(blanccoComments({ comment1: 0, comment2: '' }), []);
+});
+
+test('repeated "Comment" headers keep their own columns', () => {
+  const t = [['System serial', 'Comment', 'Comment', 'Comment'], ['S1', '', 'DI C, CD B', 'net']];
+  assert.deepEqual(mergeTables([t]), [['System serial', 'Comment', 'Comment2', 'Comment3'], ['S1', '', 'DI C, CD B', 'net']]);
+  const n = normalizeBlancco(t);
+  assert.equal(n.rows[0].comment2, 'DI C, CD B');
+  assert.equal(n.rows[0].comment3, 'net');
 });
 
 test('model cleanup and PROPER', () => {

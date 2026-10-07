@@ -148,6 +148,9 @@ table.grid { border-collapse: separate; border-spacing: 0; width: max-content; m
 
 /* export: tick rows and columns to include */
 .table-wrap.export { max-height: 55vh; }
+.pick-bar { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.pick-bar .hint { margin-left: 8px; }
+.btn.small { padding: 3px 10px; font-size: 13px; }
 .grid.pick th.pick-col { width: 34px; min-width: 34px; text-align: center; }
 .grid.pick input { cursor: pointer; margin: 0; }
 .col-pick { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }

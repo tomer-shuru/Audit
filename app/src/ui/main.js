@@ -430,7 +430,7 @@ const EXPORT_SHEETS = {
   report: { title: 'Audit Report', cols: EXPORT_COLUMNS, rows: r => r.rows },
   locked: { title: 'Locked and Faulty', cols: LOCKED_COLUMNS, rows: r => r.lockedFaulty },
 };
-const exportPrefs = { hiddenCols: load(STORE_EXPORT_COLS, { report: [], locked: [] }), excludedRows: { report: new Set(), locked: new Set() } };
+const exportPrefs = { hiddenCols: load(STORE_EXPORT_COLS, { report: [], locked: [] }), excludedRows: { report: new Set(), locked: new Set() }, anchor: {} };
 
 function exportSelection(kind) {
   const sheet = EXPORT_SHEETS[kind];
@@ -462,12 +462,19 @@ function renderExport(main) {
         <div><h2>${sheet.title} <span class="muted">${rows.length} of ${plural(allRows.length, 'row')} · ${cols.length} of ${sheet.cols.length} columns</span></h2>
         <p class="hint">${kind === 'report' ? 'Untick rows or columns you don\'t want, then copy and paste into the Google Sheet. Your column choice is remembered.' : 'Devices with a lock or fault. Send this list along with the report.'}</p></div>
         <div class="actions">
-          ${hidden.size || excluded.size ? '<button class="btn ghost" data-reset>Select all</button>' : ''}
           <button class="btn primary" data-copy ${rows.length && cols.length ? '' : 'disabled'}>Copy rows</button>
           <button class="btn" data-copy-h ${rows.length && cols.length ? '' : 'disabled'}>Copy with headers</button>
         </div>
       </div>
       ${allRows.length ? `
+      <div class="pick-bar">
+        <span class="muted">Rows:</span>
+        <button class="btn small" data-rows="all">All</button>
+        <button class="btn small" data-rows="none">None</button>
+        <button class="btn small" data-rows="invert">Invert</button>
+        ${hidden.size ? '<button class="btn small" data-all-cols>Show all columns</button>' : ''}
+        <span class="hint">Tip: tick one row, then hold Shift and click another to tick or untick everything in between.</span>
+      </div>
       <div class="table-wrap export">
         <table class="grid pick">
           <thead><tr>
@@ -507,15 +514,31 @@ function renderExport(main) {
       if (cb.checked) set.delete(cb.dataset.col); else set.add(cb.dataset.col);
       exportPrefs.hiddenCols[kind] = [...set]; saveCols(); render();
     });
-    card.querySelectorAll('[data-row]').forEach(cb => cb.onchange = () => {
-      if (cb.checked) excluded.delete(cb.dataset.row); else excluded.add(cb.dataset.row);
+    // Shift-click: give every row between the last clicked one and this one the same state
+    card.querySelectorAll('[data-row]').forEach(cb => cb.onclick = e => {
+      const code = cb.dataset.row, on = cb.checked;
+      const anchor = exportPrefs.anchor[kind];
+      const a = allRows.findIndex(x => x.itemLookup === anchor), b = allRows.findIndex(x => x.itemLookup === code);
+      const range = e.shiftKey && a >= 0 ? allRows.slice(Math.min(a, b), Math.max(a, b) + 1) : [allRows[b]];
+      for (const x of range) { if (on) excluded.delete(x.itemLookup); else excluded.add(x.itemLookup); }
+      exportPrefs.anchor[kind] = code;
+      render();
+    });
+    card.querySelectorAll('[data-rows]').forEach(btn => btn.onclick = () => {
+      const op = btn.dataset.rows;
+      for (const x of allRows) {
+        const k = x.itemLookup;
+        if (op === 'all') excluded.delete(k);
+        else if (op === 'none') excluded.add(k);
+        else if (excluded.has(k)) excluded.delete(k); else excluded.add(k);
+      }
       render();
     });
     const all = card.querySelector('[data-all-rows]');
     if (all) all.indeterminate = excluded.size > 0 && excluded.size < allRows.length;
     if (all) all.onchange = () => { if (all.checked) excluded.clear(); else allRows.forEach(x => excluded.add(x.itemLookup)); render(); };
-    const reset = card.querySelector('[data-reset]');
-    if (reset) reset.onclick = () => { excluded.clear(); exportPrefs.hiddenCols[kind] = []; saveCols(); render(); };
+    const allCols = card.querySelector('[data-all-cols]');
+    if (allCols) allCols.onclick = () => { exportPrefs.hiddenCols[kind] = []; saveCols(); render(); };
 
     const copy = async withHeader => {
       const { cols, rows } = exportSelection(kind);

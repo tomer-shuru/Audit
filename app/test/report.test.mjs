@@ -24,6 +24,14 @@ test('item numbering: gaps and codes that do not fit', () => {
   assert.ok(r.warnings.some(w => w.item === 'X9' && /doesn't follow/.test(w.text)));
 });
 
+test('a disk that succeeded on a retry ("Successful / Failed") is listed', () => {
+  const head = ['Device Identifier', 'System serial', 'Erasure state', 'System chassis type', 'Disk capacity', 'Disk interface type', 'Comment'];
+  const r = buildReport(project({ inputs: { mac: '', windows: '', blanccoFiles: [
+    { name: 'a.csv', table: [head, ['BM41', 'DJSR593', 'Successful / Failed', 'Desktop', '512.1 GB', 'NVMe', 'ok'], ['BM42', 'X2', 'Failed', 'Desktop', '256 GB', 'SATA', 'ok']] },
+  ] } }), models);
+  assert.deepEqual(r.rows.map(x => [x.itemLookup, x.disk, x.blancco]), [['BM41', '512 GB NVMe', 'Pass'], ['BM42', '', 'Fail']]);
+});
+
 test('several Blancco files are combined', () => {
   const head = ['Device Identifier', 'System serial', 'Erasure state', 'System chassis type', 'Comment'];
   const r = buildReport(project({ inputs: { mac: '', windows: '', blanccoFiles: [
