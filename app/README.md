@@ -19,6 +19,7 @@ npm install
 npm test        # rule tests + comparison with real Audit.xlsm output
 npm run build   # writes AuditBuilder.html
 npm run package # also writes dist/AuditBuilder <version>.zip (app + user guide) for the shared Drive folder
+npm run release # package + copy the zip to G:\My Drive\Audit Builder and delete older zips there
 ```
 - `src/engine/` – all calculation rules (one function per old formula), no browser code
 - `src/ui/` – screens, styles, file import/export

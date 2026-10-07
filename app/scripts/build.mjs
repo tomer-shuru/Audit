@@ -41,4 +41,19 @@ if (process.argv.includes('--zip')) {
   const zipPath = path.join(dist, `AuditBuilder ${version}.zip`);
   fs.writeFileSync(zipPath, XLSX.CFB.write(zip, { fileType: 'zip', type: 'buffer', compression: true }));
   console.log(`Packed ${path.relative(root, zipPath)} (${Math.round(fs.statSync(zipPath).size / 1024)} KB)`);
+
+  // --publish <folder>: copy the zip into the shared Drive folder and remove older versions there
+  const pi = process.argv.indexOf('--publish');
+  if (pi > 0) {
+    const target = process.argv[pi + 1];
+    if (!target || !fs.existsSync(target)) throw new Error(`Publish folder not found: ${target}`);
+    fs.copyFileSync(zipPath, path.join(target, path.basename(zipPath)));
+    for (const old of fs.readdirSync(target)) {
+      if (/^AuditBuilder .*\.zip$/.test(old) && old !== path.basename(zipPath)) {
+        fs.rmSync(path.join(target, old));
+        console.log(`Removed old ${old} from ${target}`);
+      }
+    }
+    console.log(`Published to ${target}`);
+  }
 }

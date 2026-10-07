@@ -1,6 +1,5 @@
 // File and clipboard input/output for the browser app.
 import * as XLSX from 'xlsx';
-import { REPORT_COLUMNS, LOCKED_COLUMNS } from '../engine/report.js';
 
 const trimTable = rows => {
   const out = rows.map(r => r.map(v => (v == null ? '' : v)));
@@ -75,27 +74,30 @@ export async function importWorkbook(file) {
 }
 
 // --- output ---
-const reportTable = rows => [REPORT_COLUMNS.map(c => c[1]), ...rows.map(r => REPORT_COLUMNS.map(([k]) => r[k] ?? ''))];
-const lockedTable = rows => [LOCKED_COLUMNS.map(c => c[1]), ...rows.map(r => LOCKED_COLUMNS.map(([k]) => r[k] ?? ''))];
+// cols: [[key, label]], rows: report row objects -> array of arrays with a header row
+export const toTable = (cols, rows) => [cols.map(c => c[1]), ...rows.map(r => cols.map(([k]) => r[k] ?? ''))];
 
-export function downloadXlsx(report, settings) {
+// sheets: [{ name, cols, rows }]; sheets without rows or columns are left out
+export function downloadXlsx(sheets, settings) {
   const wb = XLSX.utils.book_new();
-  const add = (name, aoa) => {
+  for (const { name, cols, rows } of sheets) {
+    if (!rows.length || !cols.length) continue;
+    const aoa = toTable(cols, rows);
     const ws = XLSX.utils.aoa_to_sheet(aoa);
     ws['!cols'] = aoa[0].map((h, j) => ({ wch: Math.min(60, Math.max(8, ...aoa.map(r => String(r[j] ?? '').length))) }));
     ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: aoa.length - 1, c: aoa[0].length - 1 } }) };
     XLSX.utils.book_append_sheet(wb, ws, name);
-  };
-  add('Audit Report', reportTable(report.rows));
-  if (report.lockedFaulty.length) add('Locked and Faulty', lockedTable(report.lockedFaulty));
+  }
+  if (!wb.SheetNames.length) return false;
   XLSX.writeFile(wb, `${settings.projectNumber || 'Audit'} - Audit Report.xlsx`);
+  return true;
 }
 
-const toTsv = (aoa, withHeader) => (withHeader ? aoa : aoa.slice(1))
-  .map(r => r.map(v => String(v ?? '').replace(/[\t\r\n]+/g, ' ')).join('\t')).join('\n');
-
-export const reportTsv = (report, withHeader) => toTsv(reportTable(report.rows), withHeader);
-export const lockedTsv = (report, withHeader) => toTsv(lockedTable(report.lockedFaulty), withHeader);
+// tab-separated text that pastes into Google Sheets / Excel as cells
+export const toTsv = (cols, rows, withHeader) => {
+  const aoa = toTable(cols, rows);
+  return (withHeader ? aoa : aoa.slice(1)).map(r => r.map(v => String(v ?? '').replace(/[\t\r\n]+/g, ' ')).join('\t')).join('\n');
+};
 
 export async function copyText(text) {
   try { await navigator.clipboard.writeText(text); return true; } catch { /* fall back below */ }

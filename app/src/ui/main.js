@@ -1,11 +1,12 @@
 // Audit Builder - browser UI
-import { buildReport, REPORT_COLUMNS, LOCKED_COLUMNS, MANUAL_FIELDS, EDITABLE, itemCode } from '../engine/report.js';
+import { buildReport, REPORT_COLUMNS, EXPORT_COLUMNS, LOCKED_COLUMNS, MANUAL_FIELDS, EDITABLE, itemCode } from '../engine/report.js';
 import { normalizeBlancco, mergeTables, parseMacLines, parseWindowsLines, itemKey } from '../engine/sources.js';
 import defaultModels from '../data/default-models.json';
 import {
-  readTableFiles, parsePastedTable, importWorkbook, downloadXlsx, reportTsv, lockedTsv,
+  readTableFiles, parsePastedTable, importWorkbook, downloadXlsx, toTsv,
   copyText, downloadJson, readJsonFile,
 } from './io.js';
+import { canSaveInPlace, rememberedFile, rememberFile, chooseSaveFile, chooseOpenFile, writeFile } from './filesave.js';
 
 const STORE_PROJECT = 'auditApp.project';
 const STORE_MODELS = 'auditApp.models';
@@ -94,7 +95,10 @@ function renderChrome() {
   $('#projectChip').innerHTML = settingsComplete(s)
     ? `<b>${esc(s.projectNumber)}</b><span>${esc(s.endClient)}</span><span>${esc(s.prefix)}</span>`
     : '<b>No project set up</b>';
-  $('#saveState').textContent = state.project.savedToFile ? '' : 'Unsaved changes';
+  const saved = $('#saveState');
+  saved.textContent = !state.project.savedToFile ? 'Unsaved changes' : state.fileName ? `Saved · ${state.fileName}` : '';
+  saved.classList.toggle('dirty', !state.project.savedToFile);
+  saved.title = state.fileName ? `Save (Ctrl+S) writes to ${state.fileName}` : 'Save (Ctrl+S) will ask where to save the project file';
   const errors = r.warnings.filter(w => w.level === 'error').length;
   const counts = {
     data: r.counts.mac + r.counts.win + r.counts.blancco || '',
@@ -420,53 +424,112 @@ function sourceBadges(row) {
 }
 
 // ---------- Export tab ----------
+// Which columns to export is remembered on this computer; which rows is per session (new items start ticked).
+const STORE_EXPORT_COLS = 'auditApp.exportHiddenCols';
+const EXPORT_SHEETS = {
+  report: { title: 'Audit Report', cols: EXPORT_COLUMNS, rows: r => r.rows },
+  locked: { title: 'Locked and Faulty', cols: LOCKED_COLUMNS, rows: r => r.lockedFaulty },
+};
+const exportPrefs = { hiddenCols: load(STORE_EXPORT_COLS, { report: [], locked: [] }), excludedRows: { report: new Set(), locked: new Set() } };
+
+function exportSelection(kind) {
+  const sheet = EXPORT_SHEETS[kind];
+  const hidden = new Set(exportPrefs.hiddenCols[kind] || []);
+  const excluded = exportPrefs.excludedRows[kind];
+  const allRows = sheet.rows(state.report);
+  return {
+    sheet, allRows,
+    cols: sheet.cols.filter(([k]) => !hidden.has(k)),
+    rows: allRows.filter(r => !excluded.has(r.itemLookup)),
+    hidden, excluded,
+  };
+}
+
 function renderExport(main) {
   const r = state.report;
   const errors = r.warnings.filter(w => w.level === 'error');
-  const preview = (cols, rows) => `
-    <div class="table-wrap short"><table class="grid">
-      <thead><tr>${cols.map(([, l]) => `<th>${esc(l)}</th>`).join('')}</tr></thead>
-      <tbody>${rows.slice(0, 8).map(row => `<tr>${cols.map(([k]) => `<td>${esc(row[k])}</td>`).join('')}</tr>`).join('')}</tbody>
-    </table></div>${rows.length > 8 ? `<p class="hint">…and ${rows.length - 8} more</p>` : ''}`;
+
+  const section = kind => {
+    const { sheet, allRows, cols, rows, hidden, excluded } = exportSelection(kind);
+    if (kind === 'locked' && !allRows.length) {
+      return `<section class="card"><div class="card-head"><div><h2>${sheet.title} <span class="muted">0 items</span></h2>
+        <p class="hint">No locked or faulty devices in this project, so you don't need this sheet.</p></div></div></section>`;
+    }
+    const allRowsOn = allRows.every(x => !excluded.has(x.itemLookup));
+    return `
+    <section class="card" data-sheet="${kind}">
+      <div class="card-head">
+        <div><h2>${sheet.title} <span class="muted">${rows.length} of ${plural(allRows.length, 'row')} · ${cols.length} of ${sheet.cols.length} columns</span></h2>
+        <p class="hint">${kind === 'report' ? 'Untick rows or columns you don\'t want, then copy and paste into the Google Sheet. Your column choice is remembered.' : 'Devices with a lock or fault. Send this list along with the report.'}</p></div>
+        <div class="actions">
+          ${hidden.size || excluded.size ? '<button class="btn ghost" data-reset>Select all</button>' : ''}
+          <button class="btn primary" data-copy ${rows.length && cols.length ? '' : 'disabled'}>Copy rows</button>
+          <button class="btn" data-copy-h ${rows.length && cols.length ? '' : 'disabled'}>Copy with headers</button>
+        </div>
+      </div>
+      ${allRows.length ? `
+      <div class="table-wrap export">
+        <table class="grid pick">
+          <thead><tr>
+            <th class="sticky pick-col"><input type="checkbox" data-all-rows ${allRowsOn ? 'checked' : ''} title="Select all rows"></th>
+            ${sheet.cols.map(([k, l]) => `<th class="${hidden.has(k) ? 'off' : ''}"><label class="col-pick"><input type="checkbox" data-col="${k}" ${hidden.has(k) ? '' : 'checked'}>${esc(l)}</label></th>`).join('')}
+          </tr></thead>
+          <tbody>${allRows.map(row => {
+            const off = excluded.has(row.itemLookup);
+            return `<tr class="${off ? 'off' : ''}">
+              <th class="sticky pick-col"><input type="checkbox" data-row="${esc(row.itemLookup)}" ${off ? '' : 'checked'} title="${esc(row.itemLookup)}"></th>
+              ${sheet.cols.map(([k]) => `<td class="${hidden.has(k) ? 'off' : ''}">${esc(row[k])}</td>`).join('')}
+            </tr>`;
+          }).join('')}</tbody>
+        </table>
+      </div>` : '<p class="empty">No items yet.</p>'}
+    </section>`;
+  };
 
   main.innerHTML = `
   ${errors.length ? `<div class="banner bad">${plural(errors.length, 'problem')} still open: ${errors.map(e => esc(e.text)).join('; ')}. <a href="#" data-goto="review">Review</a></div>` : ''}
+  ${section('report')}
+  ${section('locked')}
   <section class="card">
     <div class="card-head">
-      <div><h2>Audit Report <span class="muted">${plural(r.rows.length, 'item')}</span></h2>
-      <p class="hint">Copy and paste straight into the Google Sheet. The columns are in the same order as the old Audit Report sheet.</p></div>
-      <div class="actions">
-        <button class="btn primary" data-copy="report">Copy rows</button>
-        <button class="btn" data-copy="reportH">Copy with headers</button>
-      </div>
-    </div>
-    ${r.rows.length ? preview(REPORT_COLUMNS, r.rows) : '<p class="empty">No items yet.</p>'}
-  </section>
-  <section class="card">
-    <div class="card-head">
-      <div><h2>Locked and Faulty <span class="muted">${plural(r.lockedFaulty.length, 'item')}</span></h2>
-      <p class="hint">${r.lockedFaulty.length ? 'Devices with a lock or fault. Send this list along with the report.' : 'No locked or faulty devices in this project, so you don\'t need this sheet.'}</p></div>
-      ${r.lockedFaulty.length ? `<div class="actions">
-        <button class="btn primary" data-copy="locked">Copy rows</button>
-        <button class="btn" data-copy="lockedH">Copy with headers</button>
-      </div>` : ''}
-    </div>
-    ${r.lockedFaulty.length ? preview(LOCKED_COLUMNS, r.lockedFaulty) : ''}
-  </section>
-  <section class="card">
-    <div class="card-head">
-      <div><h2>Excel file</h2><p class="hint">Download both sheets as an .xlsx file to keep with the project.</p></div>
+      <div><h2>Excel file</h2><p class="hint">Download the selected rows and columns of both sheets as an .xlsx file.</p></div>
       <div class="actions"><button class="btn" id="dlXlsx" ${r.rows.length ? '' : 'disabled'}>Download .xlsx</button></div>
     </div>
   </section>`;
 
-  main.querySelectorAll('[data-copy]').forEach(b => b.onclick = async () => {
-    const kind = b.dataset.copy;
-    const text = kind.startsWith('report') ? reportTsv(r, kind.endsWith('H')) : lockedTsv(r, kind.endsWith('H'));
-    const n = kind.startsWith('report') ? r.rows.length : r.lockedFaulty.length;
-    toast(await copyText(text) ? `Copied ${plural(n, 'row')}. Paste it into the sheet.` : 'Copy failed. Try again.', 'ok');
+  main.querySelectorAll('[data-sheet]').forEach(card => {
+    const kind = card.dataset.sheet;
+    const { allRows, excluded } = exportSelection(kind);
+    const saveCols = () => store(STORE_EXPORT_COLS, exportPrefs.hiddenCols);
+
+    card.querySelectorAll('[data-col]').forEach(cb => cb.onchange = () => {
+      const set = new Set(exportPrefs.hiddenCols[kind] || []);
+      if (cb.checked) set.delete(cb.dataset.col); else set.add(cb.dataset.col);
+      exportPrefs.hiddenCols[kind] = [...set]; saveCols(); render();
+    });
+    card.querySelectorAll('[data-row]').forEach(cb => cb.onchange = () => {
+      if (cb.checked) excluded.delete(cb.dataset.row); else excluded.add(cb.dataset.row);
+      render();
+    });
+    const all = card.querySelector('[data-all-rows]');
+    if (all) all.indeterminate = excluded.size > 0 && excluded.size < allRows.length;
+    if (all) all.onchange = () => { if (all.checked) excluded.clear(); else allRows.forEach(x => excluded.add(x.itemLookup)); render(); };
+    const reset = card.querySelector('[data-reset]');
+    if (reset) reset.onclick = () => { excluded.clear(); exportPrefs.hiddenCols[kind] = []; saveCols(); render(); };
+
+    const copy = async withHeader => {
+      const { cols, rows } = exportSelection(kind);
+      const ok = await copyText(toTsv(cols, rows, withHeader));
+      toast(ok ? `Copied ${plural(rows.length, 'row')} × ${plural(cols.length, 'column')}. Paste it into the sheet.` : 'Copy failed. Try again.', ok ? 'ok' : 'bad');
+    };
+    card.querySelector('[data-copy]').onclick = () => copy(false);
+    card.querySelector('[data-copy-h]').onclick = () => copy(true);
   });
-  $('#dlXlsx').onclick = () => downloadXlsx(r, state.project.settings);
+
+  $('#dlXlsx').onclick = () => {
+    const sheets = Object.keys(EXPORT_SHEETS).map(kind => { const s = exportSelection(kind); return { name: s.sheet.title, cols: s.cols, rows: s.rows }; });
+    if (!downloadXlsx(sheets, state.project.settings)) toast('Nothing selected to export', 'bad');
+  };
   main.querySelectorAll('[data-goto]').forEach(a => a.onclick = e => { e.preventDefault(); setTab(a.dataset.goto); });
 }
 
@@ -557,18 +620,59 @@ async function openProjectFile(file) {
     recompute(); render();
     if (!settingsComplete(state.project.settings)) openSetup({ force: true });
     else if ($('#setupDialog').open) $('#setupDialog').close();
+    return true;
   } catch (err) {
     toast(`Couldn't open ${file.name}: ${err.message}`, 'bad');
+    return false;
   }
 }
 
-function saveProject() {
+// Save: the first time asks where, after that overwrites the same file. "Save as" always asks.
+async function saveProject({ saveAs = false } = {}) {
   const s = state.project.settings;
+  const name = `${s.projectNumber || 'project'}.audit.json`;
   const copy = { ...state.project }; delete copy.savedToFile;
-  downloadJson(copy, `${s.projectNumber || 'project'}.audit.json`);
+  const text = JSON.stringify(copy, null, 1);
+
+  if (!canSaveInPlace) {
+    downloadJson(copy, name);
+  } else {
+    let handle = saveAs ? null : await rememberedFile();
+    try {
+      if (!handle) {
+        handle = await chooseSaveFile(name);
+        if (!handle) return; // cancelled
+      }
+      await writeFile(handle, text);
+    } catch (err) {
+      if (err.name === 'NotAllowedError') { toast('Not saved: the browser wasn\'t allowed to edit the file. Try again, or use Save as.', 'bad'); return; }
+      if (err.name === 'NotFoundError') { // file was moved or deleted: ask again
+        handle = await chooseSaveFile(name);
+        if (!handle) return;
+        await writeFile(handle, text);
+      } else { toast(`Not saved: ${err.message}`, 'bad'); return; }
+    }
+    await rememberFile(handle);
+    state.fileName = handle.name;
+  }
   state.project.savedToFile = true;
   store(STORE_PROJECT, state.project);
   renderChrome();
+  toast(canSaveInPlace ? `Saved to ${state.fileName}` : `Downloaded ${name}`);
+}
+
+async function openProject() {
+  if (!canSaveInPlace) { $('#openFile').click(); return; }
+  let picked;
+  try { picked = await chooseOpenFile(); } catch (err) { toast(`Couldn't open: ${err.message}`, 'bad'); return; }
+  if (!picked) return;
+  const isProjectFile = !/\.xls[xm]$/i.test(picked.file.name);
+  if (await openProjectFile(picked.file)) {
+    // saving an opened project writes back to it; an imported workbook is saved as a new file
+    await rememberFile(isProjectFile ? picked.handle : null);
+    state.fileName = isProjectFile ? picked.handle.name : '';
+    renderChrome();
+  }
 }
 
 // ---------- light / dark mode ----------
@@ -594,12 +698,19 @@ function init() {
 
   document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => setTab(b.dataset.tab));
   $('#projectChip').onclick = () => openSetup();
-  $('#btnSave').onclick = saveProject;
-  $('#btnOpen').onclick = () => $('#openFile').click();
+  $('#btnSave').onclick = () => saveProject();
+  $('#btnSaveAs').hidden = !canSaveInPlace;
+  $('#btnSaveAs').onclick = () => saveProject({ saveAs: true });
+  $('#btnOpen').onclick = openProject;
   $('#openFile').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) openProjectFile(f); };
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); document.activeElement?.blur?.(); saveProject({ saveAs: e.shiftKey }); }
+  });
+  rememberedFile().then(h => { state.fileName = h?.name || ''; renderChrome(); });
   $('#btnNew').onclick = () => {
     if (!state.project.savedToFile && !confirm('Start a new project? Changes since you last saved the project file will be lost.')) return;
     state.project = emptyProject();
+    state.fileName = ''; rememberFile(null);
     store(STORE_PROJECT, state.project);
     recompute(); setTab('data');
     openSetup({ force: true });

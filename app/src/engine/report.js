@@ -16,6 +16,9 @@ export const REPORT_COLUMNS = [
   ['weight', 'Weight'], ['itemStatus', 'Item status'], ['estValue', 'Est. Value'], ['locked', 'Locked or Faulty'],
 ];
 
+// Columns that can be exported (Item Lookup is only used inside the app)
+export const EXPORT_COLUMNS = REPORT_COLUMNS.filter(([k]) => k !== 'itemLookup');
+
 export const LOCKED_COLUMNS = [
   ['sn', 'S.N'], ['type', 'Type'], ['make', 'Make'], ['model', 'Model'], ['issue', 'Issue type'], ['wiped', 'Wiped'],
 ];
@@ -147,7 +150,7 @@ export function buildReport(project, models) {
   });
 
   const lockedFaulty = rows.filter(r => !isBlank(r.locked)).map(r => ({
-    sn: r.sn, type: r.type, make: r.make, model: r.model, issue: r.locked,
+    itemLookup: r.itemLookup, sn: r.sn, type: r.type, make: r.make, model: r.model, issue: r.locked,
     wiped: str(r.blancco).toLowerCase().startsWith('pass') ? 'Yes' : 'No',
   }));
 

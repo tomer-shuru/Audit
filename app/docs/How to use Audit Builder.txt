@@ -23,13 +23,8 @@ INSTALLING
    Send to > Desktop (create shortcut).
    (On Windows 11, click "Show more options" first to see "Send to".)
 
-4. Have Chrome or Edge ask where to save files (recommended):
-   - Chrome: Settings > Downloads > turn on "Ask where to save each file
-     before downloading".
-   - Edge: Settings > Downloads > turn on "Ask me where to save each file
-     before downloading".
-   This lets you choose where project files are saved instead of everything
-   going to Downloads.
+4. Use Chrome or Edge. (Firefox works too, but there "Save project"
+   downloads a new copy each time instead of updating the same file.)
 
 
 OPENING THE APP
@@ -78,11 +73,19 @@ SAVING AND SHARING PROJECTS
 - The app keeps your current work automatically, so closing the window by
   accident doesn't lose anything. That copy only exists on your computer
   and in that browser, though.
-- To keep a project or pass it to someone else, click "Save project". It
-  saves a file named after the project number (e.g. SHR11734.audit.json).
-  Upload that file to the Projects folder in the shared Drive.
-- To continue a project, yours or someone else's: download its file from the
-  Projects folder in Drive, then click "Open..." in the app and choose it.
+- "Save project" (or Ctrl+S): the first time, it asks where to save the
+  project file (named after the project number, e.g. SHR11734.audit.json).
+  After that it saves over the same file without asking. The top bar shows
+  which file you're saving to.
+- After reopening the browser, the first save may show a small "allow this
+  site to edit the file?" message. Click Allow (or "Edit file").
+- "Save as..." (Ctrl+Shift+S) saves to a different file, which becomes the
+  one used from then on.
+- Opening a project file with "Open..." also makes it the file that Save
+  updates. Starting a "New" project asks again on the first save.
+- To pass a project to someone else, upload its file to the Projects folder
+  in the shared Drive. To continue someone else's project: download its file
+  from Drive, then click "Open..." in the app and choose it.
 - If two people work on the same project at the same time, their changes
   don't merge. Agree who has it.
 - An old Audit.xlsm can be opened with "Open..." too.
