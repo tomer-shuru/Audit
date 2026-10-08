@@ -66,29 +66,34 @@ DOING A PROJECT
 1. New project: click "New" and fill in the project number, end client and
    item code prefix (for example GG; leave it empty if the item codes are
    just numbers).
-2. Data tab: click "Add files..." and choose the Blancco exports (.csv, .xlsx
-   or .zip). You can choose several at once or drag them onto the box.
-   Paste the Mac report lines and the Windows report lines in their boxes.
-3. Manual entries tab: add devices the tools can't read (dead, locked, no
-   report). Click "Add item" and type the details.
-4. Review tab: check the "Checks" list at the top. Rows with a problem are
-   highlighted, and clicking a check jumps to its row. Click any cell to
+2. Data tab (everything the report is built from): click "Add files..." and
+   choose the Blancco exports (.csv, .xlsx or .zip). You can choose several
+   at once or drag them onto the box. Paste the Mac report lines and the
+   Windows report lines in their boxes.
+3. Manual entries tab (devices the tools couldn't read: dead, BIOS locked,
+   no report...): click "Add item" and type the details.
+4. Review tab (check everything is right, make small corrections): every
+   check is listed at the top. The Review tab button shows how many there
+   are: red = problems, yellow = warnings, gray = notes. Rows with a problem
+   are highlighted, and clicking a check jumps to its row. Click any cell to
    correct it. Edited cells turn blue, and clearing a cell undoes your edit.
-5. Export tab: click "Copy rows" and paste into the Google Sheet. If there
-   are locked or faulty devices, copy that list too.
+5. Export tab (only for getting the finished report out): click "Copy rows"
+   and paste into the Google Sheet. If there are locked or faulty devices,
+   copy that list too. Untick columns the Google Sheet doesn't have.
 
 If some items are already in the Google Sheet (for example BM20 was typed in
-by hand), use "Some items are already in the Google Sheet? Merge with them"
-under the Audit Report table on the Export tab:
+by hand):
    a. In the Google Sheet, select the rows you'd paste over (from the first
-      item row, down past the last filled row) and copy them.
-   b. Paste them in the box. The app shows which rows it keeps from the sheet
-      and the order everything will be in.
-   c. Click "Copy merged rows", click the same top-left cell in the Google
-      Sheet and paste. Rows already in the sheet get their own values back,
-      and the app's rows fill in around them, sorted by item code.
-   Make sure the ticked columns match the sheet's columns (the app warns if
-   the number of columns differs). Formulas in the kept rows become values.
+      item row down past the last filled row, same columns as the export)
+      and copy them.
+   b. Paste them in "Rows already in the Google Sheet" on the Data tab. It is
+      saved with the project.
+   c. On Review and Export those rows show up green, in their place, instead
+      of Audit Builder's rows for the same items. Any problem with them (for
+      example no item codes found) is listed on the Review tab.
+   d. On the Export tab click "Copy rows", click the ITEM cell of the first
+      item row in the Google Sheet and paste. The green rows get their own
+      values back (formulas in them become plain values).
 
 
 SAVING AND SHARING PROJECTS

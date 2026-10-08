@@ -88,8 +88,7 @@ export function buildReport(project, models) {
 
   // order: codes in the project's numbering first, then anything else
   const keys = new Set([...manBy.keys(), ...macBy.keys(), ...winBy.keys(), ...csvBy.keys()]);
-  const prefix = itemKey(settings.prefix);
-  const numOf = k => (k.startsWith(prefix) && /^\d+$/.test(k.slice(prefix.length)) ? Number(k.slice(prefix.length)) : null);
+  const numOf = k => codeNumber(settings, k);
   const sorted = [...keys].sort((a, b) => {
     const na = numOf(a), nb = numOf(b);
     if (na !== null && nb !== null) return na - nb;
@@ -101,12 +100,8 @@ export function buildReport(project, models) {
   const outside = sorted.filter(k => numOf(k) === null);
   for (const k of outside) warnings.push({ level: 'warn', item: k, text: `${k}: item code doesn't follow this project's numbering (${settings.prefix}01, ${settings.prefix}02…)` });
 
-  const nums = sorted.map(numOf).filter(n => n !== null);
-  if (nums.length) {
-    const have = new Set(nums); const gaps = [];
-    for (let n = Math.min(...nums); n <= Math.max(...nums); n++) if (!have.has(n)) gaps.push(n);
-    if (gaps.length) warnings.push({ level: 'info', text: `No data yet for: ${compressRanges(gaps).map(([a, b]) => a === b ? itemCode(settings, a) : `${itemCode(settings, a)}–${itemCode(settings, b)}`).join(', ')}` });
-  }
+  const gaps = missingItemsNote(settings, sorted);
+  if (gaps) warnings.push(gaps);
 
   const rows = sorted.map(k => {
     const man = manBy.get(k) || {};
@@ -176,6 +171,23 @@ export function buildReport(project, models) {
   }));
 
   return { rows, lockedFaulty, warnings, counts: { mac: mac.length, win: win.length, blancco: csv.length, blanccoRows: blanccoTable.rows.length, manual: manBy.size } };
+}
+
+// the number in an item code of this project's numbering (GG07 -> 7), or null
+export function codeNumber(settings, key) {
+  const prefix = itemKey(settings.prefix);
+  return key.startsWith(prefix) && /^\d+$/.test(key.slice(prefix.length)) ? Number(key.slice(prefix.length)) : null;
+}
+
+// note listing the item numbers between the lowest and highest code that have no data (keys: item keys)
+export function missingItemsNote(settings, keys) {
+  const nums = keys.map(k => codeNumber(settings, k)).filter(n => n !== null);
+  if (!nums.length) return null;
+  const have = new Set(nums); const gaps = [];
+  for (let n = Math.min(...nums); n <= Math.max(...nums); n++) if (!have.has(n)) gaps.push(n);
+  if (!gaps.length) return null;
+  const name = n => itemCode(settings, n);
+  return { level: 'info', kind: 'gaps', text: `No data yet for: ${compressRanges(gaps).map(([a, b]) => a === b ? name(a) : `${name(a)}–${name(b)}`).join(', ')}` };
 }
 
 function compressRanges(nums) {

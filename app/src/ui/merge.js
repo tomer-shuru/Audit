@@ -24,10 +24,11 @@ export function parseTsv(text) {
 }
 
 const escRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const byCode = (a, b) => a.code.localeCompare(b.code, undefined, { numeric: true });
 
-// sheetText: rows copied from the Google Sheet (same columns as the copy from the app)
-// cols / rows: the export selection; prefix: the project's item code prefix
+// sheetText: rows copied from the Google Sheet (same columns as the export, starting at the first item row)
+// cols: the export columns that are ticked; rows: the report rows; prefix: the project's item code prefix
+// Returns the report rows with the sheet's rows merged in. A sheet row is a row object like the others
+// (its cells spread over cols), with _sheet set and itemLookup "sheet:<n>".
 export function mergeWithSheet({ sheetText, cols, rows, prefix }) {
   const table = parseTsv(sheetText);
   const itemCol = cols.findIndex(([k]) => k === 'item');
@@ -43,48 +44,35 @@ export function mergeWithSheet({ sheetText, cols, rows, prefix }) {
     }
     return null;
   };
+  const sheetRow = (cells, code, n) => ({
+    ...Object.fromEntries(cols.map(([k], j) => [k, cells[j] ?? ''])),
+    itemLookup: `sheet:${n}`, _sheet: { code, cells },
+  });
 
-  const top = [], sheetRows = [], other = [];
-  for (const cells of table) {
-    if (cells.every(v => !v.trim())) continue;
+  let headerRows = 0;
+  const found = [], other = [];
+  table.forEach((cells, n) => {
+    if (cells.every(v => !v.trim())) return;
     const code = codeOf(cells);
-    if (code) sheetRows.push({ code, cells, from: 'sheet' });
-    else (sheetRows.length ? other : top).push(cells); // header rows stay on top, anything else goes last
-  }
+    if (code) found.push(sheetRow(cells, code, n));
+    else if (!found.length) headerRows++;   // headers above the first item are left out
+    else other.push(sheetRow(cells, '', n)); // rows without a code go last
+  });
 
-  const inSheet = new Set(sheetRows.map(r => r.code));
-  const kept = [], added = [];
-  for (const r of rows) {
-    const code = itemKey(r.itemLookup);
-    if (inSheet.has(code)) kept.push(code);
-    else added.push({ code, cells: cols.map(([k]) => String(r[k] ?? '')), from: 'app' });
-  }
-  const merged = [...sheetRows, ...added].sort(byCode);
+  const inSheet = new Set(found.map(r => r._sheet.code));
+  const skipped = rows.filter(r => inSheet.has(itemKey(r.itemLookup))).map(r => r.itemLookup);
+  const key = r => (r._sheet ? r._sheet.code : itemKey(r.itemLookup));
+  const merged = [...found, ...rows.filter(r => !inSheet.has(itemKey(r.itemLookup)))]
+    .sort((a, b) => key(a).localeCompare(key(b), undefined, { numeric: true }));
 
   const counts = new Map();
-  for (const r of sheetRows) counts.set(r.code, (counts.get(r.code) || 0) + 1);
-  const sheetWidth = Math.max(0, ...sheetRows.map(r => r.cells.length));
-  const width = Math.max(cols.length, sheetWidth, ...top.map(c => c.length), ...other.map(c => c.length));
-  const pad = cells => [...cells, ...Array(width - cells.length).fill('')];
-
+  for (const r of found) counts.set(r._sheet.code, (counts.get(r._sheet.code) || 0) + 1);
+  const sheetCodes = found.map(r => r._sheet.code).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
   return {
-    table: [...top, ...merged.map(r => r.cells), ...other].map(pad),
-    order: runs(merged),
-    sheetCodes: sheetRows.map(r => r.code).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
-    kept, added: added.map(r => r.code),
+    rows: [...merged, ...other],
+    sheetCodes, skipped,
     duplicates: [...counts].filter(([, n]) => n > 1).map(([c]) => c),
-    topRows: top.length, otherRows: other.length,
-    sheetWidth, appWidth: cols.length,
-    lineBreaks: sheetRows.some(r => r.cells.some(v => /[\t\n]/.test(v))),
+    headerRows, otherRows: other.length,
+    lineBreaks: [...found, ...other].some(r => r._sheet.cells.some(v => /[\t\n]/.test(v))),
   };
-}
-
-// consecutive rows from the same place: [{ from: 'sheet' | 'app', first, last, count }]
-function runs(merged) {
-  const out = [];
-  for (const r of merged) {
-    const last = out[out.length - 1];
-    if (last && last.from === r.from) { last.last = r.code; last.count++; } else out.push({ from: r.from, first: r.code, last: r.code, count: 1 });
-  }
-  return out;
 }

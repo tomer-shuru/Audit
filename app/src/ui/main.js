@@ -1,10 +1,10 @@
 // Audit Builder - browser UI
-import { buildReport, REPORT_COLUMNS, EXPORT_COLUMNS, LOCKED_COLUMNS, MANUAL_FIELDS, EDITABLE, itemCode } from '../engine/report.js';
+import { buildReport, REPORT_COLUMNS, EXPORT_COLUMNS, LOCKED_COLUMNS, MANUAL_FIELDS, EDITABLE, itemCode, missingItemsNote } from '../engine/report.js';
 import { normalizeBlancco, mergeTables, parseMacLines, parseWindowsLines, itemKey } from '../engine/sources.js';
 import defaultModels from '../data/default-models.json';
 import {
   readTableFiles, parsePastedTable, importWorkbook, downloadXlsx, toTsv,
-  copyText, downloadJson, readJsonFile, tableToTsv,
+  copyText, downloadJson, readJsonFile,
 } from './io.js';
 import { mergeWithSheet } from './merge.js';
 import {
@@ -20,7 +20,7 @@ const STORE_TAB = 'auditApp.tab';
 const emptyProject = () => ({
   version: 2,
   settings: { projectNumber: '', prefix: '', endClient: '' },
-  inputs: { mac: '', windows: '', blanccoFiles: [] },
+  inputs: { mac: '', windows: '', blanccoFiles: [], sheet: '' },
   manual: {}, overrides: {},
   savedToFile: true,
 });
@@ -57,7 +57,28 @@ const settingsComplete = s => s.projectNumber.trim() && s.endClient.trim(); // t
 
 function recompute() {
   state.report = buildReport(state.project, state.models);
+  mergeSheetRows();
 }
+
+// Rows already in the Google Sheet (Data tab) take the place of the report rows for the same items.
+// They are lined up with the Audit Report columns ticked on the Export tab, the way they get pasted back.
+// state.merge.rows is then the full list shown on Review and Export; its checks join the report's warnings.
+function mergeSheetRows() {
+  state.merge = null;
+  const r = state.report;
+  if (!state.project.inputs.sheet.trim()) return;
+  const cols = exportCols('report');
+  const m = mergeWithSheet({ sheetText: state.project.inputs.sheet, cols, rows: r.rows, prefix: state.project.settings.prefix });
+  state.merge = m;
+  // the app's rows for items the sheet already has aren't used, so neither are their checks
+  const skipped = new Set(m.skipped);
+  const keys = m.rows.map(x => (x._sheet ? x._sheet.code : itemKey(x.itemLookup))).filter(Boolean);
+  r.warnings = r.warnings.filter(w => !skipped.has(w.item) && w.kind !== 'gaps');
+  const gaps = missingItemsNote(state.project.settings, keys);
+  if (gaps) r.warnings.push(gaps);
+  r.warnings.push(...sheetWarnings(m));
+}
+const reportRows = () => state.merge?.rows ?? state.report.rows;
 function changed({ rerender = true } = {}) {
   state.project.savedToFile = false;
   store(STORE_PROJECT, state.project);
@@ -103,17 +124,21 @@ function renderChrome() {
   saved.textContent = !state.project.savedToFile ? 'Unsaved changes' : state.fileName ? `Saved · ${state.fileName}` : '';
   saved.classList.toggle('dirty', !state.project.savedToFile);
   saved.title = state.fileName ? `Save (Ctrl+S) writes to ${state.fileName}` : 'Save (Ctrl+S) will ask where to save the project file';
-  const errors = r.warnings.filter(w => w.level === 'error').length;
+  // Review shows how many checks there are: red = problems, yellow = warnings, gray = notes
+  const levels = { error: 'problem', warn: 'warning', info: 'note' };
+  const checks = Object.entries(levels).map(([l, word]) => {
+    const n = r.warnings.filter(w => w.level === l).length;
+    return n ? `<span class="badge ${l}" title="${plural(n, word)}">${n}</span>` : '';
+  }).join('');
   const counts = {
-    data: r.counts.mac + r.counts.win + r.counts.blancco || '',
+    data: r.counts.mac + r.counts.win + r.counts.blancco + (state.merge?.sheetCodes.length || 0) || '',
     manual: r.counts.manual || '',
-    review: r.rows.length || '',
-    export: errors ? `${errors} !` : '',
+    review: checks,
+    export: '',
   };
   document.querySelectorAll('#tabs button').forEach(b => {
     b.classList.toggle('active', b.dataset.tab === state.tab);
-    b.querySelector('.count').textContent = counts[b.dataset.tab] ?? '';
-    b.querySelector('.count').classList.toggle('bad', b.dataset.tab === 'export' && errors > 0);
+    b.querySelector('.count').innerHTML = counts[b.dataset.tab] ?? '';
   });
 }
 
@@ -183,7 +208,19 @@ function renderData(main) {
       <textarea id="winInput" class="mono" rows="10" spellcheck="false" placeholder="GG17*4V3SHW3*4004343*Notebook*Dell Inc.*Latitude 5431*…">${esc(inp.windows)}</textarea>
       <div class="status" id="winStatus">${plural(win.length, 'device')}${noCode(win) ? ` · <span class="bad-text">${noCode(win)} without item code</span>` : ''}</div>
     </section>
-  </div>`;
+  </div>
+
+  <section class="card">
+    <div class="card-head">
+      <div><h2>Rows already in the Google Sheet <span class="muted">optional</span></h2>
+      <p class="hint">If some items are already filled in the project's Google Sheet, copy those rows there (from the first item row down past the last filled one,
+      same columns as the export) and paste them here. On the Export tab they show up in their place and are copied back as they are,
+      instead of Audit Builder's rows for the same items.</p></div>
+      ${inp.sheet.trim() ? '<div class="actions"><button class="btn ghost" id="sheetClear">Clear</button></div>' : ''}
+    </div>
+    <textarea id="sheetInput" class="mono" rows="4" spellcheck="false" placeholder="Paste the Google Sheet rows here">${esc(inp.sheet)}</textarea>
+    <div class="status" id="sheetStatus">${sheetStatus()}</div>
+  </section>`;
 
   // adding a file with the same name replaces the earlier copy
   const addFiles = list => {
@@ -231,7 +268,21 @@ function renderData(main) {
     };
   };
   bindLines('#macInput', 'mac', '#macStatus', parseMacLines);
+  let sheetTimer;
+  $('#sheetInput').oninput = e => {
+    inp.sheet = e.target.value;
+    clearTimeout(sheetTimer);
+    sheetTimer = setTimeout(() => { changed({ rerender: false }); $('#sheetStatus').innerHTML = sheetStatus(); }, 300);
+  };
+  const sheetClear = $('#sheetClear');
+  if (sheetClear) sheetClear.onclick = () => { inp.sheet = ''; changed(); };
   bindLines('#winInput', 'windows', '#winStatus', parseWindowsLines);
+}
+
+function sheetStatus() {
+  const m = state.merge;
+  if (!m) return 'Nothing pasted';
+  return `${plural(m.sheetCodes.length, 'row')} with an item code`;
 }
 
 // ---------- Manual entries tab ----------
@@ -340,7 +391,8 @@ function renderReview(main) {
   }
   const issueItems = new Set(issues.keys());
   const q = state.reviewFilter.trim().toLowerCase();
-  const rows = r.rows.filter(row =>
+  const allRows = reportRows();
+  const rows = allRows.filter(row =>
     (!state.reviewIssuesOnly || issueItems.has(row.itemLookup) || row.locked) &&
     (!q || REPORT_COLUMNS.some(([k]) => String(row[k] ?? '').toLowerCase().includes(q))));
   const levelIcon = { error: '✖', warn: '!', info: 'i' };
@@ -357,17 +409,18 @@ function renderReview(main) {
   </section>` : ''}
   <section class="card">
     <div class="card-head">
-      <div><h2>Audit Report</h2><p class="hint">Click a cell to change it. Edited cells are highlighted; clear a cell to go back to the calculated value.</p></div>
+      <div><h2>Audit Report</h2><p class="hint">Click a cell to change it. Edited cells are highlighted; clear a cell to go back to the calculated value.
+      ${state.merge ? 'Green rows are already in the Google Sheet (pasted on the Data tab) and stay as they are.' : ''}</p></div>
       <div class="actions">
         <input type="search" id="reviewSearch" placeholder="Search…" value="${esc(state.reviewFilter)}">
         <label class="check"><input type="checkbox" id="issuesOnly" ${state.reviewIssuesOnly ? 'checked' : ''}> Only items with issues</label>
       </div>
     </div>
-    ${r.rows.length ? `
+    ${allRows.length ? `
     <div class="table-wrap tall">
       <table class="grid review">
         <thead><tr>${REPORT_COLUMNS.map(([k, l], j) => `<th class="${j < 2 ? 'sticky s' + j : ''}">${esc(l)}</th>`).join('')}</tr></thead>
-        <tbody>${rows.map(row => `
+        <tbody>${rows.map(row => row._sheet ? sheetReviewRow(row, issues) : `
           <tr data-code="${esc(row.itemLookup)}" class="${issues.has(row.itemLookup) ? 'issue-' + issues.get(row.itemLookup).level : ''}">
             ${REPORT_COLUMNS.map(([k], j) => {
               if (!EDITABLE.has(k)) return `<th class="sticky s${j}" ${j === 0 && issues.has(row.itemLookup) ? `title="${esc(issues.get(row.itemLookup).texts.join('\n'))}"` : ''}>${esc(row[k])}${j === 0 ? sourceBadges(row) : ''}</th>`;
@@ -378,7 +431,7 @@ function renderReview(main) {
         </tbody>
       </table>
     </div>
-    <p class="hint">${rows.length} of ${plural(r.rows.length, 'item')} shown</p>` : '<p class="empty">Nothing to show yet. Add data on the Data tab or a manual entry.</p>'}
+    <p class="hint">${rows.length} of ${plural(allRows.length, 'item')} shown</p>` : '<p class="empty">Nothing to show yet. Add data on the Data tab or a manual entry.</p>'}
   </section>`;
 
   const search = $('#reviewSearch');
@@ -422,6 +475,19 @@ function renderReview(main) {
   });
 }
 
+// a row that is already in the Google Sheet: shown as it is, not editable here
+function sheetReviewRow(row, issues) {
+  const issue = issues.get(row.itemLookup);
+  return `
+    <tr data-code="${esc(row.itemLookup)}" class="from-sheet ${issue ? 'issue-' + issue.level : ''}" title="Already in the Google Sheet. Change it on the Data tab.">
+      ${REPORT_COLUMNS.map(([k], j) => {
+        if (j === 0) return `<th class="sticky s0">${esc(row._sheet.code || '—')}<span class="badges"><i title="Google Sheet">G</i></span></th>`;
+        if (j === 1) return `<th class="sticky s1">${esc(row[k])}</th>`;
+        return `<td>${esc(row[k])}</td>`;
+      }).join('')}
+    </tr>`;
+}
+
 function sourceBadges(row) {
   const s = row._sources;
   return `<span class="badges">${s.mac ? '<i title="Mac report">M</i>' : ''}${s.win ? '<i title="Windows report">W</i>' : ''}${s.blancco ? '<i title="Blancco export">B</i>' : ''}${s.manual ? '<i title="Manual entry">H</i>' : ''}</span>`;
@@ -434,16 +500,20 @@ const EXPORT_SHEETS = {
   report: { title: 'Audit Report', cols: EXPORT_COLUMNS, rows: r => r.rows },
   locked: { title: 'Locked and Faulty', cols: LOCKED_COLUMNS, rows: r => r.lockedFaulty },
 };
-const exportPrefs = { hiddenCols: load(STORE_EXPORT_COLS, { report: [], locked: [] }), excludedRows: { report: new Set(), locked: new Set() }, anchor: {}, sheetText: '' };
+const exportPrefs = { hiddenCols: load(STORE_EXPORT_COLS, { report: [], locked: [] }), excludedRows: { report: new Set(), locked: new Set() }, anchor: {} };
+
+const exportCols = kind => {
+  const hidden = new Set(exportPrefs.hiddenCols[kind] || []);
+  return EXPORT_SHEETS[kind].cols.filter(([k]) => !hidden.has(k));
+};
 
 function exportSelection(kind) {
   const sheet = EXPORT_SHEETS[kind];
   const hidden = new Set(exportPrefs.hiddenCols[kind] || []);
   const excluded = exportPrefs.excludedRows[kind];
-  const allRows = sheet.rows(state.report);
+  const allRows = kind === 'report' ? reportRows() : sheet.rows(state.report);
   return {
-    sheet, allRows,
-    cols: sheet.cols.filter(([k]) => !hidden.has(k)),
+    sheet, allRows, cols: exportCols(kind),
     rows: allRows.filter(r => !excluded.has(r.itemLookup)),
     hidden, excluded,
   };
@@ -464,7 +534,7 @@ function renderExport(main) {
     <section class="card" data-sheet="${kind}">
       <div class="card-head">
         <div><h2>${sheet.title} <span class="muted">${rows.length} of ${plural(allRows.length, 'row')} · ${cols.length} of ${sheet.cols.length} columns</span></h2>
-        <p class="hint">${kind === 'report' ? 'Untick rows or columns you don\'t want, then copy and paste into the Google Sheet. Your column choice is remembered.' : 'Devices with a lock or fault. Send this list along with the report.'}</p></div>
+        <p class="hint">${kind === 'report' && state.merge ? 'Green rows are already in the Google Sheet and are copied back as they are. Paste at the ITEM cell of the first item row in the Google Sheet.' : kind === 'report' ? 'Untick rows or columns you don\'t want, then copy and paste into the Google Sheet. Your column choice is remembered.' : 'Devices with a lock or fault. Send this list along with the report.'}</p></div>
         <div class="actions">
           <button class="btn primary" data-copy ${rows.length && cols.length ? '' : 'disabled'}>Copy rows</button>
           <button class="btn" data-copy-h ${rows.length && cols.length ? '' : 'disabled'}>Copy with headers</button>
@@ -487,14 +557,14 @@ function renderExport(main) {
           </tr></thead>
           <tbody>${allRows.map(row => {
             const off = excluded.has(row.itemLookup);
-            return `<tr class="${off ? 'off' : ''}">
-              <th class="sticky pick-col"><input type="checkbox" data-row="${esc(row.itemLookup)}" ${off ? '' : 'checked'} title="${esc(row.itemLookup)}"></th>
+            return `<tr class="${off ? 'off' : ''}${row._sheet ? ' from-sheet' : ''}">
+              <th class="sticky pick-col"><input type="checkbox" data-row="${esc(row.itemLookup)}" ${off ? '' : 'checked'} title="${esc(row._sheet ? 'Already in the Google Sheet' : row.itemLookup)}"></th>
               ${sheet.cols.map(([k]) => `<td class="${hidden.has(k) ? 'off' : ''}">${esc(row[k])}</td>`).join('')}
             </tr>`;
           }).join('')}</tbody>
         </table>
       </div>
-      ${kind === 'report' ? mergeSection(cols, rows) : ''}` : '<p class="empty">No items yet.</p>'}
+` : '<p class="empty">No items yet.</p>'}
     </section>`;
   };
 
@@ -517,7 +587,7 @@ function renderExport(main) {
     card.querySelectorAll('[data-col]').forEach(cb => cb.onchange = () => {
       const set = new Set(exportPrefs.hiddenCols[kind] || []);
       if (cb.checked) set.delete(cb.dataset.col); else set.add(cb.dataset.col);
-      exportPrefs.hiddenCols[kind] = [...set]; saveCols(); render();
+      exportPrefs.hiddenCols[kind] = [...set]; saveCols(); recompute(); render();
     });
     // Shift-click: give every row between the last clicked one and this one the same state
     card.querySelectorAll('[data-row]').forEach(cb => cb.onclick = e => {
@@ -543,7 +613,7 @@ function renderExport(main) {
     if (all) all.indeterminate = excluded.size > 0 && excluded.size < allRows.length;
     if (all) all.onchange = () => { if (all.checked) excluded.clear(); else allRows.forEach(x => excluded.add(x.itemLookup)); render(); };
     const allCols = card.querySelector('[data-all-cols]');
-    if (allCols) allCols.onclick = () => { exportPrefs.hiddenCols[kind] = []; saveCols(); render(); };
+    if (allCols) allCols.onclick = () => { exportPrefs.hiddenCols[kind] = []; saveCols(); recompute(); render(); };
 
     const copy = async withHeader => {
       const { cols, rows } = exportSelection(kind);
@@ -554,22 +624,6 @@ function renderExport(main) {
     card.querySelector('[data-copy-h]').onclick = () => copy(true);
   });
 
-  const sheetPaste = $('#sheetPaste');
-  if (sheetPaste) {
-    const update = () => { if (sheetPaste.value !== exportPrefs.sheetText) { exportPrefs.sheetText = sheetPaste.value; render(); } };
-    sheetPaste.onpaste = () => setTimeout(update);
-    sheetPaste.onchange = update;
-    const clear = $('#mergeClear');
-    if (clear) clear.onclick = () => { exportPrefs.sheetText = ''; render(); };
-    const copyMerged = $('#mergeCopy');
-    if (copyMerged) copyMerged.onclick = async () => {
-      const { cols, rows } = exportSelection('report');
-      const m = mergeWithSheet({ sheetText: exportPrefs.sheetText, cols, rows, prefix: state.project.settings.prefix });
-      const ok = await copyText(tableToTsv(m.table));
-      toast(ok ? `Copied ${plural(m.table.length, 'row')}. Click the same top-left cell in the Google Sheet and paste.` : 'Copy failed. Try again.', ok ? 'ok' : 'bad');
-    };
-  }
-
   $('#dlXlsx').onclick = () => {
     const sheets = Object.keys(EXPORT_SHEETS).map(kind => { const s = exportSelection(kind); return { name: s.sheet.title, cols: s.cols, rows: s.rows }; });
     if (!downloadXlsx(sheets, state.project.settings)) toast('Nothing selected to export', 'bad');
@@ -577,48 +631,22 @@ function renderExport(main) {
   main.querySelectorAll('[data-goto]').forEach(a => a.onclick = e => { e.preventDefault(); setTab(a.dataset.goto); });
 }
 
-// "Some items are already in the Google Sheet": paste those rows in, copy back one merged block
-function mergeSection(cols, rows) {
-  const text = exportPrefs.sheetText;
+// checks for the Google Sheet rows pasted on the Data tab (shown on the Review tab)
+function sheetWarnings(m) {
   const settings = state.project.settings;
-  let body = '';
-  if (text.trim()) {
-    const m = mergeWithSheet({ sheetText: text, cols, rows, prefix: settings.prefix });
-    const list = codes => esc(codes.length > 12 ? `${codes.slice(0, 12).join(', ')} and ${codes.length - 12} more` : codes.join(', '));
-    const notes = [];
-    if (!m.sheetCodes.length) {
-      notes.push(['bad', `No item codes found in the pasted rows. Copy them including the ITEM column (codes like ITD-${esc(settings.projectNumber)}-${esc(itemCode(settings, 1))}).`]);
-    } else {
-      notes.push(['good', `✓ ${plural(m.sheetCodes.length, 'row')} already in the sheet ${m.sheetCodes.length === 1 ? 'stays exactly as it is' : 'stay exactly as they are'}: ${list(m.sheetCodes)}`]);
-      if (m.kept.length) notes.push(['muted', `Skipped from Audit Builder because the sheet already has them: ${list(m.kept)}`]);
-      notes.push(['muted', `${plural(m.added.length, 'row')} added from Audit Builder.`]);
-      if (m.sheetWidth !== m.appWidth) notes.push(['bad', `The sheet rows have ${m.sheetWidth} columns but you're copying ${m.appWidth}. Tick the columns above so they match the sheet, or data will land in the wrong columns.`]);
-      if (m.duplicates.length) notes.push(['warn', `In the sheet more than once: ${list(m.duplicates)}. Every copy is kept.`]);
-      if (m.topRows) notes.push(['muted', `${plural(m.topRows, 'row')} above the first item (headers) kept on top.`]);
-      if (m.otherRows) notes.push(['warn', `${plural(m.otherRows, 'row')} without an item code moved to the bottom.`]);
-      if (m.lineBreaks) notes.push(['warn', 'Some sheet cells have line breaks; they will be pasted on one line.']);
-    }
-    const span = r => esc(r.first === r.last ? r.first : `${r.first}–${r.last}`);
-    body = `
-      <ul class="merge-notes">${notes.map(([c, t]) => `<li class="${c === 'muted' ? c : c + '-text'}">${t}</li>`).join('')}</ul>
-      ${m.sheetCodes.length ? `<p class="merge-order"><span class="muted">Order:</span>${m.order.map(r => `<span class="run ${r.from}" title="${r.from === 'sheet' ? 'Kept from the sheet' : 'From Audit Builder'}">${span(r)}</span>`).join('')}</p>` : ''}
-      <div class="actions">
-        <button class="btn primary" id="mergeCopy" ${m.sheetCodes.length ? '' : 'disabled'}>Copy merged rows</button>
-        <button class="btn ghost" id="mergeClear">Clear</button>
-      </div>`;
+  const list = codes => (codes.length > 12 ? `${codes.slice(0, 12).join(', ')} and ${codes.length - 12} more` : codes.join(', '));
+  const out = [];
+  if (!m.sheetCodes.length) {
+    out.push({ level: 'error', text: `Google Sheet rows (Data tab): no item codes found. Copy them including the ITEM column (codes like ITD-${settings.projectNumber}-${itemCode(settings, 1)}).` });
+    return out;
   }
-  return `
-    <details class="merge" ${text.trim() ? 'open' : ''}>
-      <summary>Some items are already in the Google Sheet? Merge with them</summary>
-      <ol class="hint">
-        <li>Tick the columns above so they match the Google Sheet's columns.</li>
-        <li>In the Google Sheet, select the rows you'll paste over: start at the first item row in the column you paste into, and go down past the last filled row. Copy (Ctrl+C).</li>
-        <li>Paste them in the box below (Ctrl+V).</li>
-        <li>Click <b>Copy merged rows</b>, click the same top-left cell in the Google Sheet and paste. Rows already in the sheet get their own values back (formulas in them become plain values).</li>
-      </ol>
-      <textarea id="sheetPaste" class="mono" rows="3" spellcheck="false" placeholder="Paste the Google Sheet rows here">${esc(text)}</textarea>
-      ${body}
-    </details>`;
+  const sheetRow = code => m.rows.find(x => x._sheet?.code === itemKey(code))?.itemLookup;
+  for (const code of m.skipped) out.push({ level: 'info', item: sheetRow(code), text: `${code}: already in the Google Sheet, so the sheet's row is used` });
+  if (m.duplicates.length) out.push({ level: 'warn', text: `Google Sheet rows: ${list(m.duplicates)} more than once. Every copy is kept.` });
+  if (m.otherRows) out.push({ level: 'warn', text: `Google Sheet rows: ${plural(m.otherRows, 'row')} without an item code moved to the bottom` });
+  if (m.headerRows) out.push({ level: 'info', text: `Google Sheet rows: ${plural(m.headerRows, 'row')} above the first item (headers) left out` });
+  if (m.lineBreaks) out.push({ level: 'info', text: 'Google Sheet rows: some cells have line breaks; they will be pasted on one line' });
+  return out;
 }
 
 // ---------- project setup dialog ----------

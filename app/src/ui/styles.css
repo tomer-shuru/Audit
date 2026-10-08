@@ -56,13 +56,17 @@ code { font-family: var(--mono); background: var(--surface-2); padding: 0 4px; b
 .icon-btn:hover { background: var(--bad-soft); color: var(--bad); }
 
 /* tabs */
-.tabs { display: flex; gap: 4px; padding: 0 20px; background: var(--surface); border-bottom: 1px solid var(--border); overflow-x: auto; }
-.tabs button { font: inherit; border: 0; background: none; color: var(--muted); padding: 10px 14px; cursor: pointer; border-bottom: 2px solid transparent; display: flex; gap: 8px; align-items: center; white-space: nowrap; }
-.tabs button.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
-.step { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--surface-2); font-size: 12px; }
-.tabs button.active .step { background: var(--accent); color: var(--accent-ink); }
-.count { font-size: 12px; color: var(--muted); }
-.count.bad { color: var(--bad); font-weight: 600; }
+.tabs { display: flex; gap: 6px; padding: 0 20px; background: var(--surface); border-bottom: 1px solid var(--border); overflow-x: auto; }
+.tabs button { font: inherit; font-size: 15px; font-weight: 500; border: 0; background: none; color: var(--muted); padding: 13px 20px 11px; cursor: pointer; border-bottom: 3px solid transparent; display: flex; gap: 10px; align-items: center; white-space: nowrap; border-radius: 6px 6px 0 0; }
+.tabs button:hover { color: var(--text); background: var(--surface-2); }
+.tabs button.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 650; }
+.count { display: inline-flex; gap: 4px; font-size: 12px; color: var(--muted); }
+.count:empty { display: none; }
+/* number of checks on the Review tab: red = problems, yellow = warnings, gray = notes */
+.badge { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; font-size: 12px; font-weight: 700; line-height: 1; }
+.badge.error { background: var(--bad); color: #fff; }
+.badge.warn { background: var(--warn); color: #fff; }
+.badge.info { background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); }
 
 main { padding: 20px; max-width: 1600px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .card-head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
@@ -187,13 +191,7 @@ dialog label input { font-weight: 400; }
 .toast.show { opacity: 1; transform: translateX(-50%); }
 .toast.bad { background: var(--bad); color: #fff; }
 
-/* export: merge with rows already in the Google Sheet */
-.merge { border-top: 1px solid var(--border); padding-top: 12px; }
-.merge ol { padding-left: 20px; margin: 8px 0; }
-.merge ol li { margin: 2px 0; }
-.merge-notes { list-style: none; padding: 0; margin: 10px 0 6px; font-size: 13px; }
-.merge-notes li { margin: 3px 0; }
-.merge-order { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 6px 0 10px; font-size: 12px; }
-.merge-order .run { font-family: var(--mono); border-radius: 4px; padding: 1px 6px; }
-.merge-order .run.sheet { background: var(--good-soft); color: var(--good); font-weight: 600; }
-.merge-order .run.app { background: var(--surface-2); color: var(--text); }
+/* rows already in the Google Sheet (pasted on the Data tab), on Review and Export */
+.grid.pick tr.from-sheet > td, .grid.review tr.from-sheet > * { background: var(--good-soft); }
+.grid.review tr.from-sheet th.s0 { box-shadow: inset 3px 0 0 var(--good); }
+.grid.pick tr.from-sheet > th.pick-col { box-shadow: inset 3px 0 var(--good); }
