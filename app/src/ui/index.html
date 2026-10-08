@@ -37,7 +37,8 @@
     <p class="hint">These are used for every item code and on the report. You can change them later by clicking the project name at the top.</p>
     <label>Project number<input name="projectNumber" required placeholder="SHR11734" autocomplete="off"></label>
     <label>End client<input name="endClient" required placeholder="Client name" autocomplete="off"></label>
-    <label>Item code prefix<input name="prefix" required placeholder="GG" pattern="[A-Za-z0-9]+" title="Letters and numbers only" autocomplete="off"></label>
+    <label>Item code prefix<input name="prefix" placeholder="GG" pattern="[A-Za-z0-9]*" title="Letters and numbers only. Leave empty if item codes are just numbers." autocomplete="off"></label>
+    <p class="hint">Leave the prefix empty if the item codes are just numbers (01, 02…).</p>
     <p id="setupPreview" class="preview"></p>
     <div class="dialog-actions">
       <button type="button" class="btn ghost" id="setupCancel">Cancel</button>

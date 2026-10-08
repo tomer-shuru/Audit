@@ -4,8 +4,9 @@ import { normalizeBlancco, mergeTables, parseMacLines, parseWindowsLines, itemKe
 import defaultModels from '../data/default-models.json';
 import {
   readTableFiles, parsePastedTable, importWorkbook, downloadXlsx, toTsv,
-  copyText, downloadJson, readJsonFile,
+  copyText, downloadJson, readJsonFile, tableToTsv,
 } from './io.js';
+import { mergeWithSheet } from './merge.js';
 import {
   canSaveInPlace, rememberedFile, rememberFile, chooseSaveFile, chooseOpenFile, writeFile,
   MODELS_FILE, chooseModelsFile, chooseNewModelsFile, hasPermission, readFileText,
@@ -52,7 +53,7 @@ const state = {
   manualSelected: new Set(),
 };
 
-const settingsComplete = s => s.projectNumber.trim() && s.prefix.trim() && s.endClient.trim();
+const settingsComplete = s => s.projectNumber.trim() && s.endClient.trim(); // the prefix may be empty (codes that are just numbers)
 
 function recompute() {
   state.report = buildReport(state.project, state.models);
@@ -96,7 +97,7 @@ function renderChrome() {
   const s = state.project.settings;
   const r = state.report;
   $('#projectChip').innerHTML = settingsComplete(s)
-    ? `<b>${esc(s.projectNumber)}</b><span>${esc(s.endClient)}</span><span>${esc(s.prefix)}</span>`
+    ? `<b>${esc(s.projectNumber)}</b><span>${esc(s.endClient)}</span><span>${esc(s.prefix || 'no prefix')}</span>`
     : '<b>No project set up</b>';
   const saved = $('#saveState');
   saved.textContent = !state.project.savedToFile ? 'Unsaved changes' : state.fileName ? `Saved · ${state.fileName}` : '';
@@ -433,7 +434,7 @@ const EXPORT_SHEETS = {
   report: { title: 'Audit Report', cols: EXPORT_COLUMNS, rows: r => r.rows },
   locked: { title: 'Locked and Faulty', cols: LOCKED_COLUMNS, rows: r => r.lockedFaulty },
 };
-const exportPrefs = { hiddenCols: load(STORE_EXPORT_COLS, { report: [], locked: [] }), excludedRows: { report: new Set(), locked: new Set() }, anchor: {} };
+const exportPrefs = { hiddenCols: load(STORE_EXPORT_COLS, { report: [], locked: [] }), excludedRows: { report: new Set(), locked: new Set() }, anchor: {}, sheetText: '' };
 
 function exportSelection(kind) {
   const sheet = EXPORT_SHEETS[kind];
@@ -492,7 +493,8 @@ function renderExport(main) {
             </tr>`;
           }).join('')}</tbody>
         </table>
-      </div>` : '<p class="empty">No items yet.</p>'}
+      </div>
+      ${kind === 'report' ? mergeSection(cols, rows) : ''}` : '<p class="empty">No items yet.</p>'}
     </section>`;
   };
 
@@ -552,11 +554,71 @@ function renderExport(main) {
     card.querySelector('[data-copy-h]').onclick = () => copy(true);
   });
 
+  const sheetPaste = $('#sheetPaste');
+  if (sheetPaste) {
+    const update = () => { if (sheetPaste.value !== exportPrefs.sheetText) { exportPrefs.sheetText = sheetPaste.value; render(); } };
+    sheetPaste.onpaste = () => setTimeout(update);
+    sheetPaste.onchange = update;
+    const clear = $('#mergeClear');
+    if (clear) clear.onclick = () => { exportPrefs.sheetText = ''; render(); };
+    const copyMerged = $('#mergeCopy');
+    if (copyMerged) copyMerged.onclick = async () => {
+      const { cols, rows } = exportSelection('report');
+      const m = mergeWithSheet({ sheetText: exportPrefs.sheetText, cols, rows, prefix: state.project.settings.prefix });
+      const ok = await copyText(tableToTsv(m.table));
+      toast(ok ? `Copied ${plural(m.table.length, 'row')}. Click the same top-left cell in the Google Sheet and paste.` : 'Copy failed. Try again.', ok ? 'ok' : 'bad');
+    };
+  }
+
   $('#dlXlsx').onclick = () => {
     const sheets = Object.keys(EXPORT_SHEETS).map(kind => { const s = exportSelection(kind); return { name: s.sheet.title, cols: s.cols, rows: s.rows }; });
     if (!downloadXlsx(sheets, state.project.settings)) toast('Nothing selected to export', 'bad');
   };
   main.querySelectorAll('[data-goto]').forEach(a => a.onclick = e => { e.preventDefault(); setTab(a.dataset.goto); });
+}
+
+// "Some items are already in the Google Sheet": paste those rows in, copy back one merged block
+function mergeSection(cols, rows) {
+  const text = exportPrefs.sheetText;
+  const settings = state.project.settings;
+  let body = '';
+  if (text.trim()) {
+    const m = mergeWithSheet({ sheetText: text, cols, rows, prefix: settings.prefix });
+    const list = codes => esc(codes.length > 12 ? `${codes.slice(0, 12).join(', ')} and ${codes.length - 12} more` : codes.join(', '));
+    const notes = [];
+    if (!m.sheetCodes.length) {
+      notes.push(['bad', `No item codes found in the pasted rows. Copy them including the ITEM column (codes like ITD-${esc(settings.projectNumber)}-${esc(itemCode(settings, 1))}).`]);
+    } else {
+      notes.push(['good', `✓ ${plural(m.sheetCodes.length, 'row')} already in the sheet ${m.sheetCodes.length === 1 ? 'stays exactly as it is' : 'stay exactly as they are'}: ${list(m.sheetCodes)}`]);
+      if (m.kept.length) notes.push(['muted', `Skipped from Audit Builder because the sheet already has them: ${list(m.kept)}`]);
+      notes.push(['muted', `${plural(m.added.length, 'row')} added from Audit Builder.`]);
+      if (m.sheetWidth !== m.appWidth) notes.push(['bad', `The sheet rows have ${m.sheetWidth} columns but you're copying ${m.appWidth}. Tick the columns above so they match the sheet, or data will land in the wrong columns.`]);
+      if (m.duplicates.length) notes.push(['warn', `In the sheet more than once: ${list(m.duplicates)}. Every copy is kept.`]);
+      if (m.topRows) notes.push(['muted', `${plural(m.topRows, 'row')} above the first item (headers) kept on top.`]);
+      if (m.otherRows) notes.push(['warn', `${plural(m.otherRows, 'row')} without an item code moved to the bottom.`]);
+      if (m.lineBreaks) notes.push(['warn', 'Some sheet cells have line breaks; they will be pasted on one line.']);
+    }
+    const span = r => esc(r.first === r.last ? r.first : `${r.first}–${r.last}`);
+    body = `
+      <ul class="merge-notes">${notes.map(([c, t]) => `<li class="${c === 'muted' ? c : c + '-text'}">${t}</li>`).join('')}</ul>
+      ${m.sheetCodes.length ? `<p class="merge-order"><span class="muted">Order:</span>${m.order.map(r => `<span class="run ${r.from}" title="${r.from === 'sheet' ? 'Kept from the sheet' : 'From Audit Builder'}">${span(r)}</span>`).join('')}</p>` : ''}
+      <div class="actions">
+        <button class="btn primary" id="mergeCopy" ${m.sheetCodes.length ? '' : 'disabled'}>Copy merged rows</button>
+        <button class="btn ghost" id="mergeClear">Clear</button>
+      </div>`;
+  }
+  return `
+    <details class="merge" ${text.trim() ? 'open' : ''}>
+      <summary>Some items are already in the Google Sheet? Merge with them</summary>
+      <ol class="hint">
+        <li>Tick the columns above so they match the Google Sheet's columns.</li>
+        <li>In the Google Sheet, select the rows you'll paste over: start at the first item row in the column you paste into, and go down past the last filled row. Copy (Ctrl+C).</li>
+        <li>Paste them in the box below (Ctrl+V).</li>
+        <li>Click <b>Copy merged rows</b>, click the same top-left cell in the Google Sheet and paste. Rows already in the sheet get their own values back (formulas in them become plain values).</li>
+      </ol>
+      <textarea id="sheetPaste" class="mono" rows="3" spellcheck="false" placeholder="Paste the Google Sheet rows here">${esc(text)}</textarea>
+      ${body}
+    </details>`;
 }
 
 // ---------- project setup dialog ----------
@@ -574,7 +636,7 @@ function openSetup({ force = false } = {}) {
 function updateSetupPreview() {
   const f = $('#setupForm');
   const s = { projectNumber: f.projectNumber.value.trim(), prefix: f.prefix.value.trim().toUpperCase() };
-  $('#setupPreview').textContent = s.prefix ? `Items: ${itemCode(s, 1)}, ${itemCode(s, 2)}… → ITD-${s.projectNumber || '…'}-${itemCode(s, 1)}` : '';
+  $('#setupPreview').textContent = `Items: ${itemCode(s, 1)}, ${itemCode(s, 2)}… → ITD-${s.projectNumber || '…'}-${itemCode(s, 1)}`;
 }
 
 // ---------- models editor ----------

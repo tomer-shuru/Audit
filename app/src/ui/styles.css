@@ -186,3 +186,14 @@ dialog label input { font-weight: 400; }
   background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 8px; transition: .2s; max-width: calc(100vw - 32px); }
 .toast.show { opacity: 1; transform: translateX(-50%); }
 .toast.bad { background: var(--bad); color: #fff; }
+
+/* export: merge with rows already in the Google Sheet */
+.merge { border-top: 1px solid var(--border); padding-top: 12px; }
+.merge ol { padding-left: 20px; margin: 8px 0; }
+.merge ol li { margin: 2px 0; }
+.merge-notes { list-style: none; padding: 0; margin: 10px 0 6px; font-size: 13px; }
+.merge-notes li { margin: 3px 0; }
+.merge-order { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 6px 0 10px; font-size: 12px; }
+.merge-order .run { font-family: var(--mono); border-radius: 4px; padding: 1px 6px; }
+.merge-order .run.sheet { background: var(--good-soft); color: var(--good); font-weight: 600; }
+.merge-order .run.app { background: var(--surface-2); color: var(--text); }

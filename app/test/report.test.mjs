@@ -60,3 +60,16 @@ test('several Blancco files are combined', () => {
   assert.deepEqual(r.rows.map(x => [x.itemLookup, x.blancco, x.diagnostics]), [['GG01', 'Pass', 'Ok'], ['GG02', 'Fail', 'Cd B']]);
   assert.ok(r.warnings.some(w => w.level === 'error' && w.item === 'GG02'));
 });
+
+test('item codes that are just numbers (empty prefix), with or without leading zeros', () => {
+  const p = project({
+    settings: { projectNumber: 'SHR1', prefix: '', endClient: 'X' },
+    inputs: { mac: '', windows: '7*SER7*-*Notebook*Dell Inc.*Latitude 5431', blanccoFiles: [] },
+    manual: { '07': { diagnostics: 'ok' }, 10: { sn: 'B', diagnostics: 'ok' }, 2: { sn: 'A', diagnostics: 'ok' } },
+  });
+  const r = buildReport(p, models);
+  assert.deepEqual(r.rows.map(x => x.item), ['ITD-SHR1-2', 'ITD-SHR1-07', 'ITD-SHR1-10']);
+  assert.equal(r.rows[1].sn, 'SER7');   // manual 07 and Windows 7 are the same item
+  assert.ok(!texts(r).some(t => t.includes("doesn't follow")));
+  assert.ok(texts(r).some(t => t.startsWith('No data yet for: 03–06, 08–09')));
+});

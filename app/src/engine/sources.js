@@ -6,7 +6,8 @@ import {
   shortCpu, cleanModelName,
 } from './rules.js';
 
-export const itemKey = code => str(code).trim().toUpperCase();
+// codes that are only numbers (no prefix) match with or without leading zeros: 7, 07, 007
+export const itemKey = code => str(code).trim().toUpperCase().replace(/^0+(?=\d+$)/, '');
 
 const MAC_FIELDS = ['item', 'sn', 'asset', 'type', 'make', 'modelId', 'cpu', 'ram', 'disk', 'batteryHealth',
   'activationLock', 'findMyLock', 'remote', 'batteryStatus', 'diskSn', 'timestamp', 'diagnostics'];
@@ -52,7 +53,10 @@ export const BLANCCO_COLUMNS = {
   diskCapacity: 'Disk capacity', diskInterface: 'Disk interface type', diskSerial: 'Disk serial',
   comment1: 'Comment', comment2: 'Comment2', comment3: 'Comment3', comment4: 'Comment4', comment5: 'Comment5', comment6: 'Comment6',
   comment7: 'Comment7', comment8: 'Comment8',
+  itemAlt: 'Custom 1',
 };
+// Optional columns: no warning when an export doesn't have them
+const OPTIONAL = new Set(['itemAlt', 'comment1', 'comment2', 'comment3', 'comment4', 'comment5', 'comment6', 'comment7', 'comment8']);
 
 // Automatic messages Blancco writes into the comment columns, and what the report says instead.
 // Unlike typed comments these are picked up from any comment column (1-8).
@@ -130,7 +134,13 @@ export function normalizeBlancco(table) {
   const idx = {}; const missing = [];
   for (const [key, name] of Object.entries(BLANCCO_COLUMNS)) {
     idx[key] = header.indexOf(name.toLowerCase());
-    if (idx[key] < 0 && !key.startsWith('comment')) missing.push(name);
+    if (idx[key] < 0 && !OPTIONAL.has(key)) missing.push(name);
+  }
+  if (idx.itemAlt < 0) idx.itemAlt = header.indexOf('custom1');
+  // some exports have the item code in Custom 1 instead of Device Identifier
+  if (idx.item < 0) {
+    const i = missing.indexOf(BLANCCO_COLUMNS.item);
+    if (idx.itemAlt >= 0) missing.splice(i, 1); else missing[i] = 'Device Identifier (or Custom 1)';
   }
   const rows = table.slice(1)
     .filter(r => r.some(v => !isBlank(v)))
@@ -138,6 +148,7 @@ export function normalizeBlancco(table) {
       const o = {};
       for (const k of Object.keys(BLANCCO_COLUMNS)) o[k] = idx[k] >= 0 ? (r[idx[k]] ?? '') : '';
       o.serial = str(o.serial).trim();
+      if (isBlank(o.item)) o.item = o.itemAlt;
       return o;
     });
   return { rows, missing };

@@ -113,3 +113,14 @@ test('model cleanup and PROPER', () => {
   assert.equal(proper('LENOVO'), 'Lenovo');
   assert.equal(proper('Dell Inc.'), 'Dell Inc.');
 });
+
+test('item code from Custom 1 when Device Identifier is missing or blank', () => {
+  const cols = ['System manufacturer', 'System chassis type', 'Asset Tag', 'Erasure state', 'System serial', 'System version', 'System model',
+    'Capacity', 'CPU model', 'Total Memory', 'Memory type', 'Disk capacity', 'Disk interface type', 'Disk serial'];
+  const onlyCustom = normalizeBlancco([[...cols, 'Custom 1'], [...cols.map(() => ''), 'GG07']]);
+  assert.deepEqual(onlyCustom.missing, []);
+  assert.equal(onlyCustom.rows[0].item, 'GG07');
+  const both = normalizeBlancco([[...cols, 'Device Identifier', 'Custom 1'], [...cols.map(() => ''), 'GG01', 'GG99'], [...cols.map(() => ''), '', 'GG02']]);
+  assert.deepEqual(both.rows.map(r => r.item), ['GG01', 'GG02']);
+  assert.deepEqual(normalizeBlancco([cols, cols.map(() => 'x')]).missing, ['Device Identifier (or Custom 1)']);
+});

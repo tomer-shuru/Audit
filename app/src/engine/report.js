@@ -89,7 +89,7 @@ export function buildReport(project, models) {
   // order: codes in the project's numbering first, then anything else
   const keys = new Set([...manBy.keys(), ...macBy.keys(), ...winBy.keys(), ...csvBy.keys()]);
   const prefix = itemKey(settings.prefix);
-  const numOf = k => (prefix && k.startsWith(prefix) && /^\d+$/.test(k.slice(prefix.length)) ? Number(k.slice(prefix.length)) : null);
+  const numOf = k => (k.startsWith(prefix) && /^\d+$/.test(k.slice(prefix.length)) ? Number(k.slice(prefix.length)) : null);
   const sorted = [...keys].sort((a, b) => {
     const na = numOf(a), nb = numOf(b);
     if (na !== null && nb !== null) return na - nb;

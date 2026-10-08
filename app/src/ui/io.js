@@ -96,8 +96,9 @@ export function downloadXlsx(sheets, settings) {
 // tab-separated text that pastes into Google Sheets / Excel as cells
 export const toTsv = (cols, rows, withHeader) => {
   const aoa = toTable(cols, rows);
-  return (withHeader ? aoa : aoa.slice(1)).map(r => r.map(v => String(v ?? '').replace(/[\t\r\n]+/g, ' ')).join('\t')).join('\n');
+  return tableToTsv(withHeader ? aoa : aoa.slice(1));
 };
+export const tableToTsv = aoa => aoa.map(r => r.map(v => String(v ?? '').replace(/[\t\r\n]+/g, ' ')).join('\t')).join('\n');
 
 export async function copyText(text) {
   try { await navigator.clipboard.writeText(text); return true; } catch { /* fall back below */ }

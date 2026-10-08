@@ -64,7 +64,8 @@ DOING A PROJECT
 ---------------
 
 1. New project: click "New" and fill in the project number, end client and
-   item code prefix (for example GG).
+   item code prefix (for example GG; leave it empty if the item codes are
+   just numbers).
 2. Data tab: click "Add files..." and choose the Blancco exports (.csv, .xlsx
    or .zip). You can choose several at once or drag them onto the box.
    Paste the Mac report lines and the Windows report lines in their boxes.
@@ -75,6 +76,19 @@ DOING A PROJECT
    correct it. Edited cells turn blue, and clearing a cell undoes your edit.
 5. Export tab: click "Copy rows" and paste into the Google Sheet. If there
    are locked or faulty devices, copy that list too.
+
+If some items are already in the Google Sheet (for example BM20 was typed in
+by hand), use "Some items are already in the Google Sheet? Merge with them"
+under the Audit Report table on the Export tab:
+   a. In the Google Sheet, select the rows you'd paste over (from the first
+      item row, down past the last filled row) and copy them.
+   b. Paste them in the box. The app shows which rows it keeps from the sheet
+      and the order everything will be in.
+   c. Click "Copy merged rows", click the same top-left cell in the Google
+      Sheet and paste. Rows already in the sheet get their own values back,
+      and the app's rows fill in around them, sorted by item code.
+   Make sure the ticked columns match the sheet's columns (the app warns if
+   the number of columns differs). Formulas in the kept rows become values.
 
 
 SAVING AND SHARING PROJECTS
