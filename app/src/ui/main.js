@@ -7,6 +7,7 @@ import {
   copyText, downloadJson, readJsonFile,
 } from './io.js';
 import { mergeWithSheet } from './merge.js';
+import { grid } from './grid.js';
 import {
   canSaveInPlace, rememberedFile, rememberFile, chooseSaveFile, chooseOpenFile, writeFile,
   MODELS_FILE, chooseModelsFile, chooseNewModelsFile, hasPermission, readFileText,
@@ -85,6 +86,24 @@ function changed({ rerender = true } = {}) {
   recompute();
   if (rerender) render(); else renderChrome();
 }
+
+// ---------- undo / redo for edits in the Review and Manual entries tables ----------
+const history = { undo: [], redo: [] };
+const snapshot = () => JSON.stringify({ manual: state.project.manual, overrides: state.project.overrides });
+function recordEdit() {
+  history.undo.push(snapshot());
+  if (history.undo.length > 200) history.undo.shift();
+  history.redo = [];
+}
+function restoreEdit(from, to, what) {
+  if (!from.length) { toast(`Nothing to ${what}`); return; }
+  to.push(snapshot());
+  Object.assign(state.project, JSON.parse(from.pop()));
+  changed();
+}
+const undoEdit = () => restoreEdit(history.undo, history.redo, 'undo');
+const redoEdit = () => restoreEdit(history.redo, history.undo, 'redo');
+const clearHistory = () => { history.undo = []; history.redo = []; };
 
 // ---------- helpers ----------
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -308,15 +327,15 @@ function renderManual(main) {
     ${codes.length ? `
     <div class="table-wrap">
       <table class="grid manual">
-        <thead><tr><th class="sticky item-col"><label class="row-pick"><input type="checkbox" id="selAll" ${allSelected ? 'checked' : ''} title="Select all"></label>Item</th>${MANUAL_FIELDS.map(([, l]) => `<th>${esc(l)}</th>`).join('')}</tr></thead>
-        <tbody>${codes.map(code => `
+        <thead><tr><th class="sticky item-col" data-hc="0"><label class="row-pick"><input type="checkbox" id="selAll" ${allSelected ? 'checked' : ''} title="Select all"></label>Item</th>${MANUAL_FIELDS.map(([, l], j) => `<th data-hc="${j + 1}">${esc(l)}</th>`).join('')}</tr></thead>
+        <tbody>${codes.map((code, i) => `
           <tr data-code="${esc(code)}" class="${sel.has(code) ? 'selected' : ''}">
-            <th class="sticky item-col">
+            <th class="sticky item-col" data-r="${i}" data-c="0">
               <label class="row-pick"><input type="checkbox" data-sel="${esc(code)}" ${sel.has(code) ? 'checked' : ''} title="Select ${esc(code)}"></label>
               <button class="icon-btn" data-del="${esc(code)}" title="Delete ${esc(code)}">✕</button>
               ${esc(code)}
             </th>
-            ${MANUAL_FIELDS.map(([f]) => `<td contenteditable="plaintext-only" data-field="${f}">${esc(man[code][f] ?? '')}</td>`).join('')}
+            ${MANUAL_FIELDS.map(([f], j) => `<td data-r="${i}" data-c="${j + 1}">${esc(man[code][f] ?? '')}</td>`).join('')}
           </tr>`).join('')}
         </tbody>
       </table>
@@ -325,6 +344,7 @@ function renderManual(main) {
 
   // deleting is instant; the toast offers Undo
   const remove = list => {
+    recordEdit();
     const removed = list.map(c => [c, man[c]]);
     for (const c of list) { delete man[c]; sel.delete(c); }
     changed();
@@ -347,22 +367,30 @@ function renderManual(main) {
     const code = $('#newCode').value.trim();
     if (!code) return;
     if (Object.keys(man).some(c => itemKey(c) === itemKey(code))) { toast(`${code} already has a manual entry`, 'bad'); return; }
+    recordEdit();
     man[code] = {};
     changed();
-    const cell = document.querySelector(`tr[data-code="${CSS.escape(code)}"] td[data-field="sn"]`);
-    cell?.scrollIntoView({ block: 'nearest' }); cell?.focus();
+    // select the new item's first cell, ready to type
+    const row = Object.keys(man).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).indexOf(code);
+    grid('manual').select(row, 1, { focus: true });
   };
   $('#newCode').onkeydown = e => { if (e.key === 'Enter') $('#addManual').click(); };
   main.querySelectorAll('[data-del]').forEach(b => b.onclick = () => remove([b.dataset.del]));
-  main.querySelectorAll('td[data-field]').forEach(td => {
-    td.onblur = () => {
-      const code = td.parentElement.dataset.code, f = td.dataset.field;
-      const v = td.textContent.trim();
-      if ((man[code][f] ?? '') === v) return;
-      if (v) man[code][f] = v; else delete man[code][f];
-      changed({ rerender: false });
-    };
-    td.onkeydown = gridKeys;
+
+  const table = main.querySelector('table.manual');
+  if (table) grid('manual').attach(table, {
+    rows: codes.length, cols: MANUAL_FIELDS.length + 1,
+    value: (r, c) => (c === 0 ? codes[r] : man[codes[r]][MANUAL_FIELDS[c - 1][0]] ?? ''),
+    editable: (r, c) => c > 0,
+    commit: changes => {
+      recordEdit();
+      for (const { r, c, value } of changes) {
+        const rec = man[codes[r]], f = MANUAL_FIELDS[c - 1][0];
+        if (value) rec[f] = value; else delete rec[f];
+      }
+      changed();
+    },
+    undo: undoEdit, redo: redoEdit,
   });
 }
 
@@ -409,7 +437,8 @@ function renderReview(main) {
   </section>` : ''}
   <section class="card">
     <div class="card-head">
-      <div><h2>Audit Report</h2><p class="hint">Click a cell to change it. Edited cells are highlighted; clear a cell to go back to the calculated value.
+      <div><h2>Audit Report</h2><p class="hint">Works like a spreadsheet: arrow keys, Shift to select, type or double-click to change a cell, Ctrl+C / Ctrl+V, Ctrl+Z to undo.
+      Edited cells are highlighted; clear a cell (Delete) to go back to the calculated value.
       ${state.merge ? 'Green rows are already in the Google Sheet (pasted on the Data tab) and stay as they are.' : ''}</p></div>
       <div class="actions">
         <input type="search" id="reviewSearch" placeholder="Search…" value="${esc(state.reviewFilter)}">
@@ -419,13 +448,13 @@ function renderReview(main) {
     ${allRows.length ? `
     <div class="table-wrap tall">
       <table class="grid review">
-        <thead><tr>${REPORT_COLUMNS.map(([k, l], j) => `<th class="${j < 2 ? 'sticky s' + j : ''}">${esc(l)}</th>`).join('')}</tr></thead>
-        <tbody>${rows.map(row => row._sheet ? sheetReviewRow(row, issues) : `
+        <thead><tr>${REPORT_COLUMNS.map(([k, l], j) => `<th class="${j === 0 ? 'sticky ' : ''}s${j}" data-hc="${j}">${esc(l)}</th>`).join('')}</tr></thead>
+        <tbody>${rows.map((row, i) => row._sheet ? sheetReviewRow(row, i, issues) : `
           <tr data-code="${esc(row.itemLookup)}" class="${issues.has(row.itemLookup) ? 'issue-' + issues.get(row.itemLookup).level : ''}">
             ${REPORT_COLUMNS.map(([k], j) => {
-              if (!EDITABLE.has(k)) return `<th class="sticky s${j}" ${j === 0 && issues.has(row.itemLookup) ? `title="${esc(issues.get(row.itemLookup).texts.join('\n'))}"` : ''}>${esc(row[k])}${j === 0 ? sourceBadges(row) : ''}</th>`;
+              if (!EDITABLE.has(k)) return `<th class="${j === 0 ? 'sticky ' : ''}s${j}" data-r="${i}" data-c="${j}" ${j === 0 && issues.has(row.itemLookup) ? `title="${esc(issues.get(row.itemLookup).texts.join('\n'))}"` : ''}>${esc(row[k])}${j === 0 ? sourceBadges(row) : ''}</th>`;
               const edited = row._edited.includes(k);
-              return `<td contenteditable="plaintext-only" data-field="${k}" class="${edited ? 'edited' : ''}" ${edited ? `title="Edited. Calculated value: ${esc(row._base[k] || '(empty)')}"` : ''}>${esc(row[k])}</td>`;
+              return `<td data-r="${i}" data-c="${j}" class="${edited ? 'edited' : ''}" ${edited ? `title="Edited. Calculated value: ${esc(row._base[k] || '(empty)')}"` : ''}>${esc(row[k])}</td>`;
             }).join('')}
           </tr>`).join('')}
         </tbody>
@@ -439,29 +468,25 @@ function renderReview(main) {
     search.oninput = e => { state.reviewFilter = e.target.value; const pos = e.target.selectionStart; render(); const s = $('#reviewSearch'); s.focus(); s.setSelectionRange(pos, pos); };
     $('#issuesOnly').onchange = e => { state.reviewIssuesOnly = e.target.checked; render(); };
   }
-  main.querySelectorAll('td[data-field]').forEach(td => {
-    td.onblur = () => {
-      const code = td.parentElement.dataset.code, f = td.dataset.field;
-      const row = state.report.rows.find(x => x.itemLookup === code);
-      const base = String(row._edited.includes(f) ? row._base[f] ?? '' : row[f] ?? '');
-      const v = td.textContent.trim();
+  const table = main.querySelector('table.review');
+  if (table) grid('review').attach(table, {
+    rows: rows.length, cols: REPORT_COLUMNS.length,
+    value: (r, c) => (c === 0 && rows[r]._sheet ? rows[r]._sheet.code : rows[r][REPORT_COLUMNS[c][0]] ?? ''),
+    editable: (r, c) => !rows[r]._sheet && EDITABLE.has(REPORT_COLUMNS[c][0]),
+    commit: changes => {
+      recordEdit();
       const ov = state.project.overrides;
-      const current = ov[code]?.[f] ?? '';
-      const next = v === base ? '' : v;   // typing the calculated value back removes the edit
-      if (next === current) { if (!v) td.textContent = base; return; }
-      ov[code] = ov[code] || {};
-      if (next) ov[code][f] = next; else delete ov[code][f];
-      if (!Object.keys(ov[code]).length) delete ov[code];
-      changed({ rerender: false });
-      // redraw after focus has moved on (Enter / Tab / click), then put focus back on that cell
-      setTimeout(() => {
-        const a = document.activeElement;
-        const target = a?.dataset?.field ? [a.parentElement.dataset.code, a.dataset.field] : null;
-        render();
-        if (target) main.querySelector(`tr[data-code="${CSS.escape(target[0])}"] td[data-field="${target[1]}"]`)?.focus();
-      });
-    };
-    td.onkeydown = gridKeys;
+      for (const { r, c, value } of changes) {
+        const row = rows[r], code = row.itemLookup, f = REPORT_COLUMNS[c][0];
+        const base = String(row._edited.includes(f) ? row._base[f] ?? '' : row[f] ?? '');
+        const next = value === base ? '' : value; // the calculated value (or an empty cell) removes the edit
+        ov[code] = ov[code] || {};
+        if (next) ov[code][f] = next; else delete ov[code][f];
+        if (!Object.keys(ov[code]).length) delete ov[code];
+      }
+      changed();
+    },
+    undo: undoEdit, redo: redoEdit,
   });
   main.querySelectorAll('[data-goto-item]').forEach(li => li.onclick = () => {
     let tr = main.querySelector(`tr[data-code="${CSS.escape(li.dataset.gotoItem)}"]`);
@@ -472,18 +497,21 @@ function renderReview(main) {
     if (!tr) return;
     tr.scrollIntoView({ block: 'center', behavior: 'smooth' });
     tr.classList.remove('flash'); void tr.offsetWidth; tr.classList.add('flash');
+    const first = tr.querySelector('[data-r]');
+    if (first) grid('review').select(+first.dataset.r, 0);
   });
 }
 
 // a row that is already in the Google Sheet: shown as it is, not editable here
-function sheetReviewRow(row, issues) {
+function sheetReviewRow(row, i, issues) {
   const issue = issues.get(row.itemLookup);
   return `
     <tr data-code="${esc(row.itemLookup)}" class="from-sheet ${issue ? 'issue-' + issue.level : ''}" title="Already in the Google Sheet. Change it on the Data tab.">
       ${REPORT_COLUMNS.map(([k], j) => {
-        if (j === 0) return `<th class="sticky s0">${esc(row._sheet.code || '—')}<span class="badges"><i title="Google Sheet">G</i></span></th>`;
-        if (j === 1) return `<th class="sticky s1">${esc(row[k])}</th>`;
-        return `<td>${esc(row[k])}</td>`;
+        const at = `data-r="${i}" data-c="${j}"`;
+        if (j === 0) return `<th class="sticky s0" ${at}>${esc(row._sheet.code || '—')}<span class="badges"><i title="Google Sheet">G</i></span></th>`;
+        if (j === 1) return `<th class="s1" ${at}>${esc(row[k])}</th>`;
+        return `<td ${at}>${esc(row[k])}</td>`;
       }).join('')}
     </tr>`;
 }
@@ -891,6 +919,7 @@ async function openProjectFile(file) {
     else { p = await readJsonFile(file); toast(`Opened ${file.name}`); }
     state.project = Object.assign(migrate(p), { savedToFile: true });
     state.manualSelected.clear();
+    clearHistory();
     store(STORE_PROJECT, state.project);
     recompute(); render();
     if (!settingsComplete(state.project.settings)) openSetup({ force: true });
@@ -985,6 +1014,7 @@ function init() {
   $('#btnNew').onclick = () => {
     if (!state.project.savedToFile && !confirm('Start a new project? Changes since you last saved the project file will be lost.')) return;
     state.project = emptyProject();
+    clearHistory();
     state.fileName = ''; rememberFile(null);
     store(STORE_PROJECT, state.project);
     recompute(); setTab('data');

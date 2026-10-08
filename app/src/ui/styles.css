@@ -2,7 +2,7 @@
   --bg: #f5f6f8; --surface: #fff; --surface-2: #f0f2f5; --border: #dfe3e8; --text: #1d2330; --muted: #677085;
   --accent: #2456d6; --accent-ink: #fff; --accent-soft: #e8eefc;
   --good: #1d7a46; --good-soft: #e6f4ec; --bad: #c0352b; --bad-soft: #fcebea; --warn: #a76200; --warn-soft: #fff4e0;
-  --edited: #e3ecff; --edited-ink: #1d3f99; --row-warn: #fff6d6; --row-error: #fde6e4; --radius: 8px;
+  --edited: #e3ecff; --edited-ink: #1d3f99; --row-warn: #fff6d6; --row-error: #fde6e4; --radius: 8px; --sel: rgba(40, 48, 64, 0.16);
   --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
   color-scheme: light;
@@ -12,14 +12,14 @@
   --bg: #14171c; --surface: #1c2027; --surface-2: #232832; --border: #313845; --text: #e6e9ef; --muted: #98a1b3;
   --accent: #5b8cff; --accent-ink: #0b1020; --accent-soft: #22304f;
   --good: #5cc98a; --good-soft: #17301f; --bad: #ff7a70; --bad-soft: #3a1c1a; --warn: #f0b04a; --warn-soft: #3a2c12;
-  --edited: #1f2f55; --edited-ink: #a9c3ff; --row-warn: #332a12; --row-error: #3a1d1b; color-scheme: dark;
+  --edited: #1f2f55; --edited-ink: #a9c3ff; --row-warn: #332a12; --row-error: #3a1d1b; --sel: rgba(255, 255, 255, 0.14); color-scheme: dark;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
     --bg: #14171c; --surface: #1c2027; --surface-2: #232832; --border: #313845; --text: #e6e9ef; --muted: #98a1b3;
     --accent: #5b8cff; --accent-ink: #0b1020; --accent-soft: #22304f;
     --good: #5cc98a; --good-soft: #17301f; --bad: #ff7a70; --bad-soft: #3a1c1a; --warn: #f0b04a; --warn-soft: #3a2c12;
-    --edited: #1f2f55; --edited-ink: #a9c3ff; --row-warn: #332a12; --row-error: #3a1d1b; color-scheme: dark;
+    --edited: #1f2f55; --edited-ink: #a9c3ff; --row-warn: #332a12; --row-error: #3a1d1b; --sel: rgba(255, 255, 255, 0.14); color-scheme: dark;
   }
 }
 .theme-btn { display: inline-grid; place-items: center; padding: 6px 9px; }
@@ -128,7 +128,7 @@ table.grid { border-collapse: separate; border-spacing: 0; width: max-content; m
 .grid .sticky { position: sticky; left: 0; z-index: 1; }
 .grid thead .sticky { z-index: 3; }
 .review .s0 { left: 0; min-width: 110px; }
-.review .s1 { left: 110px; min-width: 170px; }
+.review .s1 { min-width: 170px; }
 .grid tr.issue-warn th.s0 { box-shadow: inset 3px 0 0 var(--warn); }
 .grid tr.issue-error th.s0 { box-shadow: inset 3px 0 0 var(--bad); }
 .manual .item-col { display: flex; align-items: center; gap: 4px; min-width: 120px; }
@@ -195,3 +195,16 @@ dialog label input { font-weight: 400; }
 .grid.pick tr.from-sheet > td, .grid.review tr.from-sheet > * { background: var(--good-soft); }
 .grid.review tr.from-sheet th.s0 { box-shadow: inset 3px 0 0 var(--good); }
 .grid.pick tr.from-sheet > th.pick-col { box-shadow: inset 3px 0 var(--good); }
+
+/* Review and Manual entries tables behave like a spreadsheet (grid.js) */
+.grid-sink { position: fixed; top: 0; left: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; border: 0; padding: 0; resize: none; }
+.grid.sheet [data-r] { cursor: cell; user-select: none; }
+.grid.sheet td[data-r] { min-width: 60px; }
+/* selection is a gray shade laid over the cell, so edited (blue) and issue rows still show through */
+.grid.sheet .sel { background-image: linear-gradient(var(--sel), var(--sel)); }
+.grid.sheet .active { outline: 2px solid var(--muted); outline-offset: -2px; }
+.grid.sheet.has-focus .active { outline-color: var(--accent); }
+.grid.sheet .editing { background: var(--surface) !important; outline: 2px solid var(--accent); outline-offset: -2px; cursor: text; user-select: text; }
+.grid.sheet thead th[data-hc] { cursor: s-resize; }
+.grid.sheet .copied { animation: copied 0.9s ease-out; }
+@keyframes copied { from { box-shadow: inset 0 0 0 2px var(--accent); } to { box-shadow: inset 0 0 0 2px transparent; } }

@@ -75,10 +75,26 @@ DOING A PROJECT
 4. Review tab (check everything is right, make small corrections): every
    check is listed at the top. The Review tab button shows how many there
    are: red = problems, yellow = warnings, gray = notes. Rows with a problem
-   are highlighted, and clicking a check jumps to its row. Click any cell to
-   correct it. Edited cells turn blue, and clearing a cell undoes your edit.
+   are highlighted, and clicking a check jumps to its row. Edited cells turn
+   blue, and clearing a cell (Delete) goes back to the calculated value.
    Diagnostic codes (like LM or CD) work in the Diagnostics and Locked or
    Faulty cells too.
+
+The Review and Manual entries tables work like a spreadsheet:
+   - Click a cell, or move with the arrow keys, Tab, Enter, Home / End,
+     Page Up / Page Down. Ctrl + arrow jumps to the end of the filled cells,
+     or to the next filled cell (like Excel).
+   - Select several cells by dragging, Shift + click or Shift + arrows.
+     Click a column header to select the column, Ctrl+A selects everything.
+   - Start typing to replace a cell, or double-click / F2 to change it.
+     Enter or Tab saves, Esc cancels.
+   - Ctrl+C copies, Ctrl+X cuts, Ctrl+V pastes (also a block of cells copied
+     from Google Sheets or Excel). One copied value pasted onto a selection
+     fills all of it.
+   - Delete clears the selected cells, Ctrl+D fills down.
+   - Ctrl+Z undoes, Ctrl+Y redoes.
+   The item code columns and green rows (already in the Google Sheet)
+   can be selected and copied but not changed.
 5. Export tab (only for getting the finished report out): click "Copy rows"
    and paste into the Google Sheet. If there are locked or faulty devices,
    copy that list too. Untick columns the Google Sheet doesn't have.
