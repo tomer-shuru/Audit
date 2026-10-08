@@ -129,11 +129,13 @@ export function buildReport(project, models) {
     row.weight = first(man.weight, lk.weight(row.type) ?? '');
     row._sources = { manual: manBy.has(k), mac: !!m, win: !!w, blancco: !!c };
     row._manual = Object.keys(man).filter(f => f !== 'item' && !isBlank(man[f]));
-    // edits made in the Review table replace the final value
+    // edits made in the Review table replace the final value; diagnostic codes work there too
     const edits = overrides[code] || overrides[k] || {};
+    const reviewValue = (f, v) => (f === 'diagnostics' ? formatDiagnostics(expandDiagCodes(v, lk.diagCodes))
+      : f === 'locked' ? expandDiagCodes(v, lk.diagCodes) : v);
     row._edited = []; row._base = {};
     for (const [f, v] of Object.entries(edits)) {
-      if (EDITABLE.has(f) && !isBlank(v)) { row._base[f] = row[f]; row[f] = v; row._edited.push(f); }
+      if (EDITABLE.has(f) && !isBlank(v)) { row._base[f] = row[f]; row[f] = reviewValue(f, v); row._edited.push(f); }
     }
 
     if (m?.unknownModel) warnings.push({ level: 'warn', item: code, text: `${code}: Mac model "${m.unknownModel}" isn't in the Models list` });

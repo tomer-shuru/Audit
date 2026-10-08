@@ -77,6 +77,8 @@ DOING A PROJECT
    are: red = problems, yellow = warnings, gray = notes. Rows with a problem
    are highlighted, and clicking a check jumps to its row. Click any cell to
    correct it. Edited cells turn blue, and clearing a cell undoes your edit.
+   Diagnostic codes (like LM or CD) work in the Diagnostics and Locked or
+   Faulty cells too.
 5. Export tab (only for getting the finished report out): click "Copy rows"
    and paste into the Google Sheet. If there are locked or faulty devices,
    copy that list too. Untick columns the Google Sheet doesn't have.

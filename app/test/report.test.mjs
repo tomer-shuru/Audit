@@ -73,3 +73,10 @@ test('item codes that are just numbers (empty prefix), with or without leading z
   assert.ok(!texts(r).some(t => t.includes("doesn't follow")));
   assert.ok(texts(r).some(t => t.startsWith('No data yet for: 03–06, 08–09')));
 });
+
+test('diagnostic codes typed in the Review table are expanded too', () => {
+  const r = buildReport(project({ manual: { GG01: { sn: 'A1' } }, overrides: { GG01: { diagnostics: 'CD B, LM b, kb sticky', locked: 'AID' } } }), models);
+  assert.equal(r.rows[0].diagnostics, 'Chassis damage B, Label marks B, Kb sticky');
+  assert.equal(r.rows[0].locked, 'Apple ID');
+  assert.deepEqual(r.rows[0]._edited.sort(), ['diagnostics', 'locked']);
+});
