@@ -32,7 +32,7 @@ export async function rememberFile(handle, key = PROJECT_FILE) {
 }
 
 const PROJECT_TYPE = { description: 'Audit project', accept: { 'application/json': ['.json'] } };
-const MODELS_TYPE = { description: 'Models list', accept: { 'application/json': ['.json'] } };
+const MODELS_TYPE = { description: 'Dictionary', accept: { 'application/json': ['.json'] } };
 
 const cancelled = err => { if (err.name === 'AbortError') return null; throw err; };
 
@@ -43,7 +43,7 @@ export async function chooseSaveFile(suggestedName) {
   } catch (err) { return cancelled(err); }
 }
 
-// the shared Models file: pick an existing one, or choose where to create it
+// the shared Dictionary file (models.json): pick an existing one, or choose where to create it
 export async function chooseModelsFile() {
   try {
     const [handle] = await window.showOpenFilePicker({ id: 'audit-models', types: [MODELS_TYPE] });

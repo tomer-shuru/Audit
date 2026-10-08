@@ -16,7 +16,7 @@
   <button class="btn ghost" id="btnOpen" title="Open a saved project (.audit.json) or import an old Audit.xlsm">Open…</button>
   <button class="btn" id="btnSave" title="Save (Ctrl+S)">Save project</button>
   <button class="btn ghost" id="btnSaveAs" title="Save to a different file (Ctrl+Shift+S)">Save as…</button>
-  <button class="btn ghost" id="btnModels">Models</button>
+  <button class="btn ghost" id="btnModels" title="Models, make names, types, weights and diagnostic codes used to build the report">Dictionary</button>
   <button class="btn ghost theme-btn" id="btnTheme" aria-label="Toggle light or dark mode"></button>
   <input type="file" id="openFile" accept=".json,.xlsm,.xlsx" hidden>
 </header>
@@ -49,7 +49,7 @@
 
 <dialog id="modelsDialog" class="wide">
   <div class="dialog-head">
-    <h2>Models</h2>
+    <h2>Dictionary</h2>
     <div class="actions">
       <button class="btn ghost" id="modelsImport">Import…</button>
       <button class="btn ghost" id="modelsExport">Export</button>

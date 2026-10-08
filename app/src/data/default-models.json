@@ -793,5 +793,11 @@
    "code": "TPD",
    "description": "TP Defect"
   }
+ ],
+ "makeMap": [
+  {
+   "from": "Dell Inc.",
+   "to": "Dell"
+  }
  ]
 }

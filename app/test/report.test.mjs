@@ -80,3 +80,25 @@ test('diagnostic codes typed in the Review table are expanded too', () => {
   assert.equal(r.rows[0].locked, 'Apple ID');
   assert.deepEqual(r.rows[0]._edited.sort(), ['diagnostics', 'locked']);
 });
+
+test('make names from the Make names list', () => {
+  const blancco = [['System manufacturer', 'System serial', 'Device Identifier'], ['DELL INC.', 'S1', 'GG01'], ['LENOVO', 'S2', 'GG02']];
+  const r = buildReport(project({
+    inputs: { mac: '', windows: 'GG03*W3*-*Notebook*dell inc.*Latitude 5431', blanccoFiles: [{ name: 'b', table: blancco }] },
+    manual: { GG04: { make: 'Dell Inc.' } },
+  }), models);
+  assert.deepEqual(r.rows.map(x => x.make), ['Dell', 'Lenovo', 'Dell', 'Dell']);
+  assert.equal(buildReport(project({ manual: { GG01: { make: 'Dell Inc.' } } }), { ...models, makeMap: [] }).rows[0].make, 'Dell Inc.');
+});
+
+test('Mac and Windows report lines pasted together are told apart by their fields', () => {
+  const mac = 'GG01*C02X*-*Laptop*Apple*MacBookPro18,3*M1 Pro*16 GB*512 GB*Normal*Disabled*Disabled*No*90*D1*2026*ok';
+  const win = 'GG02*W2*-*Notebook*Dell Inc.*Latitude 5431*i5*16*256*80*ok';
+  const r = buildReport(project({ inputs: { reports: `${mac}\n\n${win}\nGG03*broken*line`, blanccoFiles: [] } }), models);
+  assert.deepEqual(r.rows.map(x => [x.itemLookup, x._sources.mac, x._sources.win]), [['GG01', true, false], ['GG02', false, true]]);
+  assert.deepEqual(r.counts.mac + r.counts.win, 2);
+  const bad = r.warnings.filter(w => w.text.startsWith('Device reports'));
+  assert.equal(bad.length, 1);
+  assert.match(bad[0].text, /line 4: has 3 fields/);
+  assert.equal(bad[0].level, 'error');
+});

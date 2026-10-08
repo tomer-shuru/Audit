@@ -2,7 +2,7 @@
 // Replaces sheets: Audit Report, Locked and Faulty, My_Audit (manual entries).
 import { str, isBlank, joinNonEmpty, expandDiagCodes, formatDiagnostics, proper } from './rules.js';
 import {
-  itemKey, makeLookups, mergeTables, parseMacLines, parseWindowsLines, normalizeBlancco, erasureSummary,
+  itemKey, makeLookups, mergeTables, parseMacLines, parseWindowsLines, sortReportLines, normalizeBlancco, erasureSummary,
   macRecord, windowsRecord, blanccoRecords,
 } from './sources.js';
 
@@ -44,7 +44,8 @@ const first = (...vals) => { for (const v of vals) if (!isBlank(v)) return v; re
 /**
  * project = {
  *   settings: { projectNumber, prefix, endClient },
- *   inputs: { mac: string, windows: string, blanccoFiles: [{ name, table: string[][] (with header row) }] },
+ *   inputs: { reports: string, blanccoFiles: [{ name, table: string[][] (with header row) }] },
+ *     (reports: Mac and Windows report lines together; older projects have them apart in mac / windows)
  *   manual: { [itemCode]: { field: value } },      // My_Audit-style entries (merged like the workbook)
  *   overrides: { [itemCode]: { field: value } },   // Review-table edits (replace the final value)
  * }
@@ -54,8 +55,12 @@ export function buildReport(project, models) {
   const { settings, inputs = {}, manual = {}, overrides = {} } = project;
   const warnings = [];
 
-  const macLines = parseMacLines(inputs.mac);
-  const winLines = parseWindowsLines(inputs.windows);
+  const reports = sortReportLines(inputs.reports);
+  for (const u of reports.unknown) {
+    warnings.push({ level: 'error', text: `Device reports, line ${u.line}: has ${u.fields} fields, but a Mac report line has 17 and a Windows one 11, so it was skipped (${u.text.length > 50 ? u.text.slice(0, 50) + '…' : u.text})` });
+  }
+  const macLines = parseMacLines(joinNonEmpty('\n', inputs.mac, reports.mac));
+  const winLines = parseWindowsLines(joinNonEmpty('\n', inputs.windows, reports.windows));
   const blanccoInput = inputs.blanccoFiles ? mergeTables(inputs.blanccoFiles.map(f => f.table)) : (inputs.blancco || []);
   const blanccoTable = normalizeBlancco(blanccoInput);
   if (blanccoTable.missing.length && blanccoInput.length > 1) {
@@ -113,7 +118,8 @@ export function buildReport(project, models) {
       itemLookup: code,
       item: joinNonEmpty('-', 'ITD', settings.projectNumber, code),
       sn: pick('sn'), asset: pick('asset'), type: pick('type'),
-      make: first(man.make, m?.make, w?.make, c ? proper(c.make) : ''),
+      // make names from the Dictionary's Make names list; Blancco's otherwise in PROPER case
+      make: first(...[man.make, m?.make, w?.make].map(v => lk.make(v) ?? v), c ? lk.make(c.make) ?? proper(c.make) : ''),
       model: pick('model'),
       // Screen: Mac, then Windows, then typed (blank Blancco screens are never used)
       screen: first(man.screen, m ? m.screen : (w ? w.screen : '')),

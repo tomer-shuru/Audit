@@ -1,6 +1,6 @@
 // Audit Builder - browser UI
 import { buildReport, REPORT_COLUMNS, EXPORT_COLUMNS, LOCKED_COLUMNS, MANUAL_FIELDS, EDITABLE, itemCode, missingItemsNote } from '../engine/report.js';
-import { normalizeBlancco, mergeTables, parseMacLines, parseWindowsLines, itemKey } from '../engine/sources.js';
+import { normalizeBlancco, mergeTables, parseMacLines, parseWindowsLines, sortReportLines, itemKey } from '../engine/sources.js';
 import defaultModels from '../data/default-models.json';
 import {
   readTableFiles, parsePastedTable, importWorkbook, downloadXlsx, toTsv,
@@ -21,7 +21,7 @@ const STORE_TAB = 'auditApp.tab';
 const emptyProject = () => ({
   version: 2,
   settings: { projectNumber: '', prefix: '', endClient: '' },
-  inputs: { mac: '', windows: '', blanccoFiles: [], sheet: '' },
+  inputs: { reports: '', blanccoFiles: [], sheet: '' },
   manual: {}, overrides: {},
   savedToFile: true,
 });
@@ -35,6 +35,11 @@ function migrate(p) {
     if (!inp.blanccoFiles.length && inp.blancco.length > 1) inp.blanccoFiles = [{ name: inp.blanccoSource || 'Blancco export', table: inp.blancco }];
     delete inp.blancco; delete inp.blanccoSource;
   }
+  // Mac and Windows reports used to be pasted in two boxes; now they share one
+  if ('mac' in inp || 'windows' in inp) {
+    inp.reports = [inp.reports, inp.mac, inp.windows].map(t => String(t ?? '').trim()).filter(Boolean).join('\n');
+    delete inp.mac; delete inp.windows;
+  }
   delete project.settings.startNumber;
   return project;
 }
@@ -46,7 +51,7 @@ const store = (key, val) => { try { localStorage.setItem(key, JSON.stringify(val
 
 const state = {
   project: migrate(load(STORE_PROJECT, {})),
-  models: load(STORE_MODELS, null) || structuredClone(defaultModels),
+  models: withNewLists(load(STORE_MODELS, null) || structuredClone(defaultModels)),
   tab: load(STORE_TAB, 'data'),
   report: null,
   reviewFilter: '', reviewIssuesOnly: false,
@@ -121,7 +126,7 @@ function toast(msg, kind = 'ok', action = null) {
 }
 
 // suggest the code after the highest one used so far (GG01 for an empty project)
-function nextFreeCode() {
+function nextFreeNumber() {
   const p = state.project.settings;
   const prefix = itemKey(p.prefix);
   let max = 0;
@@ -129,8 +134,9 @@ function nextFreeCode() {
     const k = itemKey(code);
     if (k.startsWith(prefix) && /^\d+$/.test(k.slice(prefix.length))) max = Math.max(max, Number(k.slice(prefix.length)));
   }
-  return itemCode(p, max + 1);
+  return max + 1;
 }
+const nextFreeCode = () => itemCode(state.project.settings, nextFreeNumber());
 
 // ---------- chrome (header + tabs) ----------
 function renderChrome() {
@@ -184,8 +190,7 @@ function renderData(main) {
   const files = inp.blanccoFiles;
   const merged = normalizeBlancco(mergeTables(files.map(f => f.table)));
   const serials = new Set(merged.rows.map(r => r.serial).filter(Boolean));
-  const mac = parseMacLines(inp.mac), win = parseWindowsLines(inp.windows);
-  const noCode = list => list.filter(x => !x.item).length;
+
   const fileInfo = f => {
     const n = normalizeBlancco(f.table);
     return { rows: n.rows.length, missing: n.missing };
@@ -216,18 +221,13 @@ function renderData(main) {
     </details>
   </section>
 
-  <div class="grid2">
-    <section class="card">
-      <div class="card-head"><div><h2>Mac reports</h2><p class="hint">One device per line, fields separated by <code>*</code>.</p></div></div>
-      <textarea id="macInput" class="mono" rows="10" spellcheck="false" placeholder="GG23*YT26FYC924*5285978*Laptop*Apple*MacBookPro18,3*…">${esc(inp.mac)}</textarea>
-      <div class="status" id="macStatus">${plural(mac.length, 'device')}${noCode(mac) ? ` · <span class="bad-text">${noCode(mac)} without item code</span>` : ''}</div>
-    </section>
-    <section class="card">
-      <div class="card-head"><div><h2>Windows reports</h2><p class="hint">One device per line, fields separated by <code>*</code>.</p></div></div>
-      <textarea id="winInput" class="mono" rows="10" spellcheck="false" placeholder="GG17*4V3SHW3*4004343*Notebook*Dell Inc.*Latitude 5431*…">${esc(inp.windows)}</textarea>
-      <div class="status" id="winStatus">${plural(win.length, 'device')}${noCode(win) ? ` · <span class="bad-text">${noCode(win)} without item code</span>` : ''}</div>
-    </section>
-  </div>
+  <section class="card">
+    <div class="card-head"><div><h2>Mac and Windows reports</h2>
+      <p class="hint">Paste the report lines from both tools here, in any order: one device per line, fields separated by <code>*</code>.
+      Each line is recognised by its number of fields (Mac 17, Windows 11).</p></div></div>
+    <textarea id="reportsInput" class="mono" rows="12" spellcheck="false" placeholder="GG23*YT26FYC924*5285978*Laptop*Apple*MacBookPro18,3*…&#10;GG17*4V3SHW3*4004343*Notebook*Dell Inc.*Latitude 5431*…">${esc(inp.reports)}</textarea>
+    <div class="status" id="reportsStatus">${reportsStatus(inp.reports)}</div>
+  </section>
 
   <section class="card">
     <div class="card-head">
@@ -274,19 +274,12 @@ function renderData(main) {
   const clear = $('#blanccoClear');
   if (clear) clear.onclick = () => { if (confirm('Remove all Blancco files from this project?')) { files.length = 0; changed(); } };
 
-  const bindLines = (id, key, statusId, parse) => {
-    let t;
-    $(id).oninput = e => {
-      inp[key] = e.target.value;
-      clearTimeout(t);
-      t = setTimeout(() => {
-        changed({ rerender: false });
-        const list = parse(inp[key]);
-        $(statusId).innerHTML = plural(list.length, 'device') + (noCode(list) ? ` · <span class="bad-text">${noCode(list)} without item code</span>` : '');
-      }, 300);
-    };
+  let reportsTimer;
+  $('#reportsInput').oninput = e => {
+    inp.reports = e.target.value;
+    clearTimeout(reportsTimer);
+    reportsTimer = setTimeout(() => { changed({ rerender: false }); $('#reportsStatus').innerHTML = reportsStatus(inp.reports); }, 300);
   };
-  bindLines('#macInput', 'mac', '#macStatus', parseMacLines);
   let sheetTimer;
   $('#sheetInput').oninput = e => {
     inp.sheet = e.target.value;
@@ -295,7 +288,17 @@ function renderData(main) {
   };
   const sheetClear = $('#sheetClear');
   if (sheetClear) sheetClear.onclick = () => { inp.sheet = ''; changed(); };
-  bindLines('#winInput', 'windows', '#winStatus', parseWindowsLines);
+}
+
+// "24 devices (16 Mac, 8 Windows)"; lines that are neither are listed on the Review tab
+function reportsStatus(text) {
+  const sorted = sortReportLines(text);
+  const mac = parseMacLines(sorted.mac), win = parseWindowsLines(sorted.windows);
+  const n = mac.length + win.length, noCode = [...mac, ...win].filter(x => !x.item).length;
+  const parts = [`${plural(n, 'device')}${n ? ` (${mac.length} Mac, ${win.length} Windows)` : ''}`];
+  if (noCode) parts.push(`<span class="bad-text">${noCode} without item code</span>`);
+  if (sorted.unknown.length) parts.push(`<span class="bad-text">${plural(sorted.unknown.length, 'line')} not recognised (see Review)</span>`);
+  return parts.join(' · ');
 }
 
 function sheetStatus() {
@@ -322,6 +325,13 @@ function renderManual(main) {
         ${sel.size ? `<button class="btn danger" id="delSelected">Delete ${plural(sel.size, 'selected item')}</button>` : ''}
         <input id="newCode" class="code-input" value="${esc(nextFreeCode())}" aria-label="Item code">
         <button class="btn primary" id="addManual">Add item</button>
+        <span class="range-add" title="Add a manual entry for every item number in the range">
+          <span class="muted">or items</span>
+          <span class="prefix">${esc(state.project.settings.prefix)}</span><input id="rangeFrom" type="number" min="0" value="${nextFreeNumber()}" aria-label="First item number">
+          <span class="muted">to</span>
+          <span class="prefix">${esc(state.project.settings.prefix)}</span><input id="rangeTo" type="number" min="0" aria-label="Last item number">
+          <button class="btn" id="addRange">Add range</button>
+        </span>
       </div>
     </div>
     ${codes.length ? `
@@ -375,6 +385,25 @@ function renderManual(main) {
     grid('manual').select(row, 1, { focus: true });
   };
   $('#newCode').onkeydown = e => { if (e.key === 'Enter') $('#addManual').click(); };
+
+  // add every item number from .. to (items that already have a manual entry are skipped)
+  $('#addRange').onclick = () => {
+    const from = Number($('#rangeFrom').value), to = Number($('#rangeTo').value || $('#rangeFrom').value);
+    if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < from) { toast('Enter the first and last item number, e.g. 10 to 20', 'bad'); return; }
+    if (to - from >= 500) { toast('That\'s more than 500 items. Add a smaller range.', 'bad'); return; }
+    const have = new Set(Object.keys(man).map(itemKey));
+    const add = [];
+    for (let n = from; n <= to; n++) { const code = itemCode(state.project.settings, n); if (!have.has(itemKey(code))) add.push(code); }
+    const skipped = to - from + 1 - add.length;
+    if (!add.length) { toast('All of these already have a manual entry', 'bad'); return; }
+    recordEdit();
+    for (const code of add) man[code] = {};
+    changed();
+    const first = Object.keys(man).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).indexOf(add[0]);
+    grid('manual').select(first, 1, { focus: true });
+    toast(`Added ${add.length === 1 ? add[0] : `${plural(add.length, 'item')} (${add[0]}–${add[add.length - 1]})`}${skipped ? `, ${skipped} already there` : ''}`);
+  };
+  for (const id of ['#rangeFrom', '#rangeTo']) $(id).onkeydown = e => { if (e.key === 'Enter') $('#addRange').click(); };
   main.querySelectorAll('[data-del]').forEach(b => b.onclick = () => remove([b.dataset.del]));
 
   const table = main.querySelector('table.manual');
@@ -699,6 +728,8 @@ function updateSetupPreview() {
 const MODEL_TABS = {
   models: { label: 'Models', key: 'models', hint: 'Mac model IDs (e.g. MacBookPro18,3) and Windows model names, with the details used in the report.',
     cols: [['id', 'Model ID'], ['name', 'Model name'], ['type', 'Type'], ['year', 'Year'], ['screen', 'Screen'], ['weight', 'Weight']] },
+  makeMap: { label: 'Make names', key: 'makeMap', hint: 'Turns the make reported by the tools into the name shown in the report, e.g. "Dell Inc." to "Dell". Not case-sensitive.',
+    cols: [['from', 'Reported make'], ['to', 'Report make']], unique: 'from' },
   typeMap: { label: 'Type mapping', key: 'typeMap', hint: 'Turns the chassis type reported by the tools (Blancco / Windows) into the type shown in the report.',
     cols: [['blanccoType', 'Reported type'], ['type', 'Report type']] },
   typeWeights: { label: 'Weights', key: 'typeWeights', hint: 'Weight (kg) written in the report for each device type.',
@@ -709,16 +740,21 @@ const MODEL_TABS = {
     cols: [['code', 'Code'], ['description', 'Description']], unique: 'code' },
 };
 
-// ---------- shared Models file ----------
+// ---------- shared Dictionary file (models.json) ----------
 // One models.json in the shared Drive folder. Everyone connects to it once; the app loads it on start
-// (and when the window gets focus again) and writes every Models edit back to it.
+// (and when the window gets focus again) and writes every Dictionary edit back to it.
 // status: off | ok | needs-permission | missing | error | unsupported
 const shared = { handle: null, status: canSaveInPlace ? 'off' : 'unsupported', text: '', error: '' };
 
 const isModelsData = m => m && ['models', 'typeMap', 'typeWeights', 'cleanupRules', 'diagCodes'].every(k => Array.isArray(m[k]));
+// lists added in later versions: a Dictionary saved before them gets the built-in ones
+function withNewLists(m) {
+  return !m || Array.isArray(m.makeMap) ? m : { ...m, makeMap: structuredClone(defaultModels.makeMap) };
+}
 const modelsText = m => JSON.stringify(m, null, 1);
 
 function applyModels(m) {
+  m = withNewLists(m);
   state.models = m;
   store(STORE_MODELS, m);
   recompute();
@@ -739,19 +775,19 @@ async function loadSharedModels({ ask = false, announce = false } = {}) {
     const text = await readFileText(shared.handle);
     shared.status = 'ok';
     if (text !== shared.text) {
-      const m = JSON.parse(text);
-      if (!isModelsData(m)) throw new Error('it isn\'t a Models file');
+      const m = withNewLists(JSON.parse(text));
+      if (!isModelsData(m)) throw new Error('it isn\'t a Dictionary file');
       shared.text = text;
       if (modelsText(m) !== modelsText(state.models)) {
         applyModels(m);
-        if (announce) toast('Loaded the latest shared Models list');
+        if (announce) toast('Loaded the latest shared Dictionary');
       }
     }
     renderShared();
   } catch (err) { sharedFailed(err); }
 }
 
-// called after every edit in the Models window
+// called after every edit in the Dictionary window
 async function saveModels() {
   store(STORE_MODELS, state.models);
   recompute(); renderChrome();
@@ -764,14 +800,14 @@ async function saveModels() {
     if (current !== shared.text) {
       shared.text = '';
       await loadSharedModels();
-      toast('A coworker changed the shared Models list just now. Their version is loaded; please redo your last change.', 'bad');
+      toast('A coworker changed the shared Dictionary just now. Their version is loaded; please redo your last change.', 'bad');
       return;
     }
     await writeFile(shared.handle, text);
     shared.text = text;
   } catch (err) {
     sharedFailed(err);
-    toast(`Not saved to the shared Models file: ${err.message}`, 'bad');
+    toast(`Not saved to the shared Dictionary file: ${err.message}`, 'bad');
   }
 }
 
@@ -782,12 +818,12 @@ async function connectSharedModels() {
     if (!(await hasPermission(h, true))) throw Object.assign(new Error('the browser wasn\'t allowed to use it'), { name: 'NotAllowedError' });
     const text = await readFileText(h);
     const m = JSON.parse(text);
-    if (!isModelsData(m)) throw new Error('it isn\'t a Models file');
+    if (!isModelsData(m)) throw new Error('it isn\'t a Dictionary file');
     Object.assign(shared, { handle: h, text, status: 'ok', error: '' });
     await rememberFile(h, MODELS_FILE);
     applyModels(m);
     renderShared();
-    toast(`Connected to the shared Models file ${h.name}`);
+    toast(`Connected to the shared Dictionary file ${h.name}`);
   } catch (err) { toast(`Couldn't use ${h.name}: ${err.message}`, 'bad'); }
 }
 
@@ -805,25 +841,25 @@ async function createSharedModels() {
 }
 
 function disconnectSharedModels() {
-  if (!confirm('Stop using the shared Models file on this computer? Your current list stays, but changes will only be saved here.')) return;
+  if (!confirm('Stop using the shared Dictionary file on this computer? Your current list stays, but changes will only be saved here.')) return;
   Object.assign(shared, { handle: null, text: '', status: 'off', error: '' });
   rememberFile(null, MODELS_FILE);
   renderShared();
 }
 
-// the status box in the Models window and the bar under the tabs
+// the status box in the Dictionary window and the bar under the tabs
 function renderShared() {
   const name = esc(shared.handle?.name || 'models.json');
   const box = $('#sharedModels');
   const msg = {
-    unsupported: '<span class="muted">This browser can\'t use a shared Models file, so changes are only saved on this computer. Use Chrome or Edge to share them.</span>',
+    unsupported: '<span class="muted">This browser can\'t use a shared Dictionary file, so changes are only saved on this computer. Use Chrome or Edge to share them.</span>',
     off: `<span><b>Not shared:</b> changes are only saved on this computer.</span>
       <span class="actions"><button class="btn small" data-shared="connect">Connect shared file…</button><button class="btn small ghost" data-shared="create">Create shared file…</button></span>
       <span class="hint">The shared file is <code>G:\\My Drive\\Audit Builder\\Models\\models.json</code>. If it doesn't exist yet, create it there.</span>`,
     ok: `<span class="good-text"><b>✓ Shared:</b> using ${name}. Changes are saved to it for everyone.</span>
       <span class="actions"><button class="btn small ghost" data-shared="disconnect">Disconnect</button></span>`,
     'needs-permission': `<span class="warn-text"><b>${name}</b> needs your OK before the app can use it.</span>
-      <span class="actions"><button class="btn small primary" data-shared="allow">Load shared Models</button><button class="btn small ghost" data-shared="disconnect">Disconnect</button></span>`,
+      <span class="actions"><button class="btn small primary" data-shared="allow">Load shared Dictionary</button><button class="btn small ghost" data-shared="disconnect">Disconnect</button></span>`,
     missing: `<span class="bad-text">Can't find ${name}. It may have been moved or deleted.</span>
       <span class="actions"><button class="btn small" data-shared="connect">Connect again…</button><button class="btn small ghost" data-shared="disconnect">Disconnect</button></span>`,
     error: `<span class="bad-text">Problem with ${name}: ${esc(shared.error)}</span>
@@ -836,8 +872,8 @@ function renderShared() {
   bar.hidden = !showBar;
   if (showBar) {
     bar.innerHTML = shared.status === 'needs-permission'
-      ? `<span>The shared Models list (${name}) needs your OK to load.</span><button class="btn small primary" data-shared="allow">Load shared Models</button>`
-      : `<span>The shared Models list (${name}) can't be loaded right now, so this computer's copy is used.</span><button class="btn small" data-shared="open">Open Models</button>`;
+      ? `<span>The shared Dictionary (${name}) needs your OK to load.</span><button class="btn small primary" data-shared="allow">Load shared Dictionary</button>`
+      : `<span>The shared Dictionary (${name}) can't be loaded right now, so this computer's copy is used.</span><button class="btn small" data-shared="open">Open Dictionary</button>`;
   }
   document.querySelectorAll('[data-shared]').forEach(b => b.onclick = () => ({
     connect: connectSharedModels, create: createSharedModels, disconnect: disconnectSharedModels,
@@ -934,7 +970,9 @@ async function openProjectFile(file) {
 // Save: the first time asks where, after that overwrites the same file. "Save as" always asks.
 async function saveProject({ saveAs = false } = {}) {
   const s = state.project.settings;
-  const name = `${s.projectNumber || 'project'}.audit.json`;
+  // suggested name for a new file: "End client_Project number.audit.json" (characters Windows doesn't allow become -)
+  const base = [s.endClient, s.projectNumber].map(v => String(v ?? '').trim().replace(/[\\/:*?"<>|]+/g, '-')).filter(Boolean).join('_');
+  const name = `${base || 'project'}.audit.json`;
   const copy = { ...state.project }; delete copy.savedToFile;
   const text = JSON.stringify(copy, null, 1);
 
@@ -1049,17 +1087,17 @@ function init() {
     const file = e.target.files[0]; e.target.value = ''; if (!file) return;
     try {
       const m = await readJsonFile(file);
-      if (!isModelsData(m)) throw new Error('not a models file');
-      if (!confirm(`Replace the Models list with ${file.name}?${sharedNote()}`)) return;
-      state.models = m; renderModels(); await saveModels(); toast('Models imported');
+      if (!isModelsData(m)) throw new Error('not a Dictionary file');
+      if (!confirm(`Replace the Dictionary with ${file.name}?${sharedNote()}`)) return;
+      state.models = withNewLists(m); renderModels(); await saveModels(); toast('Dictionary imported');
     } catch (err) { toast(`Couldn't import: ${err.message}`, 'bad'); }
   };
   $('#modelsReset').onclick = async () => {
-    if (!confirm(`Replace the Models list with the built-in defaults?${sharedNote()}`)) return;
+    if (!confirm(`Replace the Dictionary with the built-in defaults?${sharedNote()}`)) return;
     state.models = structuredClone(defaultModels); renderModels(); await saveModels();
   };
 
-  // shared Models file: reconnect on start, and pick up coworkers' changes when coming back to the app
+  // shared Dictionary file: reconnect on start, and pick up coworkers' changes when coming back to the app
   if (canSaveInPlace) {
     rememberedFile(MODELS_FILE).then(h => {
       if (h) { shared.handle = h; loadSharedModels(); } else renderShared();

@@ -27,6 +27,20 @@ function splitLines(text, fields) {
 export const parseMacLines = text => splitLines(text, MAC_FIELDS);
 export const parseWindowsLines = text => splitLines(text, WIN_FIELDS);
 
+// Mac and Windows report lines pasted together, told apart by their number of fields (17 Mac, 11 Windows).
+// Returns the Mac and Windows lines as text, and the lines that are neither: [{ line, fields, text }]
+export function sortReportLines(text) {
+  const mac = [], windows = [], unknown = [];
+  str(text).split(/\r?\n/).forEach((line, i) => {
+    if (line.trim() === '') return;
+    const fields = line.split('*').length;
+    if (fields === MAC_FIELDS.length) mac.push(line);
+    else if (fields === WIN_FIELDS.length) windows.push(line);
+    else unknown.push({ line: i + 1, fields, text: line.trim() });
+  });
+  return { mac: mac.join('\n'), windows: windows.join('\n'), unknown };
+}
+
 // --- lookups into the Models data ---
 export function makeLookups(models) {
   const byId = new Map();
@@ -35,10 +49,14 @@ export function makeLookups(models) {
   for (const t of models.typeMap) { const k = str(t.blanccoType).trim().toLowerCase(); if (!typeMap.has(k)) typeMap.set(k, t.type); }
   const weights = new Map();
   for (const t of models.typeWeights) { const k = str(t.type).trim().toLowerCase(); if (!weights.has(k)) weights.set(k, t.weight); }
+  const makes = new Map();
+  for (const t of models.makeMap || []) { const k = str(t.from).trim().toLowerCase(); if (k && !makes.has(k)) makes.set(k, str(t.to).trim()); }
   return {
     model: id => byId.get(str(id).trim().toLowerCase()),
     mapType: raw => typeMap.get(str(raw).trim().toLowerCase()),
     weight: type => weights.get(str(type).trim().toLowerCase()),
+    // make name as the report should show it ("Dell Inc." -> "Dell"), or undefined if it isn't in the list
+    make: raw => makes.get(str(raw).trim().toLowerCase()),
     cleanupRules: models.cleanupRules,
     diagCodes: models.diagCodes,
   };

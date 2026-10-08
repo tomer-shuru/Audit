@@ -68,10 +68,12 @@ DOING A PROJECT
    just numbers).
 2. Data tab (everything the report is built from): click "Add files..." and
    choose the Blancco exports (.csv, .xlsx or .zip). You can choose several
-   at once or drag them onto the box. Paste the Mac report lines and the
-   Windows report lines in their boxes.
+   at once or drag them onto the box. Paste the Mac and Windows report
+   lines together in "Mac and Windows reports", in any order.
 3. Manual entries tab (devices the tools couldn't read: dead, BIOS locked,
-   no report...): click "Add item" and type the details.
+   no report...): click "Add item" and type the details. To add many at
+   once, fill in "or items ... to ..." (e.g. 10 to 20) and click "Add range";
+   items that already have a manual entry are skipped.
 4. Review tab (check everything is right, make small corrections): every
    check is listed at the top. The Review tab button shows how many there
    are: red = problems, yellow = warnings, gray = notes. Rows with a problem
@@ -121,7 +123,8 @@ SAVING AND SHARING PROJECTS
   accident doesn't lose anything. That copy only exists on your computer
   and in that browser, though.
 - "Save project" (or Ctrl+S): the first time, it asks where to save the
-  project file (named after the project number, e.g. SHR11734.audit.json).
+  project file (named after the end client and project number, e.g.
+  Acme_SHR11734.audit.json).
   After that it saves over the same file without asking. The top bar shows
   which file you're saving to.
 - After reopening the browser, the first save may show a small "allow this
@@ -139,27 +142,29 @@ SAVING AND SHARING PROJECTS
 - An old Audit.xlsm can be opened with "Open..." too.
 
 
-MODELS LIST
------------
+DICTIONARY
+----------
 
-The "Models" button holds the model list, type mapping, weights and
-diagnostic codes. Everyone shares one list, stored in
+The "Dictionary" button holds the lists used to build the report: models,
+make names, type mapping, weights, model cleanup and diagnostic codes.
+"Make names" turns the make the tools report into the one in the report,
+e.g. "Dell Inc." into "Dell". Everyone shares one Dictionary, stored in
 G:\My Drive\Audit Builder\Models\models.json.
 
 Connect to it once:
-  Models > "Connect shared file..." > choose
+  Dictionary > "Connect shared file..." > choose
   G:\My Drive\Audit Builder\Models\models.json
-The box at the top of the Models window then says "Shared".
+The box at the top of the Dictionary window then says "Shared".
 
 After that:
 - The app loads the shared list every time it opens.
-- Any change you make in Models is saved to the shared file, and coworkers
+- Any change you make in the Dictionary is saved to the shared file, and coworkers
   get it the next time they open the app or switch back to it.
 - After restarting the browser, a yellow bar may ask for your OK to load
-  the shared list. Click "Load shared Models". If the browser offers
+  the shared list. Click "Load shared Dictionary". If the browser offers
   "Allow on every visit", choose it and it won't ask again.
 - If you and a coworker change the list at the same moment, the app keeps
   their version and asks you to redo your last change.
 
-If the Models window says "Not shared", your changes stay on your computer
+If the Dictionary window says "Not shared", your changes stay on your computer
 only. Connect to the shared file as above.

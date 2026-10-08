@@ -16,6 +16,7 @@ const INTENTIONAL = {
     app: v => v.split(', ').filter(p => p !== 'WiFi defect').join(', '),
   },
   disk: { excel: v => (v === 'NONE' ? '-' : v) }, // no disk is shown as "-"
+  make: { excel: v => models.makeMap.find(t => t.from.toLowerCase() === v.toLowerCase())?.to ?? v }, // Make names list ("Dell Inc." -> "Dell")
 };
 
 for (const name of fixtureNames()) {
@@ -42,6 +43,7 @@ for (const name of fixtureNames()) {
   test(`Locked and Faulty matches workbook (${name})`, () => {
     const { project, expectedLocked } = loadFixture(name);
     const { lockedFaulty } = buildReport(project, models);
-    assert.deepEqual(lockedFaulty.map(r => LOCKED_COLUMNS.map(([k]) => cell(r[k]))), expectedLocked.map(r => r.map(cell)));
+    const fix = (v, j) => (LOCKED_COLUMNS[j][0] === 'make' ? INTENTIONAL.make.excel(cell(v)) : cell(v));
+    assert.deepEqual(lockedFaulty.map(r => LOCKED_COLUMNS.map(([k]) => cell(r[k]))), expectedLocked.map(r => r.map(fix)));
   });
 }
