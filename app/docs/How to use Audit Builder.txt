@@ -65,7 +65,8 @@ DOING A PROJECT
 
 1. New project: click "New" and fill in the project number, end client and
    item code prefix (for example GG; leave it empty if the item codes are
-   just numbers).
+   just numbers) and the first item number (usually 1; e.g. 4000 if the
+   client numbers from there).
 2. Data tab (everything the report is built from): click "Add files..." and
    choose the Blancco exports (.csv, .xlsx or .zip). You can choose several
    at once or drag them onto the box. Paste the Mac and Windows report
@@ -97,9 +98,18 @@ The Review and Manual entries tables work like a spreadsheet:
    - Ctrl+Z undoes, Ctrl+Y redoes.
    The item code columns and green rows (already in the Google Sheet)
    can be selected and copied but not changed.
-5. Export tab (only for getting the finished report out): click "Copy rows"
-   and paste into the Google Sheet. If there are locked or faulty devices,
-   copy that list too. Untick columns the Google Sheet doesn't have.
+5. Export (the "Export..." button on the Review tab, only for getting the
+   finished report out): click "Copy rows" and paste into the Google Sheet.
+   If there are locked or faulty devices, copy that list too. Untick
+   columns the Google Sheet doesn't have. If problems (red) are still open
+   on Review, the app asks before opening Export.
+
+Review and Export show a row for every item number from the first item
+number up to the highest one. Numbers with no data yet get an empty (yellow)
+row, so the rows line up with the Google Sheet; typing in one on Review adds
+a manual entry. The "No data yet for" warning jumps to the first one.
+"Hide empty rows" only hides them from view: Copy rows and the Excel file
+always include them.
 
 If some items are already in the Google Sheet (for example BM20 was typed in
 by hand):
@@ -111,7 +121,7 @@ by hand):
    c. On Review and Export those rows show up green, in their place, instead
       of Audit Builder's rows for the same items. Any problem with them (for
       example no item codes found) is listed on the Review tab.
-   d. On the Export tab click "Copy rows", click the ITEM cell of the first
+   d. In Export (button on Review) click "Copy rows", click the ITEM cell of the first
       item row in the Google Sheet and paste. The green rows get their own
       values back (formulas in them become plain values).
 

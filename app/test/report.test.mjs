@@ -22,6 +22,8 @@ test('warns when the same asset tag is on more than one device', () => {
     manual: {
       GG01: { asset: '4004012', diagnostics: 'ok' }, GG02: { asset: '4004012 ', diagnostics: 'ok' },
       GG03: { asset: '4004099', diagnostics: 'ok' }, GG04: { asset: '-', diagnostics: 'ok' }, GG05: { asset: '-', diagnostics: 'ok' },
+      GG06: { asset: 'N/A', diagnostics: 'ok' }, GG07: { asset: 'n/a', diagnostics: 'ok' },
+      GG08: { asset: 'NA', diagnostics: 'ok' }, GG09: { asset: 'na', diagnostics: 'ok' }, GG10: { asset: '--', diagnostics: 'ok' },
     },
     overrides: { GG03: { asset: '4004012' } },
   }), models);
@@ -39,7 +41,8 @@ test('missing Blancco erasure: only a note for Windows reports, a warning for Ma
 test('item numbering: gaps and codes that do not fit', () => {
   const r = buildReport(project({ manual: { GG03: { diagnostics: 'ok' }, GG06: { diagnostics: 'ok' }, X9: { diagnostics: 'ok' } } }), models);
   assert.deepEqual(r.rows.map(x => x.itemLookup), ['GG03', 'GG06', 'X9']);
-  assert.ok(texts(r).includes('No data yet for: GG04–GG05'));
+  const gaps = r.warnings.find(w => w.text.startsWith('No data yet'));
+  assert.deepEqual([gaps.level, gaps.text], ['warn', 'No data yet for: GG01–GG02, GG04–GG05']); // counted from 01
   assert.ok(r.warnings.some(w => w.item === 'X9' && /doesn't follow/.test(w.text)));
 });
 
@@ -71,7 +74,7 @@ test('item codes that are just numbers (empty prefix), with or without leading z
   assert.deepEqual(r.rows.map(x => x.item), ['ITD-SHR1-2', 'ITD-SHR1-07', 'ITD-SHR1-10']);
   assert.equal(r.rows[1].sn, 'SER7');   // manual 07 and Windows 7 are the same item
   assert.ok(!texts(r).some(t => t.includes("doesn't follow")));
-  assert.ok(texts(r).some(t => t.startsWith('No data yet for: 03–06, 08–09')));
+  assert.ok(texts(r).includes('No data yet for: 01, 03–06, 08–09'));
 });
 
 test('diagnostic codes typed in the Review table are expanded too', () => {
@@ -101,4 +104,13 @@ test('Mac and Windows report lines pasted together are told apart by their field
   assert.equal(bad.length, 1);
   assert.match(bad[0].text, /line 4: has 3 fields/);
   assert.equal(bad[0].level, 'error');
+});
+
+test('first item number from project setup, and a safety net when it is far below the items', () => {
+  const with4000 = buildReport(project({ settings: { projectNumber: 'SHR1', prefix: 'GG', endClient: 'X', startNumber: 4000 }, manual: { GG4001: { diagnostics: 'ok' }, GG4003: { diagnostics: 'ok' }, GG12: { diagnostics: 'ok' } } }), models);
+  assert.ok(texts(with4000).includes('No data yet for: GG4000, GG4002'));
+  assert.ok(texts(with4000).includes('GG12: below the first item number (GG4000)'));
+  const forgotten = buildReport(project({ manual: { GG4000: { diagnostics: 'ok' }, GG4002: { diagnostics: 'ok' } } }), models);
+  assert.ok(texts(forgotten).includes('No data yet for: GG4001'));
+  assert.ok(texts(forgotten).some(t => t.startsWith('The items start at GG4000 but the first item number in project setup is 1')));
 });

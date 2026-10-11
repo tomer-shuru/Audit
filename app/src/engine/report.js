@@ -103,10 +103,9 @@ export function buildReport(project, models) {
   });
 
   const outside = sorted.filter(k => numOf(k) === null);
-  for (const k of outside) warnings.push({ level: 'warn', item: k, text: `${k}: item code doesn't follow this project's numbering (${settings.prefix}01, ${settings.prefix}02…)` });
-
-  const gaps = missingItemsNote(settings, sorted);
-  if (gaps) warnings.push(gaps);
+  const firstNumber = numberingStart(settings, sorted).start;
+  for (const k of outside) warnings.push({ level: 'warn', item: k, text: `${k}: item code doesn't follow this project's numbering (${itemCode(settings, firstNumber)}, ${itemCode(settings, firstNumber + 1)}…)` });
+  warnings.push(...numberingChecks(settings, sorted));
 
   const rows = sorted.map(k => {
     const man = manBy.get(k) || {};
@@ -156,11 +155,12 @@ export function buildReport(project, models) {
     return row;
   });
 
-  // Asset tags are unique per device: flag any tag used by more than one item ("-" means no tag)
+  // Asset tags are unique per device: flag any tag used by more than one item
+  // (dashes, N/A, NA, none mean the device has no tag)
   const byAsset = new Map();
   for (const r of rows) {
     const a = str(r.asset).trim();
-    if (a === '' || a === '-') continue;
+    if (a === '' || /^(-+|n\.?\/?a\.?|none)$/i.test(a)) continue;
     const k = a.toLowerCase();
     if (!byAsset.has(k)) byAsset.set(k, []);
     byAsset.get(k).push(r);
@@ -187,15 +187,34 @@ export function codeNumber(settings, key) {
   return key.startsWith(prefix) && /^\d+$/.test(key.slice(prefix.length)) ? Number(key.slice(prefix.length)) : null;
 }
 
-// note listing the item numbers between the lowest and highest code that have no data (keys: item keys)
-export function missingItemsNote(settings, keys) {
+// The project's first item number (project setup, 1 if not set). If the items in use start far above it
+// (e.g. a project numbered from 4000 whose setup still says 1), they start at the lowest one in use instead,
+// so there aren't thousands of empty items. keys: item keys in use.
+export function numberingStart(settings, keys) {
+  const set = String(settings.startNumber ?? '').trim();
+  const start = set !== '' && Number.isInteger(Number(set)) && Number(set) >= 0 ? Number(set) : 1;
+  const nums = keys.map(k => codeNumber(settings, k)).filter(n => n !== null && n >= start);
+  const low = nums.length ? Math.min(...nums) : start;
+  return { start: low - start > 100 ? low : start, set: start };
+}
+
+// checks on the item numbering: items with no data from the first item number up to the highest one,
+// items below the first item number, and a first item number that doesn't fit the items at all
+export function numberingChecks(settings, keys) {
+  const out = [];
   const nums = keys.map(k => codeNumber(settings, k)).filter(n => n !== null);
-  if (!nums.length) return null;
-  const have = new Set(nums); const gaps = [];
-  for (let n = Math.min(...nums); n <= Math.max(...nums); n++) if (!have.has(n)) gaps.push(n);
-  if (!gaps.length) return null;
+  if (!nums.length) return out;
+  const { start, set } = numberingStart(settings, keys);
   const name = n => itemCode(settings, n);
-  return { level: 'info', kind: 'gaps', text: `No data yet for: ${compressRanges(gaps).map(([a, b]) => a === b ? name(a) : `${name(a)}–${name(b)}`).join(', ')}` };
+  if (start !== set) out.push({ level: 'warn', kind: 'numbering', text: `The items start at ${name(start)} but the first item number in project setup is ${set}. Click the project name at the top to change it.` });
+  for (const k of keys) {
+    const n = codeNumber(settings, k);
+    if (n !== null && n < start) out.push({ level: 'warn', kind: 'numbering', item: k, text: `${k}: below the first item number (${name(start)})` });
+  }
+  const have = new Set(nums); const gaps = [];
+  for (let n = start; n <= Math.max(...nums); n++) if (!have.has(n)) gaps.push(n);
+  if (gaps.length) out.push({ level: 'warn', kind: 'numbering', item: name(gaps[0]), text: `No data yet for: ${compressRanges(gaps).map(([a, b]) => a === b ? name(a) : `${name(a)}–${name(b)}`).join(', ')}` });
+  return out;
 }
 
 function compressRanges(nums) {

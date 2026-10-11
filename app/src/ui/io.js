@@ -67,7 +67,10 @@ export async function importWorkbook(file) {
   }
   const blancco = trimTable(input.map(r => r.slice(3, 33).map(v => (v == null ? '' : String(v)))));
   return {
-    settings: { projectNumber: String(input[1]?.[0] ?? ''), prefix: String(input[3]?.[0] ?? ''), endClient: String(input[5]?.[0] ?? '') },
+    settings: {
+      projectNumber: String(input[1]?.[0] ?? ''), prefix: String(input[3]?.[0] ?? ''), endClient: String(input[5]?.[0] ?? ''),
+      startNumber: Number(input[7]?.[0]) || 1,
+    },
     inputs: { mac: col(1), windows: col(2), blanccoFiles: blancco.length > 1 ? [{ name: `${file.name} (Input sheet)`, table: blancco }] : [] },
     manual, overrides: {},
   };
@@ -104,7 +107,7 @@ export async function copyText(text) {
   try { await navigator.clipboard.writeText(text); return true; } catch { /* fall back below */ }
   const ta = document.createElement('textarea');
   ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
-  document.body.appendChild(ta); ta.select();
+  (document.querySelector('dialog[open]') || document.body).appendChild(ta); ta.select();
   const ok = document.execCommand('copy');
   ta.remove();
   return ok;

@@ -25,7 +25,6 @@
   <button data-tab="data" title="Paste and add everything the report is built from">Data<span class="count"></span></button>
   <button data-tab="manual" title="Devices the tools couldn't read (dead, BIOS locked…)">Manual entries<span class="count"></span></button>
   <button data-tab="review" title="Check everything is right and make small corrections">Review<span class="count"></span></button>
-  <button data-tab="export" title="Copy or download the finished report">Export<span class="count"></span></button>
 </nav>
 
 <div id="sharedBar" class="shared-bar" hidden></div>
@@ -39,6 +38,8 @@
     <label>End client<input name="endClient" required placeholder="Client name" autocomplete="off"></label>
     <label>Item code prefix<input name="prefix" placeholder="GG" pattern="[A-Za-z0-9]*" title="Letters and numbers only. Leave empty if item codes are just numbers." autocomplete="off"></label>
     <p class="hint">Leave the prefix empty if the item codes are just numbers (01, 02…).</p>
+    <label>First item number<input name="startNumber" type="number" min="0" step="1" required value="1"></label>
+    <p class="hint">Usually 1. Some clients number their items from somewhere else, e.g. 4000.</p>
     <p id="setupPreview" class="preview"></p>
     <div class="dialog-actions">
       <button type="button" class="btn ghost" id="setupCancel">Cancel</button>
@@ -60,6 +61,14 @@
   </div>
   <div id="sharedModels" class="shared-box"></div>
   <div id="modelsBody"></div>
+</dialog>
+
+<dialog id="exportDialog" class="full">
+  <div class="dialog-head">
+    <div><h2>Export</h2><p class="hint">Copy the report and paste it into the project's Google Sheet, or download it as an Excel file.</p></div>
+    <div class="actions"><button class="btn primary" id="exportClose">Done</button></div>
+  </div>
+  <div id="exportBody"></div>
 </dialog>
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>

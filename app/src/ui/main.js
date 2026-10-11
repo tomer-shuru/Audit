@@ -1,5 +1,5 @@
 // Audit Builder - browser UI
-import { buildReport, REPORT_COLUMNS, EXPORT_COLUMNS, LOCKED_COLUMNS, MANUAL_FIELDS, EDITABLE, itemCode, missingItemsNote } from '../engine/report.js';
+import { buildReport, REPORT_COLUMNS, EXPORT_COLUMNS, LOCKED_COLUMNS, MANUAL_FIELDS, EDITABLE, itemCode, numberingChecks, numberingStart, codeNumber } from '../engine/report.js';
 import { normalizeBlancco, mergeTables, parseMacLines, parseWindowsLines, sortReportLines, itemKey } from '../engine/sources.js';
 import defaultModels from '../data/default-models.json';
 import {
@@ -20,7 +20,7 @@ const STORE_TAB = 'auditApp.tab';
 // ---------- state ----------
 const emptyProject = () => ({
   version: 2,
-  settings: { projectNumber: '', prefix: '', endClient: '' },
+  settings: { projectNumber: '', prefix: '', endClient: '', startNumber: 1 },
   inputs: { reports: '', blanccoFiles: [], sheet: '' },
   manual: {}, overrides: {},
   savedToFile: true,
@@ -40,7 +40,7 @@ function migrate(p) {
     inp.reports = [inp.reports, inp.mac, inp.windows].map(t => String(t ?? '').trim()).filter(Boolean).join('\n');
     delete inp.mac; delete inp.windows;
   }
-  delete project.settings.startNumber;
+  project.settings = Object.assign(emptyProject().settings, p.settings);
   return project;
 }
 
@@ -52,9 +52,10 @@ const store = (key, val) => { try { localStorage.setItem(key, JSON.stringify(val
 const state = {
   project: migrate(load(STORE_PROJECT, {})),
   models: withNewLists(load(STORE_MODELS, null) || structuredClone(defaultModels)),
-  tab: load(STORE_TAB, 'data'),
+  tab: ['data', 'manual', 'review'].includes(load(STORE_TAB, 'data')) ? load(STORE_TAB, 'data') : 'review',
   report: null,
   reviewFilter: '', reviewIssuesOnly: false,
+  hideEmpty: { review: false, export: false }, // "Hide empty rows" on Review / Export (only hides them from view)
   modelsTab: 'models',
   manualSelected: new Set(),
 };
@@ -67,7 +68,7 @@ function recompute() {
 }
 
 // Rows already in the Google Sheet (Data tab) take the place of the report rows for the same items.
-// They are lined up with the Audit Report columns ticked on the Export tab, the way they get pasted back.
+// They are lined up with the Audit Report columns ticked in the Export window, the way they get pasted back.
 // state.merge.rows is then the full list shown on Review and Export; its checks join the report's warnings.
 function mergeSheetRows() {
   state.merge = null;
@@ -79,12 +80,38 @@ function mergeSheetRows() {
   // the app's rows for items the sheet already has aren't used, so neither are their checks
   const skipped = new Set(m.skipped);
   const keys = m.rows.map(x => (x._sheet ? x._sheet.code : itemKey(x.itemLookup))).filter(Boolean);
-  r.warnings = r.warnings.filter(w => !skipped.has(w.item) && w.kind !== 'gaps');
-  const gaps = missingItemsNote(state.project.settings, keys);
-  if (gaps) r.warnings.push(gaps);
+  r.warnings = r.warnings.filter(w => !skipped.has(w.item) && w.kind !== 'numbering');
+  r.warnings.push(...numberingChecks(state.project.settings, keys));
   r.warnings.push(...sheetWarnings(m));
 }
-const reportRows = () => state.merge?.rows ?? state.report.rows;
+// all rows of the Audit Report (with the Google Sheet rows), plus an empty row for every item number
+// from the first item number (project setup) up to the highest one that has no data, so the list lines up
+const reportRows = () => withEmptyRows(state.merge?.rows ?? state.report.rows);
+
+function withEmptyRows(rows) {
+  const settings = state.project.settings;
+  const byNumber = new Map(), rest = [];
+  for (const row of rows) {
+    const key = row._sheet ? row._sheet.code : itemKey(row.itemLookup);
+    const n = key ? codeNumber(settings, key) : null;
+    if (n === null) rest.push(row);
+    else { if (!byNumber.has(n)) byNumber.set(n, []); byNumber.get(n).push(row); }
+  }
+  if (!byNumber.size) return rows;
+  const numbers = [...byNumber.keys()].sort((a, b) => a - b);
+  const { start } = numberingStart(settings, numbers.map(n => itemKey(itemCode(settings, n))));
+  const out = numbers.filter(n => n < start).flatMap(n => byNumber.get(n)); // below the first item number: as they are
+  for (let n = start, max = numbers[numbers.length - 1]; n <= max; n++) out.push(...(byNumber.get(n) || [emptyRow(n)]));
+  return [...out, ...rest];
+}
+
+function emptyRow(n) {
+  const code = itemCode(state.project.settings, n);
+  return {
+    itemLookup: code, item: ['ITD', state.project.settings.projectNumber, code].filter(Boolean).join('-'),
+    _empty: true, _edited: [], _base: {}, _sources: {},
+  };
+}
 function changed({ rerender = true } = {}) {
   state.project.savedToFile = false;
   store(STORE_PROJECT, state.project);
@@ -118,6 +145,8 @@ const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 let toastTimer;
 function toast(msg, kind = 'ok', action = null) {
   const t = $('#toast');
+  const host = document.querySelector('dialog[open]') || document.body; // a modal window would cover it otherwise
+  if (t.parentElement !== host) host.appendChild(t);
   t.innerHTML = `<span>${esc(msg)}</span>${action ? `<button class="toast-action">${esc(action.label)}</button>` : ''}`;
   t.className = `toast show ${kind}`;
   if (action) t.querySelector('button').onclick = () => { t.className = 'toast'; action.run(); };
@@ -134,7 +163,8 @@ function nextFreeNumber() {
     const k = itemKey(code);
     if (k.startsWith(prefix) && /^\d+$/.test(k.slice(prefix.length))) max = Math.max(max, Number(k.slice(prefix.length)));
   }
-  return max + 1;
+  const start = Number(p.startNumber);
+  return Math.max(max + 1, Number.isInteger(start) && start >= 0 ? start : 1);
 }
 const nextFreeCode = () => itemCode(state.project.settings, nextFreeNumber());
 
@@ -170,8 +200,37 @@ function renderChrome() {
 function render() {
   renderChrome();
   const main = $('#main');
-  const views = { data: renderData, manual: renderManual, review: renderReview, export: renderExport };
+  const views = { data: renderData, manual: renderManual, review: renderReview };
   keepScroll(main, () => views[state.tab](main));
+  fitTallTable();
+  // the Export window, when open, is redrawn too (keeping its tables' scroll position)
+  if ($('#exportDialog').open) {
+    const body = $('#exportBody');
+    const before = [...body.querySelectorAll('.table-wrap')].map(w => [w.scrollLeft, w.scrollTop]);
+    renderExport(body);
+    body.querySelectorAll('.table-wrap').forEach((w, i) => { if (before[i]) [w.scrollLeft, w.scrollTop] = before[i]; });
+  }
+}
+
+// Export (a window opened from Review): if red problems are still open, ask first
+function openExport() {
+  const errors = state.report.warnings.filter(w => w.level === 'error').length;
+  if (errors && !confirm(`${errors === 1 ? '1 problem is' : `${errors} problems are`} still open on Review. Export anyway?`)) return;
+  renderExport($('#exportBody'));
+  $('#exportDialog').showModal();
+}
+
+// The Review table gets the height that fits the window: below what's above it if that leaves enough room,
+// otherwise the height at which its whole card (header, table, scrollbar) fits once scrolled to it.
+function fitTallTable() {
+  const wrap = $('#main .table-wrap.tall');
+  if (!wrap) return;
+  const card = wrap.closest('.card');
+  const around = card.offsetHeight - wrap.offsetHeight; // the card's header, hint and padding
+  const gap = 20;
+  let h = window.innerHeight - (card.getBoundingClientRect().top + window.scrollY) - around - gap;
+  if (h < window.innerHeight * 0.5) h = window.innerHeight - around - 2 * gap;
+  wrap.style.maxHeight = `${Math.max(200, Math.floor(h))}px`;
 }
 
 // re-render without making tables jump back to the top-left
@@ -233,7 +292,7 @@ function renderData(main) {
     <div class="card-head">
       <div><h2>Rows already in the Google Sheet <span class="muted">optional</span></h2>
       <p class="hint">If some items are already filled in the project's Google Sheet, copy those rows there (from the first item row down past the last filled one,
-      same columns as the export) and paste them here. On the Export tab they show up in their place and are copied back as they are,
+      same columns as the export) and paste them here. On Review and in Export they show up in their place and are copied back as they are,
       instead of Audit Builder's rows for the same items.</p></div>
       ${inp.sheet.trim() ? '<div class="actions"><button class="btn ghost" id="sheetClear">Clear</button></div>' : ''}
     </div>
@@ -450,7 +509,8 @@ function renderReview(main) {
   const q = state.reviewFilter.trim().toLowerCase();
   const allRows = reportRows();
   const rows = allRows.filter(row =>
-    (!state.reviewIssuesOnly || issueItems.has(row.itemLookup) || row.locked) &&
+    !(state.hideEmpty.review && row._empty) &&
+    (!state.reviewIssuesOnly || issueItems.has(row.itemLookup) || row.locked || row._empty) &&
     (!q || REPORT_COLUMNS.some(([k]) => String(row[k] ?? '').toLowerCase().includes(q))));
   const levelIcon = { error: '✖', warn: '!', info: 'i' };
 
@@ -468,10 +528,13 @@ function renderReview(main) {
     <div class="card-head">
       <div><h2>Audit Report</h2><p class="hint">Works like a spreadsheet: arrow keys, Shift to select, type or double-click to change a cell, Ctrl+C / Ctrl+V, Ctrl+Z to undo.
       Edited cells are highlighted; clear a cell (Delete) to go back to the calculated value.
-      ${state.merge ? 'Green rows are already in the Google Sheet (pasted on the Data tab) and stay as they are.' : ''}</p></div>
+      ${state.merge ? 'Green rows are already in the Google Sheet (pasted on the Data tab) and stay as they are.' : ''}
+      Empty yellow rows are item numbers with no data yet; typing in one adds a manual entry.</p></div>
       <div class="actions">
         <input type="search" id="reviewSearch" placeholder="Search…" value="${esc(state.reviewFilter)}">
         <label class="check"><input type="checkbox" id="issuesOnly" ${state.reviewIssuesOnly ? 'checked' : ''}> Only items with issues</label>
+        <label class="check"><input type="checkbox" id="hideEmptyReview" ${state.hideEmpty.review ? 'checked' : ''}> Hide empty rows</label>
+        <button class="btn primary" id="openExport" ${allRows.length ? '' : 'disabled'} title="Copy the report for the Google Sheet, or download it as Excel">Export…</button>
       </div>
     </div>
     ${allRows.length ? `
@@ -479,7 +542,7 @@ function renderReview(main) {
       <table class="grid review">
         <thead><tr>${REPORT_COLUMNS.map(([k, l], j) => `<th class="${j === 0 ? 'sticky ' : ''}s${j}" data-hc="${j}">${esc(l)}</th>`).join('')}</tr></thead>
         <tbody>${rows.map((row, i) => row._sheet ? sheetReviewRow(row, i, issues) : `
-          <tr data-code="${esc(row.itemLookup)}" class="${issues.has(row.itemLookup) ? 'issue-' + issues.get(row.itemLookup).level : ''}">
+          <tr data-code="${esc(row.itemLookup)}" class="${row._empty ? 'empty-row issue-warn' : issues.has(row.itemLookup) ? 'issue-' + issues.get(row.itemLookup).level : ''}"${row._empty ? ' title="No data yet for this item"' : ''}>
             ${REPORT_COLUMNS.map(([k], j) => {
               if (!EDITABLE.has(k)) return `<th class="${j === 0 ? 'sticky ' : ''}s${j}" data-r="${i}" data-c="${j}" ${j === 0 && issues.has(row.itemLookup) ? `title="${esc(issues.get(row.itemLookup).texts.join('\n'))}"` : ''}>${esc(row[k])}${j === 0 ? sourceBadges(row) : ''}</th>`;
               const edited = row._edited.includes(k);
@@ -496,6 +559,8 @@ function renderReview(main) {
   if (search) {
     search.oninput = e => { state.reviewFilter = e.target.value; const pos = e.target.selectionStart; render(); const s = $('#reviewSearch'); s.focus(); s.setSelectionRange(pos, pos); };
     $('#issuesOnly').onchange = e => { state.reviewIssuesOnly = e.target.checked; render(); };
+    $('#hideEmptyReview').onchange = e => { state.hideEmpty.review = e.target.checked; render(); };
+    $('#openExport').onclick = openExport;
   }
   const table = main.querySelector('table.review');
   if (table) grid('review').attach(table, {
@@ -504,9 +569,15 @@ function renderReview(main) {
     editable: (r, c) => !rows[r]._sheet && EDITABLE.has(REPORT_COLUMNS[c][0]),
     commit: changes => {
       recordEdit();
-      const ov = state.project.overrides;
+      const ov = state.project.overrides, man = state.project.manual;
       for (const { r, c, value } of changes) {
         const row = rows[r], code = row.itemLookup, f = REPORT_COLUMNS[c][0];
+        if (row._empty) { // an item with no data yet: what's typed becomes its manual entry
+          if (!value) continue;
+          const key = Object.keys(man).find(k => itemKey(k) === itemKey(code)) ?? code;
+          man[key] = { ...man[key], [f]: value };
+          continue;
+        }
         const base = String(row._edited.includes(f) ? row._base[f] ?? '' : row[f] ?? '');
         const next = value === base ? '' : value; // the calculated value (or an empty cell) removes the edit
         ov[code] = ov[code] || {};
@@ -519,8 +590,8 @@ function renderReview(main) {
   });
   main.querySelectorAll('[data-goto-item]').forEach(li => li.onclick = () => {
     let tr = main.querySelector(`tr[data-code="${CSS.escape(li.dataset.gotoItem)}"]`);
-    if (!tr && (state.reviewFilter || state.reviewIssuesOnly)) {
-      state.reviewFilter = ''; state.reviewIssuesOnly = false; render();
+    if (!tr && (state.reviewFilter || state.reviewIssuesOnly || state.hideEmpty.review)) {
+      state.reviewFilter = ''; state.reviewIssuesOnly = false; state.hideEmpty.review = false; render();
       tr = main.querySelector(`tr[data-code="${CSS.escape(li.dataset.gotoItem)}"]`);
     }
     if (!tr) return;
@@ -550,7 +621,7 @@ function sourceBadges(row) {
   return `<span class="badges">${s.mac ? '<i title="Mac report">M</i>' : ''}${s.win ? '<i title="Windows report">W</i>' : ''}${s.blancco ? '<i title="Blancco export">B</i>' : ''}${s.manual ? '<i title="Manual entry">H</i>' : ''}</span>`;
 }
 
-// ---------- Export tab ----------
+// ---------- Export window ----------
 // Which columns to export is remembered on this computer; which rows is per session (new items start ticked).
 const STORE_EXPORT_COLS = 'auditApp.exportHiddenCols';
 const EXPORT_SHEETS = {
@@ -578,7 +649,6 @@ function exportSelection(kind) {
 
 function renderExport(main) {
   const r = state.report;
-  const errors = r.warnings.filter(w => w.level === 'error');
 
   const section = kind => {
     const { sheet, allRows, cols, rows, hidden, excluded } = exportSelection(kind);
@@ -587,6 +657,8 @@ function renderExport(main) {
         <p class="hint">No locked or faulty devices in this project, so you don't need this sheet.</p></div></div></section>`;
     }
     const allRowsOn = allRows.every(x => !excluded.has(x.itemLookup));
+    // empty rows can be hidden from view, but are always copied (so the rows line up with the sheet)
+    const shown = kind === 'report' && state.hideEmpty.export ? allRows.filter(x => !x._empty) : allRows;
     return `
     <section class="card" data-sheet="${kind}">
       <div class="card-head">
@@ -604,6 +676,7 @@ function renderExport(main) {
         <button class="btn small" data-rows="none">None</button>
         <button class="btn small" data-rows="invert">Invert</button>
         ${hidden.size ? '<button class="btn small" data-all-cols>Show all columns</button>' : ''}
+        ${kind === 'report' ? `<label class="check" title="Only hides them here. Empty rows are still copied, so the rows line up with the Google Sheet."><input type="checkbox" id="hideEmptyExport" ${state.hideEmpty.export ? 'checked' : ''}> Hide empty rows</label>` : ''}
         <span class="hint">Tip: tick one row, then hold Shift and click another to tick or untick everything in between.</span>
       </div>
       <div class="table-wrap export">
@@ -612,9 +685,9 @@ function renderExport(main) {
             <th class="sticky pick-col"><input type="checkbox" data-all-rows ${allRowsOn ? 'checked' : ''} title="Select all rows"></th>
             ${sheet.cols.map(([k, l]) => `<th class="${hidden.has(k) ? 'off' : ''}"><label class="col-pick"><input type="checkbox" data-col="${k}" ${hidden.has(k) ? '' : 'checked'}>${esc(l)}</label></th>`).join('')}
           </tr></thead>
-          <tbody>${allRows.map(row => {
+          <tbody>${shown.map(row => {
             const off = excluded.has(row.itemLookup);
-            return `<tr class="${off ? 'off' : ''}${row._sheet ? ' from-sheet' : ''}">
+            return `<tr class="${off ? 'off' : ''}${row._sheet ? ' from-sheet' : ''}${row._empty ? ' empty-row' : ''}">
               <th class="sticky pick-col"><input type="checkbox" data-row="${esc(row.itemLookup)}" ${off ? '' : 'checked'} title="${esc(row._sheet ? 'Already in the Google Sheet' : row.itemLookup)}"></th>
               ${sheet.cols.map(([k]) => `<td class="${hidden.has(k) ? 'off' : ''}">${esc(row[k])}</td>`).join('')}
             </tr>`;
@@ -626,7 +699,6 @@ function renderExport(main) {
   };
 
   main.innerHTML = `
-  ${errors.length ? `<div class="banner bad">${plural(errors.length, 'problem')} still open: ${errors.map(e => esc(e.text)).join('; ')}. <a href="#" data-goto="review">Review</a></div>` : ''}
   ${section('report')}
   ${section('locked')}
   <section class="card">
@@ -639,7 +711,10 @@ function renderExport(main) {
   main.querySelectorAll('[data-sheet]').forEach(card => {
     const kind = card.dataset.sheet;
     const { allRows, excluded } = exportSelection(kind);
+    const shown = kind === 'report' && state.hideEmpty.export ? allRows.filter(x => !x._empty) : allRows;
     const saveCols = () => store(STORE_EXPORT_COLS, exportPrefs.hiddenCols);
+    const hideEmpty = card.querySelector('#hideEmptyExport');
+    if (hideEmpty) hideEmpty.onchange = () => { state.hideEmpty.export = hideEmpty.checked; render(); };
 
     card.querySelectorAll('[data-col]').forEach(cb => cb.onchange = () => {
       const set = new Set(exportPrefs.hiddenCols[kind] || []);
@@ -650,8 +725,8 @@ function renderExport(main) {
     card.querySelectorAll('[data-row]').forEach(cb => cb.onclick = e => {
       const code = cb.dataset.row, on = cb.checked;
       const anchor = exportPrefs.anchor[kind];
-      const a = allRows.findIndex(x => x.itemLookup === anchor), b = allRows.findIndex(x => x.itemLookup === code);
-      const range = e.shiftKey && a >= 0 ? allRows.slice(Math.min(a, b), Math.max(a, b) + 1) : [allRows[b]];
+      const a = shown.findIndex(x => x.itemLookup === anchor), b = shown.findIndex(x => x.itemLookup === code);
+      const range = e.shiftKey && a >= 0 ? shown.slice(Math.min(a, b), Math.max(a, b) + 1) : [shown[b]];
       for (const x of range) { if (on) excluded.delete(x.itemLookup); else excluded.add(x.itemLookup); }
       exportPrefs.anchor[kind] = code;
       render();
@@ -685,7 +760,6 @@ function renderExport(main) {
     const sheets = Object.keys(EXPORT_SHEETS).map(kind => { const s = exportSelection(kind); return { name: s.sheet.title, cols: s.cols, rows: s.rows }; });
     if (!downloadXlsx(sheets, state.project.settings)) toast('Nothing selected to export', 'bad');
   };
-  main.querySelectorAll('[data-goto]').forEach(a => a.onclick = e => { e.preventDefault(); setTab(a.dataset.goto); });
 }
 
 // checks for the Google Sheet rows pasted on the Data tab (shown on the Review tab)
@@ -711,7 +785,7 @@ function openSetup({ force = false } = {}) {
   const d = $('#setupDialog');
   const s = state.project.settings;
   const f = $('#setupForm');
-  f.projectNumber.value = s.projectNumber; f.prefix.value = s.prefix; f.endClient.value = s.endClient;
+  f.projectNumber.value = s.projectNumber; f.prefix.value = s.prefix; f.endClient.value = s.endClient; f.startNumber.value = s.startNumber ?? 1;
   $('#setupCancel').hidden = force;
   d.dataset.force = force ? '1' : '';
   updateSetupPreview();
@@ -721,7 +795,8 @@ function openSetup({ force = false } = {}) {
 function updateSetupPreview() {
   const f = $('#setupForm');
   const s = { projectNumber: f.projectNumber.value.trim(), prefix: f.prefix.value.trim().toUpperCase() };
-  $('#setupPreview').textContent = `Items: ${itemCode(s, 1)}, ${itemCode(s, 2)}… → ITD-${s.projectNumber || '…'}-${itemCode(s, 1)}`;
+  const n = Number(f.startNumber.value) || 0;
+  $('#setupPreview').textContent = `Items: ${itemCode(s, n)}, ${itemCode(s, n + 1)}… → ITD-${s.projectNumber || '…'}-${itemCode(s, n)}`;
 }
 
 // ---------- models editor ----------
@@ -1068,6 +1143,7 @@ function init() {
     s.projectNumber = f.projectNumber.value.trim();
     s.prefix = f.prefix.value.trim().toUpperCase();
     s.endClient = f.endClient.value.trim();
+    s.startNumber = Number(f.startNumber.value) || 0;
     $('#setupDialog').close();
     changed();
   };
@@ -1080,6 +1156,7 @@ function init() {
     if (shared.status === 'ok') await loadSharedModels(); // pick up coworkers' latest changes first
   };
   $('#modelsClose').onclick = () => { $('#modelsDialog').close(); render(); };
+  $('#exportClose').onclick = () => $('#exportDialog').close();
   $('#modelsExport').onclick = () => downloadJson(state.models, 'models.json');
   $('#modelsImport').onclick = () => $('#modelsFile').click();
   const sharedNote = () => (shared.status === 'ok' ? ' This also changes the shared list for everyone.' : '');
@@ -1107,6 +1184,8 @@ function init() {
     });
   } else renderShared();
 
+  window.addEventListener('resize', fitTallTable);
+  document.addEventListener('toggle', e => { if (e.target.closest?.('.warnings')) fitTallTable(); }, true); // Checks opened / closed
   window.addEventListener('beforeunload', e => { if (!state.project.savedToFile && settingsComplete(state.project.settings)) e.preventDefault(); });
 
   render();

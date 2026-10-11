@@ -139,9 +139,10 @@ export function expandDiagCodes(txt, diagCodes) {
   let padded = ' ' + s.split(',').join(' , ') + ' ';
   for (const { code, description } of diagCodes) {
     if (!code) continue;
-    padded = padded.split(' ' + code + ' ').join(' ' + description + ' ');
-    // second pass catches back-to-back codes that shared a space
-    padded = padded.split(' ' + code + ' ').join(' ' + description + ' ');
+    // one pass that also catches back-to-back codes sharing a space; a second pass would expand
+    // a description that starts with its own code again ("LED" -> "LED marks" -> "LED marks marks")
+    const re = new RegExp('(?<= )' + code.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?= )', 'g');
+    padded = padded.replace(re, () => description);
   }
   return excelTrim(padded).split(' , ').join(', ');
 }

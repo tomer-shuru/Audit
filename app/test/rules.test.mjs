@@ -71,6 +71,10 @@ test('diagnostic codes', () => {
   assert.equal(expandDiagCodes('Battery D, KBS, AID', models.diagCodes), 'Battery D, KB Sticky, Apple ID');
   assert.equal(expandDiagCodes('label marks d', models.diagCodes), 'label marks d');
   assert.equal(expandDiagCodes('', models.diagCodes), '');
+  // a description that starts with its own code is not expanded twice; back-to-back codes still work
+  const codes = [{ code: 'LED', description: 'LED marks' }, { code: 'NF', description: 'Noisy fan' }];
+  assert.equal(expandDiagCodes('LED D, NF', codes), 'LED marks D, Noisy fan');
+  assert.equal(expandDiagCodes('NF NF', codes), 'Noisy fan Noisy fan');
 });
 
 test('diagnostics capitalisation', () => {

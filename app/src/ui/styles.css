@@ -3,6 +3,7 @@
   --accent: #2456d6; --accent-ink: #fff; --accent-soft: #e8eefc;
   --good: #1d7a46; --good-soft: #e6f4ec; --bad: #c0352b; --bad-soft: #fcebea; --warn: #a76200; --warn-soft: #fff4e0;
   --edited: #e3ecff; --edited-ink: #1d3f99; --row-warn: #fff6d6; --row-error: #fde6e4; --radius: 8px; --sel: rgba(40, 48, 64, 0.16);
+  --c-data: #2f6fdb; --c-manual: #7a52c7; --c-review: #138a7e; --c-export: #c0457d; /* one soft color per part of the app */
   --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
   color-scheme: light;
@@ -13,6 +14,7 @@
   --accent: #5b8cff; --accent-ink: #0b1020; --accent-soft: #22304f;
   --good: #5cc98a; --good-soft: #17301f; --bad: #ff7a70; --bad-soft: #3a1c1a; --warn: #f0b04a; --warn-soft: #3a2c12;
   --edited: #1f2f55; --edited-ink: #a9c3ff; --row-warn: #332a12; --row-error: #3a1d1b; --sel: rgba(255, 255, 255, 0.14); color-scheme: dark;
+  --c-data: #6b9cff; --c-manual: #a98bf0; --c-review: #4cc7b8; --c-export: #f07aaf;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
@@ -20,6 +22,7 @@
     --accent: #5b8cff; --accent-ink: #0b1020; --accent-soft: #22304f;
     --good: #5cc98a; --good-soft: #17301f; --bad: #ff7a70; --bad-soft: #3a1c1a; --warn: #f0b04a; --warn-soft: #3a2c12;
     --edited: #1f2f55; --edited-ink: #a9c3ff; --row-warn: #332a12; --row-error: #3a1d1b; --sel: rgba(255, 255, 255, 0.14); color-scheme: dark;
+  --c-data: #6b9cff; --c-manual: #a98bf0; --c-review: #4cc7b8; --c-export: #f07aaf;
   }
 }
 .theme-btn { display: inline-grid; place-items: center; padding: 6px 9px; }
@@ -59,7 +62,7 @@ code { font-family: var(--mono); background: var(--surface-2); padding: 0 4px; b
 .tabs { display: flex; gap: 6px; padding: 0 20px; background: var(--surface); border-bottom: 1px solid var(--border); overflow-x: auto; }
 .tabs button { font: inherit; font-size: 15px; font-weight: 500; border: 0; background: none; color: var(--muted); padding: 13px 20px 11px; cursor: pointer; border-bottom: 3px solid transparent; display: flex; gap: 10px; align-items: center; white-space: nowrap; border-radius: 6px 6px 0 0; }
 .tabs button:hover { color: var(--text); background: var(--surface-2); }
-.tabs button.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 650; }
+.tabs button.active { color: var(--text); border-bottom-color: var(--tab-accent); font-weight: 650; }
 .count { display: inline-flex; gap: 4px; font-size: 12px; color: var(--muted); }
 .count:empty { display: none; }
 /* number of checks on the Review tab: red = problems, yellow = warnings, gray = notes */
@@ -109,7 +112,7 @@ li.info .lvl { background: var(--surface-2); color: var(--muted); }
 
 /* tables */
 .table-wrap { overflow: auto; border: 1px solid var(--border); border-radius: 6px; max-height: 60vh; }
-.table-wrap.tall { max-height: calc(100vh - 260px); min-height: 200px; }
+.table-wrap.tall { min-height: 200px; } /* height set to fit the window (fitTallTable) */
 .table-wrap.short { max-height: 320px; }
 table.grid { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; font-size: 13px; }
 .grid th, .grid td { border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); padding: 5px 8px; text-align: left; vertical-align: top; max-width: 320px; }
@@ -164,10 +167,13 @@ table.grid { border-collapse: separate; border-spacing: 0; width: max-content; m
 /* dialogs */
 dialog { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text); padding: 24px; width: min(460px, calc(100vw - 32px)); }
 dialog.wide { width: min(1100px, calc(100vw - 32px)); }
+dialog.full { width: calc(100vw - 32px); max-width: 1500px; height: calc(100vh - 32px); max-height: none; display: none; flex-direction: column; padding: 20px; }
+dialog.full[open] { display: flex; }
+dialog.full #exportBody { flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 16px; }
 dialog::backdrop { background: rgb(10 14 22 / .45); }
 dialog form { display: flex; flex-direction: column; gap: 12px; }
-dialog label { display: flex; flex-direction: column; gap: 4px; font-weight: 600; font-size: 13px; }
-dialog label input { font-weight: 400; }
+dialog form label { display: flex; flex-direction: column; gap: 4px; font-weight: 600; font-size: 13px; }
+dialog form label input { font-weight: 400; }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .preview { color: var(--accent); font-family: var(--mono); font-size: 13px; margin: 0; min-height: 1.4em; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
@@ -213,3 +219,24 @@ dialog label input { font-weight: 400; }
 .range-add input[type=number] { width: 70px; }
 .range-add .prefix { font-weight: 600; margin-right: -2px; }
 .range-add .prefix:empty { display: none; }
+
+/* item numbers with no data yet (Review / Export) */
+.grid tr.empty-row > th { color: var(--muted); font-weight: 500; }
+
+/* a soft color per part of the app: Data blue, Manual entries violet, Review teal, Export rose */
+.tabs button[data-tab="data"], main[data-tab="data"] { --tab-accent: var(--c-data); }
+.tabs button[data-tab="manual"], main[data-tab="manual"] { --tab-accent: var(--c-manual); }
+.tabs button[data-tab="review"], main[data-tab="review"] { --tab-accent: var(--c-review); }
+#exportDialog { --tab-accent: var(--c-export); }
+.tabs button::before { content: ''; width: 10px; height: 10px; border-radius: 50%; background: var(--tab-accent); opacity: .7; }
+.tabs button.active::before, .tabs button:hover::before { opacity: 1; box-shadow: 0 0 0 3px color-mix(in srgb, var(--tab-accent) 25%, transparent); }
+.tabs button.active { color: var(--tab-accent); border-bottom-color: var(--tab-accent); background: linear-gradient(to top, color-mix(in srgb, var(--tab-accent) 18%, transparent), transparent 85%); }
+main .card {
+  border-top: 4px solid var(--tab-accent);
+  background: linear-gradient(color-mix(in srgb, var(--tab-accent) 7%, var(--surface)), var(--surface) 90px);
+}
+main .card h2 { color: color-mix(in srgb, var(--tab-accent) 75%, var(--text)); }
+#exportDialog { border-top: 5px solid var(--tab-accent); }
+/* the boxes inside the Export window stay quiet: just a thin edge in the window's color */
+#exportDialog .card { border-top: 2px solid color-mix(in srgb, var(--tab-accent) 35%, var(--border)); }
+#exportDialog .dialog-head h2 { color: var(--tab-accent); }
