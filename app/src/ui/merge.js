@@ -26,16 +26,17 @@ export function parseTsv(text) {
 const escRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // sheetText: rows copied from the Google Sheet (same columns as the export, starting at the first item row)
-// cols: the export columns that are ticked; rows: the report rows; prefix: the project's item code prefix
+// cols: the export columns that are ticked; rows: the report rows; prefix: the project's item code prefix;
+// itemPrefix: the start of the ITEM column ("ITD", from the config)
 // Returns the report rows with the sheet's rows merged in. A sheet row is a row object like the others
 // (its cells spread over cols), with _sheet set and itemLookup "sheet:<n>".
-export function mergeWithSheet({ sheetText, cols, rows, prefix }) {
+export function mergeWithSheet({ sheetText, cols, rows, prefix, itemPrefix = 'ITD' }) {
   const table = parseTsv(sheetText);
   const itemCol = cols.findIndex(([k]) => k === 'item');
   // "ITD-SHR11734-BM20" or just "BM20". Without a prefix a bare number is only taken from the ITEM column,
   // so serials, years and weights in other columns aren't mistaken for item codes.
   const code = `(${escRe(String(prefix ?? '').trim().toUpperCase())}\\d+)$`;
-  const loose = new RegExp(`(?:^|-)${code}`), strict = prefix ? loose : new RegExp(`^ITD-.+-${code}`);
+  const loose = new RegExp(`(?:^|-)${code}`), strict = prefix ? loose : new RegExp(`^${escRe(String(itemPrefix).trim().toUpperCase())}-.+-${code}`);
   const codeOf = cells => {
     const order = itemCol >= 0 && itemCol < cells.length ? [itemCol, ...cells.keys()] : [...cells.keys()];
     for (const j of order) {

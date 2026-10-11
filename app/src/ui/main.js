@@ -1,5 +1,6 @@
 // Audit Builder - browser UI
-import { buildReport, REPORT_COLUMNS, EXPORT_COLUMNS, LOCKED_COLUMNS, MANUAL_FIELDS, EDITABLE, itemCode, numberingChecks, numberingStart, codeNumber } from '../engine/report.js';
+import { buildReport, reportColumns, exportColumns, lockedColumns, MANUAL_FIELDS, EDITABLE, itemCode, itemName, numberingChecks, numberingStart, codeNumber } from '../engine/report.js';
+import { DEFAULT_CONFIG, withDefaults } from '../engine/config.js';
 import { normalizeBlancco, mergeTables, parseMacLines, parseWindowsLines, sortReportLines, itemKey } from '../engine/sources.js';
 import defaultModels from '../data/default-models.json';
 import {
@@ -7,10 +8,12 @@ import {
   copyText, downloadJson, readJsonFile,
 } from './io.js';
 import { mergeWithSheet } from './merge.js';
+import { initDevMode, STORE_CONFIG, attachConfigFile, reconnectConfigFile, renderConfigBar } from './devmode.js';
 import { grid } from './grid.js';
 import {
   canSaveInPlace, rememberedFile, rememberFile, chooseSaveFile, chooseOpenFile, writeFile,
   MODELS_FILE, chooseModelsFile, chooseNewModelsFile, hasPermission, readFileText,
+  FOLDER, canUseFolder, chooseFolder, folderFile,
 } from './filesave.js';
 
 const STORE_PROJECT = 'auditApp.project';
@@ -52,6 +55,7 @@ const store = (key, val) => { try { localStorage.setItem(key, JSON.stringify(val
 const state = {
   project: migrate(load(STORE_PROJECT, {})),
   models: withNewLists(load(STORE_MODELS, null) || structuredClone(defaultModels)),
+  config: withDefaults(load(STORE_CONFIG, null) || DEFAULT_CONFIG), // DevMode rules (the shared config.json)
   tab: ['data', 'manual', 'review'].includes(load(STORE_TAB, 'data')) ? load(STORE_TAB, 'data') : 'review',
   report: null,
   reviewFilter: '', reviewIssuesOnly: false,
@@ -63,7 +67,7 @@ const state = {
 const settingsComplete = s => s.projectNumber.trim() && s.endClient.trim(); // the prefix may be empty (codes that are just numbers)
 
 function recompute() {
-  state.report = buildReport(state.project, state.models);
+  state.report = buildReport(state.project, state.models, state.config);
   mergeSheetRows();
 }
 
@@ -75,13 +79,13 @@ function mergeSheetRows() {
   const r = state.report;
   if (!state.project.inputs.sheet.trim()) return;
   const cols = exportCols('report');
-  const m = mergeWithSheet({ sheetText: state.project.inputs.sheet, cols, rows: r.rows, prefix: state.project.settings.prefix });
+  const m = mergeWithSheet({ sheetText: state.project.inputs.sheet, cols, rows: r.rows, prefix: state.project.settings.prefix, itemPrefix: state.config.texts.itemPrefix });
   state.merge = m;
   // the app's rows for items the sheet already has aren't used, so neither are their checks
   const skipped = new Set(m.skipped);
   const keys = m.rows.map(x => (x._sheet ? x._sheet.code : itemKey(x.itemLookup))).filter(Boolean);
   r.warnings = r.warnings.filter(w => !skipped.has(w.item) && w.kind !== 'numbering');
-  r.warnings.push(...numberingChecks(state.project.settings, keys));
+  r.warnings.push(...numberingChecks(state.project.settings, keys, state.config));
   r.warnings.push(...sheetWarnings(m));
 }
 // all rows of the Audit Report (with the Google Sheet rows), plus an empty row for every item number
@@ -108,7 +112,7 @@ function withEmptyRows(rows) {
 function emptyRow(n) {
   const code = itemCode(state.project.settings, n);
   return {
-    itemLookup: code, item: ['ITD', state.project.settings.projectNumber, code].filter(Boolean).join('-'),
+    itemLookup: code, item: itemName(state.project.settings, code, state.config),
     _empty: true, _edited: [], _base: {}, _sources: {},
   };
 }
@@ -247,11 +251,11 @@ function keepScroll(main, draw) {
 function renderData(main) {
   const inp = state.project.inputs;
   const files = inp.blanccoFiles;
-  const merged = normalizeBlancco(mergeTables(files.map(f => f.table)));
+  const merged = normalizeBlancco(mergeTables(files.map(f => f.table)), state.config.blanccoColumns);
   const serials = new Set(merged.rows.map(r => r.serial).filter(Boolean));
 
   const fileInfo = f => {
-    const n = normalizeBlancco(f.table);
+    const n = normalizeBlancco(f.table, state.config.blanccoColumns);
     return { rows: n.rows.length, missing: n.missing };
   };
 
@@ -506,6 +510,7 @@ function renderReview(main) {
     issues.set(w.item, cur);
   }
   const issueItems = new Set(issues.keys());
+  const REPORT_COLUMNS = reportColumns(state.config);
   const q = state.reviewFilter.trim().toLowerCase();
   const allRows = reportRows();
   const rows = allRows.filter(row =>
@@ -604,6 +609,7 @@ function renderReview(main) {
 
 // a row that is already in the Google Sheet: shown as it is, not editable here
 function sheetReviewRow(row, i, issues) {
+  const REPORT_COLUMNS = reportColumns(state.config);
   const issue = issues.get(row.itemLookup);
   return `
     <tr data-code="${esc(row.itemLookup)}" class="from-sheet ${issue ? 'issue-' + issue.level : ''}" title="Already in the Google Sheet. Change it on the Data tab.">
@@ -625,14 +631,14 @@ function sourceBadges(row) {
 // Which columns to export is remembered on this computer; which rows is per session (new items start ticked).
 const STORE_EXPORT_COLS = 'auditApp.exportHiddenCols';
 const EXPORT_SHEETS = {
-  report: { title: 'Audit Report', cols: EXPORT_COLUMNS, rows: r => r.rows },
-  locked: { title: 'Locked and Faulty', cols: LOCKED_COLUMNS, rows: r => r.lockedFaulty },
+  report: { title: 'Audit Report', cols: () => exportColumns(state.config), rows: r => r.rows },
+  locked: { title: 'Locked and Faulty', cols: () => lockedColumns(state.config), rows: r => r.lockedFaulty },
 };
 const exportPrefs = { hiddenCols: load(STORE_EXPORT_COLS, { report: [], locked: [] }), excludedRows: { report: new Set(), locked: new Set() }, anchor: {} };
 
 const exportCols = kind => {
   const hidden = new Set(exportPrefs.hiddenCols[kind] || []);
-  return EXPORT_SHEETS[kind].cols.filter(([k]) => !hidden.has(k));
+  return EXPORT_SHEETS[kind].cols().filter(([k]) => !hidden.has(k));
 };
 
 function exportSelection(kind) {
@@ -662,7 +668,7 @@ function renderExport(main) {
     return `
     <section class="card" data-sheet="${kind}">
       <div class="card-head">
-        <div><h2>${sheet.title} <span class="muted">${rows.length} of ${plural(allRows.length, 'row')} · ${cols.length} of ${sheet.cols.length} columns</span></h2>
+        <div><h2>${sheet.title} <span class="muted">${rows.length} of ${plural(allRows.length, 'row')} · ${cols.length} of ${sheet.cols().length} columns</span></h2>
         <p class="hint">${kind === 'report' && state.merge ? 'Green rows are already in the Google Sheet and are copied back as they are. Paste at the ITEM cell of the first item row in the Google Sheet.' : kind === 'report' ? 'Untick rows or columns you don\'t want, then copy and paste into the Google Sheet. Your column choice is remembered.' : 'Devices with a lock or fault. Send this list along with the report.'}</p></div>
         <div class="actions">
           <button class="btn primary" data-copy ${rows.length && cols.length ? '' : 'disabled'}>Copy rows</button>
@@ -683,13 +689,13 @@ function renderExport(main) {
         <table class="grid pick">
           <thead><tr>
             <th class="sticky pick-col"><input type="checkbox" data-all-rows ${allRowsOn ? 'checked' : ''} title="Select all rows"></th>
-            ${sheet.cols.map(([k, l]) => `<th class="${hidden.has(k) ? 'off' : ''}"><label class="col-pick"><input type="checkbox" data-col="${k}" ${hidden.has(k) ? '' : 'checked'}>${esc(l)}</label></th>`).join('')}
+            ${sheet.cols().map(([k, l]) => `<th class="${hidden.has(k) ? 'off' : ''}"><label class="col-pick"><input type="checkbox" data-col="${k}" ${hidden.has(k) ? '' : 'checked'}>${esc(l)}</label></th>`).join('')}
           </tr></thead>
           <tbody>${shown.map(row => {
             const off = excluded.has(row.itemLookup);
             return `<tr class="${off ? 'off' : ''}${row._sheet ? ' from-sheet' : ''}${row._empty ? ' empty-row' : ''}">
               <th class="sticky pick-col"><input type="checkbox" data-row="${esc(row.itemLookup)}" ${off ? '' : 'checked'} title="${esc(row._sheet ? 'Already in the Google Sheet' : row.itemLookup)}"></th>
-              ${sheet.cols.map(([k]) => `<td class="${hidden.has(k) ? 'off' : ''}">${esc(row[k])}</td>`).join('')}
+              ${sheet.cols().map(([k]) => `<td class="${hidden.has(k) ? 'off' : ''}">${esc(row[k])}</td>`).join('')}
             </tr>`;
           }).join('')}</tbody>
         </table>
@@ -768,7 +774,7 @@ function sheetWarnings(m) {
   const list = codes => (codes.length > 12 ? `${codes.slice(0, 12).join(', ')} and ${codes.length - 12} more` : codes.join(', '));
   const out = [];
   if (!m.sheetCodes.length) {
-    out.push({ level: 'error', text: `Google Sheet rows (Data tab): no item codes found. Copy them including the ITEM column (codes like ITD-${settings.projectNumber}-${itemCode(settings, 1)}).` });
+    out.push({ level: 'error', text: `Google Sheet rows (Data tab): no item codes found. Copy them including the ITEM column (codes like ${itemName(settings, itemCode(settings, 1), state.config)}).` });
     return out;
   }
   const sheetRow = code => m.rows.find(x => x._sheet?.code === itemKey(code))?.itemLookup;
@@ -796,7 +802,7 @@ function updateSetupPreview() {
   const f = $('#setupForm');
   const s = { projectNumber: f.projectNumber.value.trim(), prefix: f.prefix.value.trim().toUpperCase() };
   const n = Number(f.startNumber.value) || 0;
-  $('#setupPreview').textContent = `Items: ${itemCode(s, n)}, ${itemCode(s, n + 1)}… → ITD-${s.projectNumber || '…'}-${itemCode(s, n)}`;
+  $('#setupPreview').textContent = `Items: ${itemCode(s, n)}, ${itemCode(s, n + 1)}… → ${itemName({ projectNumber: s.projectNumber || '…' }, itemCode(s, n), state.config)}`;
 }
 
 // ---------- models editor ----------
@@ -919,7 +925,56 @@ function disconnectSharedModels() {
   if (!confirm('Stop using the shared Dictionary file on this computer? Your current list stays, but changes will only be saved here.')) return;
   Object.assign(shared, { handle: null, text: '', status: 'off', error: '' });
   rememberFile(null, MODELS_FILE);
+  forgetFolder(); // or it would connect again on the next start
   renderShared();
+}
+
+// ---------- the shared Audit Builder folder ----------
+// G:\My Drive\Audit Builder holds both shared files: Models\models.json (Dictionary) and Config\config.json (DevMode rules).
+// Browsers only let a page use files the person picked, so the folder is picked once; after that the app finds
+// both files in it by itself and reconnects to them every time it opens. After a browser restart the browser
+// may want one OK for the folder (one click for both files, none with "Allow on every visit").
+const folder = { handle: null, pending: false }; // pending: remembered, but waiting for the browser's OK
+
+// uses the folder: ask=true only from a click (may show the browser's prompt). Returns which files it found, or null.
+async function useFolder(dir, ask) {
+  const opts = { mode: 'readwrite' };
+  let ok = (await dir.queryPermission(opts)) === 'granted';
+  if (!ok && ask) ok = (await dir.requestPermission(opts)) === 'granted';
+  folder.handle = dir;
+  folder.pending = !ok;
+  if (!ok) { renderShared(); renderConfigBar(); return null; }
+  const models = await folderFile(dir, 'Models', 'models.json');
+  const config = await folderFile(dir, 'Config', 'config.json');
+  if (models) {
+    Object.assign(shared, { handle: models, text: '', status: 'ok', error: '' });
+    await rememberFile(models, MODELS_FILE);
+    await loadSharedModels({ announce: ask });
+  }
+  if (config) await attachConfigFile(config, { announce: ask });
+  renderShared(); renderConfigBar();
+  return { models: !!models, config: !!config };
+}
+
+async function connectFolder() {
+  const dir = await chooseFolder();
+  if (!dir) return;
+  try {
+    const found = await useFolder(dir, true);
+    if (!found) { toast('The browser wasn\'t allowed to use the folder', 'bad'); return; }
+    if (!found.models && !found.config) {
+      forgetFolder(); renderShared(); renderConfigBar();
+      toast(`${dir.name} has no Models\\models.json or Config\\config.json. Choose G:\\My Drive\\Audit Builder.`, 'bad');
+      return;
+    }
+    await rememberFile(dir, FOLDER);
+    toast(`Connected to ${dir.name}: shared ${[found.models && 'Dictionary', found.config && 'rules'].filter(Boolean).join(' and ')} loaded`);
+  } catch (err) { toast(`Couldn't use the folder: ${err.message}`, 'bad'); }
+}
+
+function forgetFolder() {
+  Object.assign(folder, { handle: null, pending: false });
+  rememberFile(null, FOLDER);
 }
 
 // the status box in the Dictionary window and the bar under the tabs
@@ -929,8 +984,9 @@ function renderShared() {
   const msg = {
     unsupported: '<span class="muted">This browser can\'t use a shared Dictionary file, so changes are only saved on this computer. Use Chrome or Edge to share them.</span>',
     off: `<span><b>Not shared:</b> changes are only saved on this computer.</span>
-      <span class="actions"><button class="btn small" data-shared="connect">Connect shared file…</button><button class="btn small ghost" data-shared="create">Create shared file…</button></span>
-      <span class="hint">The shared file is <code>G:\\My Drive\\Audit Builder\\Models\\models.json</code>. If it doesn't exist yet, create it there.</span>`,
+      <span class="actions">${canUseFolder ? '<button class="btn small primary" data-shared="folder">Connect Audit Builder folder…</button>' : ''}<button class="btn small" data-shared="connect">Connect shared file…</button><button class="btn small ghost" data-shared="create">Create shared file…</button></span>
+      <span class="hint">Connect the folder <code>G:\\My Drive\\Audit Builder</code> and the app finds the shared Dictionary (and rules) in it by itself.
+      The shared file is <code>G:\\My Drive\\Audit Builder\\Models\\models.json</code>. If it doesn't exist yet, create it there.</span>`,
     ok: `<span class="good-text"><b>✓ Shared:</b> using ${name}. Changes are saved to it for everyone.</span>
       <span class="actions"><button class="btn small ghost" data-shared="disconnect">Disconnect</button></span>`,
     'needs-permission': `<span class="warn-text"><b>${name}</b> needs your OK before the app can use it.</span>
@@ -943,9 +999,12 @@ function renderShared() {
   if (box) box.innerHTML = msg;
 
   const bar = $('#sharedBar');
-  const showBar = ['needs-permission', 'missing', 'error'].includes(shared.status);
+  const showBar = folder.pending || ['needs-permission', 'missing', 'error'].includes(shared.status);
   bar.hidden = !showBar;
-  if (showBar) {
+  if (folder.pending) {
+    // one OK for the whole shared folder loads the Dictionary and the rules
+    bar.innerHTML = '<span>The shared Dictionary and rules need your OK to load.</span><button class="btn small primary" data-shared="folderAllow">Load shared files</button>';
+  } else if (showBar) {
     bar.innerHTML = shared.status === 'needs-permission'
       ? `<span>The shared Dictionary (${name}) needs your OK to load.</span><button class="btn small primary" data-shared="allow">Load shared Dictionary</button>`
       : `<span>The shared Dictionary (${name}) can't be loaded right now, so this computer's copy is used.</span><button class="btn small" data-shared="open">Open Dictionary</button>`;
@@ -954,6 +1013,8 @@ function renderShared() {
     connect: connectSharedModels, create: createSharedModels, disconnect: disconnectSharedModels,
     allow: () => loadSharedModels({ ask: true, announce: true }),
     open: () => $('#btnModels').click(),
+    folder: connectFolder,
+    folderAllow: () => useFolder(folder.handle, true).catch(err => toast(`Couldn't use the folder: ${err.message}`, 'bad')),
   })[b.dataset.shared]());
 }
 
@@ -1174,15 +1235,31 @@ function init() {
     state.models = structuredClone(defaultModels); renderModels(); await saveModels();
   };
 
-  // shared Dictionary file: reconnect on start, and pick up coworkers' changes when coming back to the app
+  // DevMode: the rules in the shared config.json, behind a password
+  initDevMode({
+    state, toast, esc, downloadJson, readJsonFile,
+    applyConfig: cfg => { state.config = withDefaults(cfg); store(STORE_CONFIG, state.config); recompute(); render(); },
+    folder: () => ({ connected: !!folder.handle && !folder.pending, pending: folder.pending }),
+    connectFolder: () => (canUseFolder ? connectFolder() : toast('This browser can\'t connect a folder. Use Chrome or Edge.', 'bad')),
+    forgetFolder,
+  });
+
+  // shared files: reconnect on start (through the shared folder, or the files connected one by one before),
+  // and pick up coworkers' changes when coming back to the app
   if (canSaveInPlace) {
-    rememberedFile(MODELS_FILE).then(h => {
+    (async () => {
+      const dir = canUseFolder ? await rememberedFile(FOLDER) : null;
+      if (dir) {
+        try { await useFolder(dir, false); return; } catch { forgetFolder(); }
+      }
+      const h = await rememberedFile(MODELS_FILE);
       if (h) { shared.handle = h; loadSharedModels(); } else renderShared();
-    });
+      reconnectConfigFile();
+    })();
     window.addEventListener('focus', () => {
       if (shared.status === 'ok' && !$('#modelsDialog').open) loadSharedModels({ announce: true });
     });
-  } else renderShared();
+  } else { renderShared(); reconnectConfigFile(); }
 
   window.addEventListener('resize', fitTallTable);
   document.addEventListener('toggle', e => { if (e.target.closest?.('.warnings')) fitTallTable(); }, true); // Checks opened / closed

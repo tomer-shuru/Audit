@@ -1,5 +1,6 @@
 // Field-level rules ported from the formulas in Audit.xlsm.
 // Each function notes the sheet/column it replaces.
+import { DEFAULT_CONFIG } from './config.js';
 
 export const str = v => (v == null ? '' : String(v));
 export const isBlank = v => v == null || String(v).trim() === '';
@@ -21,13 +22,11 @@ export function toNumber(v) {
   return NaN;
 }
 
-// Battery grade (Output_Mac N / Output_Win N / CSV U,V)
-export function batteryGrade(pct) {
+// Battery grade (Output_Mac N / Output_Win N / CSV U,V); grades from the config, checked top to bottom
+export function batteryGrade(pct, grades = DEFAULT_CONFIG.battery) {
   if (Number.isNaN(pct)) return '';
-  if (pct < 55) return 'Battery Defect';
-  if (pct <= 69) return 'Battery D';
-  if (pct <= 80) return 'Battery C';
-  return '';
+  const g = grades.find(x => (x.op === '<' ? pct < Number(x.value) : pct <= Number(x.value)));
+  return g ? str(g.label) : '';
 }
 
 // Output_Win AF: battery health written as a fraction (0.69) becomes 69
@@ -82,12 +81,11 @@ export function formatDiskCapacity(cap) {
   return Math.trunc(n) + ' ' + s.slice(sp + 1);
 }
 
-export function diskKind(iface) {
+// disk interface -> name in the Disk column (config "Disk types", top to bottom), or the interface as it is
+export function diskKind(iface, kinds = DEFAULT_CONFIG.diskKinds) {
   const s = str(iface).toLowerCase();
-  if (s.includes('nvme')) return 'NVMe';
-  if (s.includes('ssd')) return 'SSD';
-  if (s.includes('sata')) return 'HDD';
-  return str(iface);
+  const k = kinds.find(x => str(x.match).trim() && s.includes(str(x.match).trim().toLowerCase()));
+  return k ? str(k.name) : str(iface);
 }
 
 // CPU_Formula sheet: raw CPU string -> short name ("i7-8700", "Ryzen 5 PRO 4650U", "Ultra 7 155H", "Xeon E5-2620 v4")

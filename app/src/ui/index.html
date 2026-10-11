@@ -17,6 +17,7 @@
   <button class="btn" id="btnSave" title="Save (Ctrl+S)">Save project</button>
   <button class="btn ghost" id="btnSaveAs" title="Save to a different file (Ctrl+Shift+S)">Save as…</button>
   <button class="btn ghost" id="btnModels" title="Models, make names, types, weights and diagnostic codes used to build the report">Dictionary</button>
+  <button class="btn ghost" id="btnDev" title="Developer mode: change the rules the report is built with (password)">DevMode</button>
   <button class="btn ghost theme-btn" id="btnTheme" aria-label="Toggle light or dark mode"></button>
   <input type="file" id="openFile" accept=".json,.xlsm,.xlsx" hidden>
 </header>
@@ -28,6 +29,7 @@
 </nav>
 
 <div id="sharedBar" class="shared-bar" hidden></div>
+<div id="configBar" class="shared-bar" hidden></div>
 <main id="main"></main>
 
 <dialog id="setupDialog">
@@ -69,6 +71,32 @@
     <div class="actions"><button class="btn primary" id="exportClose">Done</button></div>
   </div>
   <div id="exportBody"></div>
+</dialog>
+
+<dialog id="devLogin">
+  <form id="devLoginForm">
+    <h2>DevMode</h2>
+    <p class="hint">Enter the DevMode password to change the rules the report is built with.</p>
+    <label>Password<input name="pw" type="password" autocomplete="off" required></label>
+    <p class="bad-text" id="devLoginError" role="alert"></p>
+    <div class="dialog-actions">
+      <button type="button" class="btn ghost" id="devLoginCancel">Cancel</button>
+      <button type="submit" class="btn primary">Unlock</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="devDialog" class="full">
+  <div class="dialog-head">
+    <div><h2>DevMode</h2><p class="hint">The rules the report is built with, for everyone. Changes are previewed at the bottom and only apply when you save.</p></div>
+    <div class="actions">
+      <button class="btn ghost" id="devLock" title="Close DevMode and ask for the password next time">Lock</button>
+      <button class="btn primary" id="devClose">Done</button>
+    </div>
+  </div>
+  <div id="devFile" class="shared-box"></div>
+  <div id="devBody"></div>
+  <div id="devFooter"></div>
 </dialog>
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>

@@ -5,6 +5,7 @@ import {
   formatRamMac, formatRamWindows, formatRamBlancco, formatDiskCapacity, diskKind,
   shortCpu, cleanModelName,
 } from './rules.js';
+import { DEFAULT_CONFIG } from './config.js';
 
 // codes that are only numbers (no prefix) match with or without leading zeros: 7, 07, 007
 export const itemKey = code => str(code).trim().toUpperCase().replace(/^0+(?=\d+$)/, '');
@@ -42,7 +43,8 @@ export function sortReportLines(text) {
 }
 
 // --- lookups into the Models data ---
-export function makeLookups(models) {
+// cfg: the DevMode rules (config.json), carried along with the lookups to every record builder
+export function makeLookups(models, cfg = DEFAULT_CONFIG) {
   const byId = new Map();
   for (const m of models.models) { const k = str(m.id).trim().toLowerCase(); if (!byId.has(k)) byId.set(k, m); }
   const typeMap = new Map();
@@ -59,46 +61,36 @@ export function makeLookups(models) {
     make: raw => makes.get(str(raw).trim().toLowerCase()),
     cleanupRules: models.cleanupRules,
     diagCodes: models.diagCodes,
+    cfg,
   };
 }
 
 // --- Blancco export ---
 // Column names are matched by header text, so the export's column order doesn't matter.
-export const BLANCCO_COLUMNS = {
-  make: 'System manufacturer', chassis: 'System chassis type', item: 'Device Identifier', asset: 'Asset Tag',
-  erasure: 'Erasure state', serial: 'System serial', version: 'System version', model: 'System model',
-  battery: 'Capacity', cpu: 'CPU model', memory: 'Total Memory', memoryType: 'Memory type',
-  diskCapacity: 'Disk capacity', diskInterface: 'Disk interface type', diskSerial: 'Disk serial',
-  comment1: 'Comment', comment2: 'Comment2', comment3: 'Comment3', comment4: 'Comment4', comment5: 'Comment5', comment6: 'Comment6',
-  comment7: 'Comment7', comment8: 'Comment8',
-  itemAlt: 'Custom 1',
-};
+// The names are in the config ("Blancco columns" in DevMode); these are the defaults.
+export const BLANCCO_COLUMNS = DEFAULT_CONFIG.blanccoColumns;
 // Optional columns: no warning when an export doesn't have them
 const OPTIONAL = new Set(['itemAlt', 'comment1', 'comment2', 'comment3', 'comment4', 'comment5', 'comment6', 'comment7', 'comment8']);
 
-// Automatic messages Blancco writes into the comment columns, and what the report says instead.
-// Unlike typed comments these are picked up from any comment column (1-8).
-export const COMMENT_MESSAGES = [
-  { match: /could not connect to the configured network/i, text: 'WiFi defect' },
-];
-
-// Diagnostics text from a Blancco row: comments 1-6 as typed (like the workbook),
-// known automatic messages from any comment column, each finding listed once.
-export function blanccoComments(r) {
-  const typed = [r.comment1, r.comment2, r.comment3, r.comment4, r.comment5, r.comment6];
-  const extra = [r.comment7, r.comment8];
+// Diagnostics text from a Blancco row: comments 1-6 as typed (like the workbook; the number is in the config),
+// automatic messages (config "Blancco messages") from any comment column, each finding listed once.
+// A message whose report text is empty is dropped.
+export function blanccoComments(r, cfg = DEFAULT_CONFIG) {
+  const all = [r.comment1, r.comment2, r.comment3, r.comment4, r.comment5, r.comment6, r.comment7, r.comment8];
+  const typed = all.slice(0, cfg.typedCommentColumns);
+  const extra = all.slice(cfg.typedCommentColumns);
   const out = [];
   const add = text => { if (text && !out.some(x => x.toLowerCase() === text.toLowerCase())) out.push(text); };
-  const message = c => COMMENT_MESSAGES.find(m => m.match.test(c));
+  const message = c => cfg.blanccoMessages.find(m => str(m.match).trim() && c.toLowerCase().includes(str(m.match).trim().toLowerCase()));
   for (const c of typed) {
     const s = c === 0 ? '' : str(c).trim();
     if (s === '' || s === '0') continue;
     const m = message(s);
-    if (m) { add(m.text); continue; }
+    if (m) { add(str(m.text).trim()); continue; }
     // a typed comment may already say it (e.g. "CD C, WiFi defect, DI C") - keep it, but don't repeat later
     for (const part of s.split(',').map(p => p.trim()).filter(Boolean)) add(part);
   }
-  for (const c of extra) { const m = message(str(c)); if (m) add(m.text); }
+  for (const c of extra) { const m = message(str(c)); if (m) add(str(m.text).trim()); }
   return out;
 }
 
@@ -145,26 +137,26 @@ export function mergeTables(tables) {
   return out;
 }
 
-// rows: array of arrays, first row = headers
-export function normalizeBlancco(table) {
+// rows: array of arrays, first row = headers; columns: the config's Blancco column names
+export function normalizeBlancco(table, columns = BLANCCO_COLUMNS) {
   if (!table || table.length === 0) return { rows: [], missing: [] };
   const header = uniqueHeaders(table[0]).map(h => h.toLowerCase());
   const idx = {}; const missing = [];
-  for (const [key, name] of Object.entries(BLANCCO_COLUMNS)) {
-    idx[key] = header.indexOf(name.toLowerCase());
+  for (const [key, name] of Object.entries(columns)) {
+    idx[key] = header.indexOf(str(name).trim().toLowerCase());
     if (idx[key] < 0 && !OPTIONAL.has(key)) missing.push(name);
   }
-  if (idx.itemAlt < 0) idx.itemAlt = header.indexOf('custom1');
+  if (idx.itemAlt < 0) idx.itemAlt = header.indexOf(str(columns.itemAlt).replace(/\s+/g, '').toLowerCase());
   // some exports have the item code in Custom 1 instead of Device Identifier
   if (idx.item < 0) {
-    const i = missing.indexOf(BLANCCO_COLUMNS.item);
-    if (idx.itemAlt >= 0) missing.splice(i, 1); else missing[i] = 'Device Identifier (or Custom 1)';
+    const i = missing.indexOf(columns.item);
+    if (idx.itemAlt >= 0) missing.splice(i, 1); else missing[i] = `${columns.item} (or ${columns.itemAlt})`;
   }
   const rows = table.slice(1)
     .filter(r => r.some(v => !isBlank(v)))
     .map(r => {
       const o = {};
-      for (const k of Object.keys(BLANCCO_COLUMNS)) o[k] = idx[k] >= 0 ? (r[idx[k]] ?? '') : '';
+      for (const k of Object.keys(columns)) o[k] = idx[k] >= 0 ? (r[idx[k]] ?? '') : '';
       o.serial = str(o.serial).trim();
       if (isBlank(o.item)) o.item = o.itemAlt;
       return o;
@@ -172,44 +164,50 @@ export function normalizeBlancco(table) {
   return { rows, missing };
 }
 
+// does an erasure state contain one of these words (config "Erasure")?
+export const erasureHas = (state, words) => {
+  const s = str(state).toLowerCase();
+  return words.some(w => str(w).trim() && s.includes(str(w).trim().toLowerCase()));
+};
+
 // Disk_Pivot: per serial, count successful / failed erasures -> "Pass", "Pass x2, Fail"
-export function erasureSummary(blanccoRows) {
+export function erasureSummary(blanccoRows, erasure = DEFAULT_CONFIG.erasure) {
   const counts = new Map();
   for (const r of blanccoRows) {
     if (r.serial === '') continue;
     const k = r.serial.toLowerCase();
     if (!counts.has(k)) counts.set(k, { pass: 0, fail: 0 });
-    const state = str(r.erasure).toLowerCase();
-    if (state.includes('successful')) counts.get(k).pass++;
-    else if (state.includes('failed')) counts.get(k).fail++;
+    if (erasureHas(r.erasure, erasure.passWords)) counts.get(k).pass++;
+    else if (erasureHas(r.erasure, erasure.failWords)) counts.get(k).fail++;
   }
   const label = (n, word) => (n < 1 ? '' : n === 1 ? word : `${word} x${n}`);
   return serial => {
     const c = counts.get(str(serial).trim().toLowerCase());
-    return c ? joinNonEmpty(', ', label(c.pass, 'Pass'), label(c.fail, 'Fail')) : '';
+    return c ? joinNonEmpty(', ', label(c.pass, erasure.passText), label(c.fail, erasure.failText)) : '';
   };
 }
 
-// Mac / Windows reports write "NONE" when the device has no disk; the report shows "-"
-export const formatReportDisk = disk => (/^none$/i.test(str(disk).trim()) ? '-' : disk);
+// Mac / Windows reports write "NONE" when the device has no disk; the report shows "-" (config "Texts")
+export const formatReportDisk = (disk, noDisk = DEFAULT_CONFIG.texts.noDisk) => (/^none$/i.test(str(disk).trim()) ? noDisk : disk);
 
 // --- Output_Mac ---
 export function macRecord(m, lk, blanccoResult) {
+  const { texts, battery, erasure } = lk.cfg;
   const model = lk.model(m.modelId);
   const pct = isBlank(m.batteryStatus) ? NaN : toNumber(m.batteryStatus);
-  const grade = batteryGrade(pct);
-  const service = eqi(m.batteryHealth, 'Service') ? 'Battery Service' : '';
-  const appleId = eqi(m.activationLock, 'Enabled') ? 'Apple ID Lock' : '';
-  const remote = eqi(m.remote, 'Remote Lock') ? 'Remote Locked' : '';
+  const grade = batteryGrade(pct, battery);
+  const service = eqi(m.batteryHealth, 'Service') ? texts.batteryService : '';
+  const appleId = eqi(m.activationLock, 'Enabled') ? texts.appleIdLock : '';
+  const remote = eqi(m.remote, 'Remote Lock') ? texts.remoteLocked : '';
   const blancco = blanccoResult(m.sn);
   return {
     source: 'mac', item: m.item, sn: m.sn, asset: m.asset, type: m.type, make: m.make,
     model: model ? str(model.name) : m.modelId,
     screen: model ? model.screen : '', year: model ? model.year : '',
-    cpu: m.cpu, ram: formatRamMac(m.ram), disk: formatReportDisk(m.disk),
+    cpu: m.cpu, ram: formatRamMac(m.ram), disk: formatReportDisk(m.disk, texts.noDisk),
     diagnostics: joinNonEmpty(', ', appleId, remote, grade, service, m.diagnostics),
     blancco, locked: joinNonEmpty(', ', appleId, remote),
-    diskSnIfFailed: blancco === 'Fail' ? m.diskSn : '',
+    diskSnIfFailed: blancco === erasure.failText ? m.diskSn : '',
     unknownModel: !model && !isBlank(m.modelId) ? m.modelId : '',
   };
 }
@@ -218,14 +216,14 @@ export function macRecord(m, lk, blanccoResult) {
 export function windowsRecord(w, lk, blanccoResult) {
   const model = lk.model(w.model);
   const pct = windowsBatteryPct(w.battery);
-  const grade = isBlank(w.battery) ? '' : batteryGrade(pct);
+  const grade = isBlank(w.battery) ? '' : batteryGrade(pct, lk.cfg.battery);
   return {
     source: 'win', item: w.item, sn: w.sn, asset: w.asset,
     type: lk.mapType(w.type) ?? w.type, make: w.make,
     model: model ? str(model.name) : cleanModelName(w.model, lk.cleanupRules),
     screen: model ? model.screen : '', year: model ? model.year : '',
     cpu: shortCpu(w.cpu) || (w.cpu === '0' ? '' : w.cpu),
-    ram: formatRamWindows(w.ram), disk: formatReportDisk(w.disk),
+    ram: formatRamWindows(w.ram), disk: formatReportDisk(w.disk, lk.cfg.texts.noDisk),
     diagnostics: joinNonEmpty(', ', grade, w.diagnostics),
     blancco: blanccoResult(w.sn), locked: '',
   };
@@ -233,6 +231,8 @@ export function windowsRecord(w, lk, blanccoResult) {
 
 // --- CSV sheet: one record per Blancco serial that isn't a Mac ---
 export function blanccoRecords(blanccoRows, macSerials, lk, blanccoResult) {
+  const { cfg } = lk;
+  const fromVersion = new Set(cfg.modelFromVersion.map(m => str(m).trim().toLowerCase()).filter(Boolean));
   const macSet = new Set(macSerials.map(s => str(s).trim().toLowerCase()));
   const seen = new Set(); const out = [];
   for (const r of blanccoRows) {
@@ -242,16 +242,16 @@ export function blanccoRecords(blanccoRows, macSerials, lk, blanccoResult) {
     const all = blanccoRows.filter(x => x.serial.toLowerCase() === k);
     const type = lk.mapType(r.chassis) ?? str(r.chassis);
     // a disk counts as wiped if any attempt succeeded ("Successful", or "Successful / Failed" after a retry)
-    const disks = all.filter(x => str(x.erasure).toLowerCase().includes('successful'))
-      .map(x => formatDiskCapacity(x.diskCapacity) + ' ' + diskKind(x.diskInterface));
+    const disks = all.filter(x => erasureHas(x.erasure, cfg.erasure.passWords))
+      .map(x => formatDiskCapacity(x.diskCapacity) + ' ' + diskKind(x.diskInterface, cfg.diskKinds));
     const batteryRaw = str(r.battery);
     const [b1 = '', b2 = ''] = batteryRaw === '' ? [] : batteryRaw.split(' / ');
-    const grade = v => (isBlank(v) ? '' : batteryGrade(toNumber(v)));
-    const comments = blanccoComments(r);
+    const grade = v => (isBlank(v) ? '' : batteryGrade(toNumber(v), cfg.battery));
+    const comments = blanccoComments(r, cfg);
     out.push({
       source: 'blancco', item: str(r.item), sn: r.serial, asset: str(r.asset), type, rawType: str(r.chassis),
       make: str(r.make),
-      model: str(eqi(r.make, 'LENOVO') ? r.version : r.model),
+      model: str(fromVersion.has(str(r.make).trim().toLowerCase()) ? r.version : r.model),
       screen: '', year: '',
       cpu: shortCpu(r.cpu), rawCpu: str(r.cpu),
       ram: formatRamBlancco(r.memory, r.memoryType),

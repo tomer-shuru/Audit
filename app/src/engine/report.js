@@ -5,23 +5,26 @@ import {
   itemKey, makeLookups, mergeTables, parseMacLines, parseWindowsLines, sortReportLines, normalizeBlancco, erasureSummary,
   macRecord, windowsRecord, blanccoRecords,
 } from './sources.js';
+import { DEFAULT_CONFIG, withDefaults } from './config.js';
 
-// Columns of the Audit Report sheet, in order
-export const REPORT_COLUMNS = [
-  ['itemLookup', 'Item Lookup'], ['item', 'ITEM'], ['sn', 'S.N.'], ['asset', 'Asset'], ['type', 'Type'],
-  ['make', 'Make'], ['model', 'Model'], ['screen', 'Screen'], ['year', 'Year'], ['cpu', 'CPU'], ['ram', 'RAM'],
-  ['disk', 'Disk'], ['diagnostics', 'Diagnostics'], ['blancco', 'Blancco result'],
-  ['snDataCarrier', 'S.N. Data carrier'], ['noDataCarrier', 'No. Data carrier'],
-  ['destruction', 'Data Destruction Method'], ['comments', 'Comments'], ['powerSupply', 'Power Supply'],
-  ['weight', 'Weight'], ['itemStatus', 'Item status'], ['estValue', 'Est. Value'], ['locked', 'Locked or Faulty'],
-];
-
+// Columns of the Audit Report sheet, in order (the order and headers are in the config: "Report columns" in DevMode)
+export const reportColumns = (cfg = DEFAULT_CONFIG) => [['itemLookup', 'Item Lookup'], ...cfg.reportColumns.map(c => [c.key, c.label])];
 // Columns that can be exported (Item Lookup is only used inside the app)
-export const EXPORT_COLUMNS = REPORT_COLUMNS.filter(([k]) => k !== 'itemLookup');
+export const exportColumns = (cfg = DEFAULT_CONFIG) => reportColumns(cfg).filter(([k]) => k !== 'itemLookup');
+export const lockedColumns = (cfg = DEFAULT_CONFIG) => cfg.lockedColumns.map(c => [c.key, c.label]);
 
-export const LOCKED_COLUMNS = [
-  ['sn', 'S.N'], ['type', 'Type'], ['make', 'Make'], ['model', 'Model'], ['issue', 'Issue type'], ['wiped', 'Wiped'],
-];
+// the default columns (as the workbook had them)
+export const REPORT_COLUMNS = reportColumns();
+export const EXPORT_COLUMNS = exportColumns();
+export const LOCKED_COLUMNS = lockedColumns();
+
+// asset tag values that mean "no tag" (config): compared without dots, slashes, spaces or capitals; "-" covers "--" etc.
+export function isNoAssetTag(value, words = DEFAULT_CONFIG.noAssetTag) {
+  const a = str(value).trim();
+  if (a === '') return true;
+  const norm = s => str(s).toLowerCase().replace(/[.\/\s]/g, '');
+  return words.some(w => (/^-+$/.test(str(w).trim()) ? /^-+$/.test(a) : norm(w) !== '' && norm(w) === norm(a)));
+}
 
 // Fields a person can type for an item (My_Audit columns + the hand-typed Audit Report columns).
 // Anything typed here wins over the tools' data.
@@ -38,6 +41,8 @@ export const MANUAL_FIELDS = [
 export const EDITABLE = new Set(REPORT_COLUMNS.map(([k]) => k).filter(k => k !== 'itemLookup' && k !== 'item'));
 
 export const itemCode =(settings, n) => str(settings.prefix) + String(n).padStart(2, '0');
+// the ITEM column: "ITD-SHR11734-GG01" ("ITD" is in the config: Texts)
+export const itemName = (settings, code, cfg = DEFAULT_CONFIG) => joinNonEmpty('-', cfg.texts.itemPrefix, settings.projectNumber, code);
 
 const first = (...vals) => { for (const v of vals) if (!isBlank(v)) return v; return ''; };
 
@@ -50,23 +55,30 @@ const first = (...vals) => { for (const v of vals) if (!isBlank(v)) return v; re
  *   overrides: { [itemCode]: { field: value } },   // Review-table edits (replace the final value)
  * }
  */
-export function buildReport(project, models) {
-  const lk = makeLookups(models);
+// config: the DevMode rules (config.json); left out = the built-in defaults
+export function buildReport(project, models, config) {
+  const cfg = withDefaults(config);
+  const lk = makeLookups(models, cfg);
   const { settings, inputs = {}, manual = {}, overrides = {} } = project;
   const warnings = [];
+  // a check's level (red / yellow / gray, or off) comes from the config
+  const add = (check, w) => { const level = cfg.checks[check]; if (level && level !== 'off') warnings.push({ ...w, level }); };
 
   const reports = sortReportLines(inputs.reports);
   for (const u of reports.unknown) {
-    warnings.push({ level: 'error', text: `Device reports, line ${u.line}: has ${u.fields} fields, but a Mac report line has 17 and a Windows one 11, so it was skipped (${u.text.length > 50 ? u.text.slice(0, 50) + '…' : u.text})` });
+    add('reportLineUnknown', { text: `Device reports, line ${u.line}: has ${u.fields} fields, but a Mac report line has 17 and a Windows one 11, so it was skipped (${u.text.length > 50 ? u.text.slice(0, 50) + '…' : u.text})` });
   }
   const macLines = parseMacLines(joinNonEmpty('\n', inputs.mac, reports.mac));
   const winLines = parseWindowsLines(joinNonEmpty('\n', inputs.windows, reports.windows));
   const blanccoInput = inputs.blanccoFiles ? mergeTables(inputs.blanccoFiles.map(f => f.table)) : (inputs.blancco || []);
-  const blanccoTable = normalizeBlancco(blanccoInput);
+  const blanccoTable = normalizeBlancco(blanccoInput, cfg.blanccoColumns);
   if (blanccoTable.missing.length && blanccoInput.length > 1) {
-    warnings.push({ level: 'error', text: `Blancco export is missing columns: ${blanccoTable.missing.join(', ')}` });
+    add('blanccoMissingColumns', { text: `Blancco export is missing columns: ${blanccoTable.missing.join(', ')}` });
   }
-  const blanccoResult = erasureSummary(blanccoTable.rows);
+  // the Blancco result column says "Pass…" / "…Fail" (texts from the config)
+  const passed = v => str(v).trim().toLowerCase().startsWith(str(cfg.erasure.passText).trim().toLowerCase());
+  const failed = v => str(v).toLowerCase().includes(str(cfg.erasure.failText).trim().toLowerCase());
+  const blanccoResult = erasureSummary(blanccoTable.rows, cfg.erasure);
 
   const mac = macLines.map(m => macRecord(m, lk, blanccoResult));
   const win = winLines.map(w => windowsRecord(w, lk, blanccoResult));
@@ -77,8 +89,8 @@ export function buildReport(project, models) {
     const map = new Map();
     for (const r of records) {
       const k = itemKey(r.item);
-      if (k === '') { warnings.push({ level: 'warn', text: `${label}: device ${r.sn || '(no serial)'} has no item code and was skipped` }); continue; }
-      if (map.has(k)) warnings.push({ level: 'warn', text: `${label}: item ${r.item} appears more than once; only the first is used` });
+      if (k === '') { add('noItemCode', { text: `${label}: device ${r.sn || '(no serial)'} has no item code and was skipped` }); continue; }
+      if (map.has(k)) add('duplicateItem', { text: `${label}: item ${r.item} appears more than once; only the first is used` });
       else map.set(k, r);
     }
     return map;
@@ -104,8 +116,8 @@ export function buildReport(project, models) {
 
   const outside = sorted.filter(k => numOf(k) === null);
   const firstNumber = numberingStart(settings, sorted).start;
-  for (const k of outside) warnings.push({ level: 'warn', item: k, text: `${k}: item code doesn't follow this project's numbering (${itemCode(settings, firstNumber)}, ${itemCode(settings, firstNumber + 1)}…)` });
-  warnings.push(...numberingChecks(settings, sorted));
+  for (const k of outside) add('outsideNumbering', { item: k, text: `${k}: item code doesn't follow this project's numbering (${itemCode(settings, firstNumber)}, ${itemCode(settings, firstNumber + 1)}…)` });
+  warnings.push(...numberingChecks(settings, sorted, cfg));
 
   const rows = sorted.map(k => {
     const man = manBy.get(k) || {};
@@ -115,7 +127,7 @@ export function buildReport(project, models) {
 
     const row = {
       itemLookup: code,
-      item: joinNonEmpty('-', 'ITD', settings.projectNumber, code),
+      item: itemName(settings, code, cfg),
       sn: pick('sn'), asset: pick('asset'), type: pick('type'),
       // make names from the Dictionary's Make names list; Blancco's otherwise in PROPER case
       make: first(...[man.make, m?.make, w?.make].map(v => lk.make(v) ?? v), c ? lk.make(c.make) ?? proper(c.make) : ''),
@@ -130,7 +142,7 @@ export function buildReport(project, models) {
       itemStatus: str(man.itemStatus), estValue: str(man.estValue),
       locked: expandDiagCodes(joinNonEmpty(', ', man.locked, m?.locked, w?.locked), lk.diagCodes),
     };
-    row.destruction = first(man.destruction, str(row.blancco).toLowerCase().startsWith('pass') ? 'Nist SP 800-88' : '');
+    row.destruction = first(man.destruction, passed(row.blancco) ? cfg.erasure.destruction : '');
     row.weight = first(man.weight, lk.weight(row.type) ?? '');
     row._sources = { manual: manBy.has(k), mac: !!m, win: !!w, blancco: !!c };
     row._manual = Object.keys(man).filter(f => f !== 'item' && !isBlank(man[f]));
@@ -143,24 +155,24 @@ export function buildReport(project, models) {
       if (EDITABLE.has(f) && !isBlank(v)) { row._base[f] = row[f]; row[f] = reviewValue(f, v); row._edited.push(f); }
     }
 
-    if (m?.unknownModel) warnings.push({ level: 'warn', item: code, text: `${code}: Mac model "${m.unknownModel}" isn't in the Models list` });
-    if (c && isBlank(row.cpu) && !isBlank(c.rawCpu)) warnings.push({ level: 'warn', item: code, text: `${code}: couldn't shorten CPU "${c.rawCpu}"` });
-    if (/fail/i.test(row.blancco)) warnings.push({ level: 'error', item: code, text: `${code}: erasure failed (${row.blancco})` });
+    if (m?.unknownModel) add('unknownMacModel', { item: code, text: `${code}: Mac model "${m.unknownModel}" isn't in the Models list` });
+    if (c && isBlank(row.cpu) && !isBlank(c.rawCpu)) add('cpuNotShortened', { item: code, text: `${code}: couldn't shorten CPU "${c.rawCpu}"` });
+    if (failed(row.blancco)) add('erasureFailed', { item: code, text: `${code}: erasure failed (${row.blancco})` });
     if ((m || w) && isBlank(row.blancco)) {
       // Windows reports are used for devices without a disk (no erasure possible), so that's only a note
-      if (w && !m) warnings.push({ level: 'info', item: code, text: `${code}: no Blancco erasure (Windows report, S.N. ${row.sn})` });
-      else warnings.push({ level: 'warn', item: code, text: `${code}: no Blancco erasure found for S.N. ${row.sn}` });
+      if (w && !m) add('noErasureWindows', { item: code, text: `${code}: no Blancco erasure (Windows report, S.N. ${row.sn})` });
+      else add('noErasureMac', { item: code, text: `${code}: no Blancco erasure found for S.N. ${row.sn}` });
     }
-    if (isBlank(row.diagnostics)) warnings.push({ level: 'warn', item: code, text: `${code}: Diagnostics is empty` });
+    if (isBlank(row.diagnostics)) add('diagnosticsEmpty', { item: code, text: `${code}: Diagnostics is empty` });
     return row;
   });
 
   // Asset tags are unique per device: flag any tag used by more than one item
-  // (dashes, N/A, NA, none mean the device has no tag)
+  // (dashes, N/A, none… mean the device has no tag: config "Asset tags")
   const byAsset = new Map();
   for (const r of rows) {
     const a = str(r.asset).trim();
-    if (a === '' || /^(-+|n\.?\/?a\.?|none)$/i.test(a)) continue;
+    if (isNoAssetTag(a, cfg.noAssetTag)) continue;
     const k = a.toLowerCase();
     if (!byAsset.has(k)) byAsset.set(k, []);
     byAsset.get(k).push(r);
@@ -169,13 +181,13 @@ export function buildReport(project, models) {
     if (group.length < 2) continue;
     for (const r of group) {
       const others = group.filter(x => x !== r).map(x => x.itemLookup).join(', ');
-      warnings.push({ level: 'warn', item: r.itemLookup, text: `${r.itemLookup}: Asset ${r.asset} is also used by ${others}` });
+      add('duplicateAsset', { item: r.itemLookup, text: `${r.itemLookup}: Asset ${r.asset} is also used by ${others}` });
     }
   }
 
   const lockedFaulty = rows.filter(r => !isBlank(r.locked)).map(r => ({
     itemLookup: r.itemLookup, sn: r.sn, type: r.type, make: r.make, model: r.model, issue: r.locked,
-    wiped: str(r.blancco).toLowerCase().startsWith('pass') ? 'Yes' : 'No',
+    wiped: passed(r.blancco) ? 'Yes' : 'No',
   }));
 
   return { rows, lockedFaulty, warnings, counts: { mac: mac.length, win: win.length, blancco: csv.length, blanccoRows: blanccoTable.rows.length, manual: manBy.size } };
@@ -200,20 +212,22 @@ export function numberingStart(settings, keys) {
 
 // checks on the item numbering: items with no data from the first item number up to the highest one,
 // items below the first item number, and a first item number that doesn't fit the items at all
-export function numberingChecks(settings, keys) {
+export function numberingChecks(settings, keys, config) {
+  const cfg = withDefaults(config);
   const out = [];
+  const push = (check, w) => { const level = cfg.checks[check]; if (level && level !== 'off') out.push({ ...w, level, kind: 'numbering' }); };
   const nums = keys.map(k => codeNumber(settings, k)).filter(n => n !== null);
   if (!nums.length) return out;
   const { start, set } = numberingStart(settings, keys);
   const name = n => itemCode(settings, n);
-  if (start !== set) out.push({ level: 'warn', kind: 'numbering', text: `The items start at ${name(start)} but the first item number in project setup is ${set}. Click the project name at the top to change it.` });
+  if (start !== set) push('numberingStart', { text: `The items start at ${name(start)} but the first item number in project setup is ${set}. Click the project name at the top to change it.` });
   for (const k of keys) {
     const n = codeNumber(settings, k);
-    if (n !== null && n < start) out.push({ level: 'warn', kind: 'numbering', item: k, text: `${k}: below the first item number (${name(start)})` });
+    if (n !== null && n < start) push('belowStart', { item: k, text: `${k}: below the first item number (${name(start)})` });
   }
   const have = new Set(nums); const gaps = [];
   for (let n = start; n <= Math.max(...nums); n++) if (!have.has(n)) gaps.push(n);
-  if (gaps.length) out.push({ level: 'warn', kind: 'numbering', item: name(gaps[0]), text: `No data yet for: ${compressRanges(gaps).map(([a, b]) => a === b ? name(a) : `${name(a)}–${name(b)}`).join(', ')}` });
+  if (gaps.length) push('numberingGaps', { item: name(gaps[0]), text: `No data yet for: ${compressRanges(gaps).map(([a, b]) => a === b ? name(a) : `${name(a)}–${name(b)}`).join(', ')}` });
   return out;
 }
 

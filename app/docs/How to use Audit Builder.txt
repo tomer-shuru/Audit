@@ -152,29 +152,35 @@ SAVING AND SHARING PROJECTS
 - An old Audit.xlsm can be opened with "Open..." too.
 
 
-DICTIONARY
-----------
+SHARED DICTIONARY AND RULES
+---------------------------
 
-The "Dictionary" button holds the lists used to build the report: models,
-make names, type mapping, weights, model cleanup and diagnostic codes.
-"Make names" turns the make the tools report into the one in the report,
-e.g. "Dell Inc." into "Dell". Everyone shares one Dictionary, stored in
-G:\My Drive\Audit Builder\Models\models.json.
+Everyone shares two files in the Audit Builder folder on the Drive:
+- Modelsmodels.json: the Dictionary (button "Dictionary"): models, make names,
+  type mapping, weights, model cleanup and diagnostic codes. "Make names"
+  turns the make the tools report into the one in the report, e.g.
+  "Dell Inc." into "Dell".
+- Configconfig.json: the rules the report is built with (battery grades,
+  how Blancco comments are read, which checks show on Review, column
+  headers...), so everyone's report comes out the same.
 
-Connect to it once:
-  Dictionary > "Connect shared file..." > choose
-  G:\My Drive\Audit Builder\Models\models.json
-The box at the top of the Dictionary window then says "Shared".
+Connect once (the browser only lets the app use files you picked yourself):
+click "Connect folder..." in the yellow bar under the tabs and choose the
+folder G:My DriveAudit Builder. The browser asks to let the app view and
+edit files in it: allow it. The app then finds both files by itself.
 
 After that:
-- The app loads the shared list every time it opens.
-- Any change you make in the Dictionary is saved to the shared file, and coworkers
-  get it the next time they open the app or switch back to it.
+- The app loads both every time it opens. Nothing more to do.
 - After restarting the browser, a yellow bar may ask for your OK to load
-  the shared list. Click "Load shared Dictionary". If the browser offers
-  "Allow on every visit", choose it and it won't ask again.
-- If you and a coworker change the list at the same moment, the app keeps
-  their version and asks you to redo your last change.
+  them. Click "Load shared files". If the browser offers "Allow on every
+  visit", choose it and it won't ask again.
+- Any change you make in the Dictionary is saved to the shared file, and
+  coworkers get it the next time they open the app or switch back to it.
+- If you and a coworker change the Dictionary at the same moment, the app
+  keeps their version and asks you to redo your last change.
 
 If the Dictionary window says "Not shared", your changes stay on your computer
-only. Connect to the shared file as above.
+only. Connect the folder as above.
+
+The "DevMode" button is for the person who maintains the rules and asks for
+a password.

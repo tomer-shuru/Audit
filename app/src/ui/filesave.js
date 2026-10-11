@@ -5,7 +5,7 @@
 export const canSaveInPlace = typeof window !== 'undefined' && 'showSaveFilePicker' in window && 'indexedDB' in window;
 
 const DB = 'auditApp', STORE = 'handles';
-export const PROJECT_FILE = 'projectFile', MODELS_FILE = 'modelsFile';
+export const PROJECT_FILE = 'projectFile', MODELS_FILE = 'modelsFile', CONFIG_FILE = 'configFile', FOLDER = 'sharedFolder';
 
 function withStore(mode, fn) {
   return new Promise((resolve, reject) => {
@@ -21,7 +21,8 @@ function withStore(mode, fn) {
   });
 }
 
-// key: PROJECT_FILE (where Save writes) or MODELS_FILE (the shared Models list)
+// key: PROJECT_FILE (where Save writes), MODELS_FILE (the shared Models list), CONFIG_FILE (the shared DevMode rules)
+// or FOLDER (the shared Audit Builder folder holding both)
 export async function rememberedFile(key = PROJECT_FILE) {
   if (!canSaveInPlace) return null;
   try { return (await withStore('readonly', s => s.get(key))) || null; } catch { return null; }
@@ -33,6 +34,7 @@ export async function rememberFile(handle, key = PROJECT_FILE) {
 
 const PROJECT_TYPE = { description: 'Audit project', accept: { 'application/json': ['.json'] } };
 const MODELS_TYPE = { description: 'Dictionary', accept: { 'application/json': ['.json'] } };
+const CONFIG_TYPE = { description: 'Audit Builder rules', accept: { 'application/json': ['.json'] } };
 
 const cancelled = err => { if (err.name === 'AbortError') return null; throw err; };
 
@@ -56,10 +58,40 @@ export async function chooseNewModelsFile() {
   } catch (err) { return cancelled(err); }
 }
 
-// Is the browser allowed to read and write this file right now?
+// the shared rules file (config.json, DevMode): pick an existing one, or choose where to create it
+export async function chooseConfigFile() {
+  try {
+    const [handle] = await window.showOpenFilePicker({ id: 'audit-config', types: [CONFIG_TYPE] });
+    return handle;
+  } catch (err) { return cancelled(err); }
+}
+export async function chooseNewConfigFile() {
+  try {
+    return await window.showSaveFilePicker({ suggestedName: 'config.json', types: [CONFIG_TYPE], id: 'audit-config' });
+  } catch (err) { return cancelled(err); }
+}
+
+// the shared Audit Builder folder (G:My DriveAudit Builder): connecting it once lets the app find the shared files in it
+export const canUseFolder = canSaveInPlace && 'showDirectoryPicker' in window;
+export async function chooseFolder() {
+  try {
+    return await window.showDirectoryPicker({ id: 'audit-folder', mode: 'readwrite' });
+  } catch (err) { return cancelled(err); }
+}
+// a file in a subfolder of the shared folder (e.g. Models / models.json), or null when it isn't there
+export async function folderFile(dir, sub, name) {
+  try {
+    return await (await dir.getDirectoryHandle(sub)).getFileHandle(name);
+  } catch (err) {
+    if (err.name === 'NotFoundError' || err.name === 'TypeMismatchError') return null;
+    throw err;
+  }
+}
+
+// Is the browser allowed to read and write this file right now? (mode 'read' only asks to read it)
 // With ask=true (only from a click) the browser may show its "allow" prompt.
-export async function hasPermission(handle, ask = false) {
-  const opts = { mode: 'readwrite' };
+export async function hasPermission(handle, ask = false, mode = 'readwrite') {
+  const opts = { mode };
   if ((await handle.queryPermission(opts)) === 'granted') return true;
   return ask ? (await handle.requestPermission(opts)) === 'granted' : false;
 }

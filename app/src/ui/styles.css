@@ -76,7 +76,7 @@ main { padding: 20px; max-width: 1600px; margin: 0 auto; display: flex; flex-dir
 .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 @media (max-width: 520px) { main { padding: 12px; } }
 
-textarea, input[type=search], input:not([type]), input[type=number], .code-input {
+textarea, input[type=search], input:not([type]), input[type=number], input[type=password], .code-input {
   font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; width: 100%; }
 textarea { resize: vertical; }
 textarea.mono { font: 12px/1.5 var(--mono); white-space: pre; overflow-x: auto; }
@@ -240,3 +240,34 @@ main .card h2 { color: color-mix(in srgb, var(--tab-accent) 75%, var(--text)); }
 /* the boxes inside the Export window stay quiet: just a thin edge in the window's color */
 #exportDialog .card { border-top: 2px solid color-mix(in srgb, var(--tab-accent) 35%, var(--border)); }
 #exportDialog .dialog-head h2 { color: var(--tab-accent); }
+
+/* DevMode: the rules editor (a window behind a password) */
+#devDialog { --tab-accent: #8a6d1f; border-top: 5px solid var(--tab-accent); }
+#devDialog .dialog-head h2 { color: var(--tab-accent); }
+#devBody { flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 12px; padding-right: 4px; }
+.dev-section { display: flex; flex-direction: column; gap: 10px; max-width: 1000px; }
+.dev-section h3 { margin: 10px 0 0; font-size: 15px; }
+.dev-section > p { margin: 0; }
+.dev-section .btn.small, .dev-section > p > .btn { align-self: flex-start; }
+.dev-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px 24px; align-items: start; }
+.dev-cols > div { display: flex; flex-direction: column; gap: 8px; }
+.grid.dev-table { width: auto; min-width: 280px; }
+.grid.dev-table td { padding: 3px 6px; }
+.grid.dev-table input, .grid.dev-table select { width: 100%; min-width: 120px; }
+.grid.dev-table input[type=number] { width: 90px; min-width: 90px; }
+select { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 5px 6px; }
+.dev-field { display: grid; grid-template-columns: minmax(220px, 340px) minmax(160px, 360px); gap: 12px; align-items: center; }
+.dev-field > span { display: flex; flex-direction: column; font-weight: 600; font-size: 13px; }
+.dev-field small { font-weight: 400; }
+.dev-field input[type=number] { width: 90px; }
+@media (max-width: 640px) { .dev-field { grid-template-columns: 1fr; gap: 4px; } }
+.dev-password { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: flex-end; }
+.dev-password label { display: flex; flex-direction: column; gap: 4px; font-weight: 600; font-size: 13px; }
+.dev-password input { width: 200px; }
+#devFooter { border-top: 1px solid var(--border); padding-top: 12px; margin-top: 12px; display: flex; flex-direction: column; gap: 10px; max-height: 45vh; overflow: auto; }
+#devFooter > .actions { justify-content: flex-end; }
+#devFooter .banner ul { margin: 6px 0 0; padding-left: 20px; }
+.dev-preview summary { color: var(--text); }
+.dev-preview .table-wrap { margin-top: 8px; max-height: 26vh; }
+.grid.dev-table td.changed { background: var(--edited); color: var(--edited-ink); }
+#devLoginError:empty { display: none; }
