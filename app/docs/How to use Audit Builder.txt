@@ -126,6 +126,56 @@ by hand):
       values back (formulas in them become plain values).
 
 
+SIMS PROJECTS (A DIFFERENT SHEET LAYOUT)
+----------------------------------------
+
+Some contractors (SIMS) want their own sheet instead of ours. The data and
+the Manual entries stay exactly the same; only the output changes.
+
+1. Set "Output" to SIMS. It is in the top bar next to the project name
+   (always there), and also on the Review tab and in the Export window.
+   It is saved with the project; switch back to Shuru any time.
+2. The Review table then shows the SIMS columns D (Item No) to T (Blancco
+   Result): Category (from the device type), Model (make, model, screen,
+   year), Purchase Description (CPU, RAM, disk, or n/a), our Diagnostics,
+   the SIMS Diagnostic Codes, Item Remark, Weight and Blancco Result
+   (Erased / Not Erased).
+   - Serial No, asset tag, Diagnostics and Weight are the same as in the
+     Shuru layout: changing them changes both.
+   - Typing in another column (e.g. Category or Diagnostic Codes) only
+     changes the SIMS output. Clear the cell to go back.
+3. Diagnostic codes: each diagnostic becomes the SIMS code of the device's
+   category (e.g. "Sticky kb" on a laptop is LPT107). A diagnostic with no
+   SIMS code goes to Item Remark and the device gets the "see remarks" code
+   (e.g. LPT172). Review lists those as yellow warnings, so you can add them
+   to the Dictionary. "Ok" is left out.
+4. Export (button on Review) has three lists: Item per service project
+   (paste at the Item No cell, column D, of the first item row), HDD (one
+   row per data carrier serial from "S.N. Data carrier") and Locked and
+   Faulty. "Download SIMS .xlsx" fills the SIMS template with the rows,
+   so their logos, comments and Summary stay as they are; the Summary
+   counts itself when you open the file. The template is
+   G:\My Drive\Audit Builder\Templates\SIMS.xlsx. When SIMS sends a new
+   template, empty it of data and save it over that file.
+5. Rows already in the SIMS sheet can be pasted in "Rows already in the
+   Google Sheet" on the Data tab (copy columns D to T), like for our sheet.
+
+The SIMS lists are in the Dictionary (after "SIMS output:"):
+- SIMS diagnostics: one row per SIMS issue. Write our diagnostics next to
+  the issue they mean, separated by commas (e.g. "Sticky kb, KB sticky" next
+  to keyboard defect). Capitals, spaces and dashes don't matter. One issue
+  works for every category: keyboard defect is LPT107 on a laptop and would
+  be BSU107 on a PC. Writing a diagnostic on two issues gives two codes
+  (BIOS locked = password protected + no audit). The first row, "Leave out",
+  lists diagnostics that get no code at all (Ok). Use the search box and
+  "Only issues with our diagnostics" to find your way in the list.
+- SIMS codes: all SIMS codes per category (from their template), with a
+  category filter and search.
+- SIMS categories: which SIMS category each of our device types is, and,
+  when it's different, which category's codes it uses (Switch uses Network
+  Switch codes, loose disks use Data Carrier codes).
+
+
 SAVING AND SHARING PROJECTS
 ---------------------------
 
@@ -156,17 +206,17 @@ SHARED DICTIONARY AND RULES
 ---------------------------
 
 Everyone shares two files in the Audit Builder folder on the Drive:
-- Modelsmodels.json: the Dictionary (button "Dictionary"): models, make names,
-  type mapping, weights, model cleanup and diagnostic codes. "Make names"
+- Models\models.json: the Dictionary (button "Dictionary"): models, make names,
+  type mapping, weights, model cleanup, diagnostic codes and the SIMS lists. "Make names"
   turns the make the tools report into the one in the report, e.g.
   "Dell Inc." into "Dell".
-- Configconfig.json: the rules the report is built with (battery grades,
+- Config\config.json: the rules the report is built with (battery grades,
   how Blancco comments are read, which checks show on Review, column
   headers...), so everyone's report comes out the same.
 
 Connect once (the browser only lets the app use files you picked yourself):
 click "Connect folder..." in the yellow bar under the tabs and choose the
-folder G:My DriveAudit Builder. The browser asks to let the app view and
+folder G:\My Drive\Audit Builder. The browser asks to let the app view and
 edit files in it: allow it. The app then finds both files by itself.
 
 After that:

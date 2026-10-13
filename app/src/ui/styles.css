@@ -271,3 +271,13 @@ select { font: inherit; color: var(--text); background: var(--surface); border: 
 .dev-preview .table-wrap { margin-top: 8px; max-height: 26vh; }
 .grid.dev-table td.changed { background: var(--edited); color: var(--edited-ink); }
 #devLoginError:empty { display: none; }
+
+/* SIMS output: the Output picker on Review, the SIMS lists in the Dictionary */
+.output-pick { display: flex; gap: 6px; align-items: center; color: var(--muted); }
+.output-pick select, .filter-bar select { font: inherit; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
+.output-pick select { font-weight: 600; color: var(--text); }
+.subtab-sep { align-self: center; margin-left: 10px; color: var(--muted); font-size: 12px; }
+.filter-bar { margin: 8px 0; }
+.grid .muted-cell { color: var(--muted); }
+.grid.sims-diag td[data-aliases] { min-width: 320px; }
+.grid tr.ignore-row > * { background: var(--warn-soft); }

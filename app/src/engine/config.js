@@ -30,6 +30,8 @@ export const CHECKS = {
   noErasureWindows: 'No Blancco erasure for a Windows report device',
   diagnosticsEmpty: 'Diagnostics is empty',
   duplicateAsset: 'The same asset tag is on more than one device',
+  simsNoCode: 'SIMS output: a diagnostic has no SIMS code (it goes to Item Remark)',
+  simsNoCategory: 'SIMS output: a device type has no SIMS category or codes',
 };
 export const CHECK_LEVELS = ['error', 'warn', 'info', 'off'];
 
@@ -67,6 +69,8 @@ export const DEFAULT_CONFIG = {
     itemPrefix: 'ITD',              // ITEM = <this>-<project number>-<item code>
     noDisk: '-',                    // Disk when the Mac / Windows report says NONE
     appleIdLock: 'Apple ID Lock', remoteLocked: 'Remote Locked', batteryService: 'Battery Service',
+    simsErased: 'Erased', simsNotErased: 'Not Erased', // SIMS Blancco Result for a passed / failed erasure
+    simsNoSpecs: 'n/a',             // SIMS Purchase Description when there is no CPU, RAM or disk
   },
   // asset tag values meaning "no tag" (dots, slashes, spaces and capitals don't matter; "-" covers any number of dashes)
   noAssetTag: ['-', 'N/A', 'none'],
@@ -77,6 +81,7 @@ export const DEFAULT_CONFIG = {
     outsideNumbering: 'warn', numberingStart: 'warn', belowStart: 'warn', numberingGaps: 'warn',
     unknownMacModel: 'warn', cpuNotShortened: 'warn', erasureFailed: 'error', noErasureMac: 'warn',
     noErasureWindows: 'info', diagnosticsEmpty: 'warn', duplicateAsset: 'warn',
+    simsNoCode: 'warn', simsNoCategory: 'warn',
   },
   reportColumns: REPORT.map(([key, label]) => ({ key, label })),
   lockedColumns: LOCKED.map(([key, label]) => ({ key, label })),

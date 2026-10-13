@@ -81,7 +81,7 @@ export async function importWorkbook(file) {
 export const toTable = (cols, rows) => [cols.map(c => c[1]), ...rows.map(r => cols.map(([k]) => r[k] ?? ''))];
 
 // sheets: [{ name, cols, rows }]; sheets without rows or columns are left out
-export function downloadXlsx(sheets, settings) {
+export function downloadXlsx(sheets, settings, title = 'Audit Report') {
   const wb = XLSX.utils.book_new();
   for (const { name, cols, rows } of sheets) {
     if (!rows.length || !cols.length) continue;
@@ -92,7 +92,7 @@ export function downloadXlsx(sheets, settings) {
     XLSX.utils.book_append_sheet(wb, ws, name);
   }
   if (!wb.SheetNames.length) return false;
-  XLSX.writeFile(wb, `${settings.projectNumber || 'Audit'} - Audit Report.xlsx`);
+  XLSX.writeFile(wb, `${settings.projectNumber || 'Audit'} - ${title}.xlsx`);
   return true;
 }
 

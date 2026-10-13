@@ -8,6 +8,8 @@ import {
   copyText, downloadJson, readJsonFile,
 } from './io.js';
 import { mergeWithSheet } from './merge.js';
+import { buildSims, hddRows, simsIssues, splitList, normDiag, SIMS_COLUMNS, SIMS_SHARED, HDD_COLUMNS, simsEditable } from '../engine/sims.js';
+import { fillSimsTemplate, downloadBytes, SIMS_TEMPLATE } from './simstemplate.js';
 import { initDevMode, STORE_CONFIG, attachConfigFile, reconnectConfigFile, renderConfigBar } from './devmode.js';
 import { grid } from './grid.js';
 import {
@@ -23,9 +25,11 @@ const STORE_TAB = 'auditApp.tab';
 // ---------- state ----------
 const emptyProject = () => ({
   version: 2,
-  settings: { projectNumber: '', prefix: '', endClient: '', startNumber: 1 },
+  // output: which sheet layout Review and Export use ('shuru' or 'sims')
+  settings: { projectNumber: '', prefix: '', endClient: '', startNumber: 1, output: 'shuru' },
   inputs: { reports: '', blanccoFiles: [], sheet: '' },
   manual: {}, overrides: {},
+  simsOverrides: {}, // edits of SIMS-only columns, made in the Review table in SIMS layout
   savedToFile: true,
 });
 
@@ -61,15 +65,34 @@ const state = {
   reviewFilter: '', reviewIssuesOnly: false,
   hideEmpty: { review: false, export: false }, // "Hide empty rows" on Review / Export (only hides them from view)
   modelsTab: 'models',
+  modelsFilter: {}, // Dictionary filters per tab: { q, category, mapped }
   manualSelected: new Set(),
 };
 
 const settingsComplete = s => s.projectNumber.trim() && s.endClient.trim(); // the prefix may be empty (codes that are just numbers)
 
+const isSims = () => state.project.settings.output === 'sims';
+const OUTPUTS = { shuru: 'Shuru', sims: 'SIMS' };
+// the Output pickers (top bar, Review, Export window) all change the same project setting
+function setOutput(value) {
+  if (!OUTPUTS[value] || value === (state.project.settings.output || 'shuru')) return;
+  state.project.settings.output = value;
+  changed();
+  toast(`Output: ${OUTPUTS[value]}. Review and Export now use the ${OUTPUTS[value]} layout.`);
+}
+
 function recompute() {
   state.report = buildReport(state.project, state.models, state.config);
+  // the SIMS layout is made from the finished report rows; its checks join the report's
+  state.sims = isSims() ? buildSims(state.report, state.project, state.models, state.config) : null;
+  if (state.sims) state.report.warnings.push(...state.sims.warnings);
   mergeSheetRows();
 }
+// the rows of the chosen output (Shuru: the Audit Report, SIMS: the SIMS rows)
+const outputRows = () => state.sims?.rows ?? state.report.rows;
+// columns of the Review table: Item Lookup, then the chosen output's columns
+const reviewColumns = () => (isSims() ? [['itemLookup', 'Item Lookup'], ...SIMS_COLUMNS.map(([k, l, name]) => [k, name ?? l])] : reportColumns(state.config));
+const isEditable = k => (isSims() ? k !== 'itemLookup' && simsEditable(k) : EDITABLE.has(k));
 
 // Rows already in the Google Sheet (Data tab) take the place of the report rows for the same items.
 // They are lined up with the Audit Report columns ticked in the Export window, the way they get pasted back.
@@ -78,19 +101,19 @@ function mergeSheetRows() {
   state.merge = null;
   const r = state.report;
   if (!state.project.inputs.sheet.trim()) return;
-  const cols = exportCols('report');
-  const m = mergeWithSheet({ sheetText: state.project.inputs.sheet, cols, rows: r.rows, prefix: state.project.settings.prefix, itemPrefix: state.config.texts.itemPrefix });
+  const cols = exportCols(isSims() ? 'sims' : 'report');
+  const m = mergeWithSheet({ sheetText: state.project.inputs.sheet, cols, rows: outputRows(), prefix: state.project.settings.prefix, itemPrefix: state.config.texts.itemPrefix });
   state.merge = m;
   // the app's rows for items the sheet already has aren't used, so neither are their checks
   const skipped = new Set(m.skipped);
   const keys = m.rows.map(x => (x._sheet ? x._sheet.code : itemKey(x.itemLookup))).filter(Boolean);
-  r.warnings = r.warnings.filter(w => !skipped.has(w.item) && w.kind !== 'numbering');
+  r.warnings = r.warnings.filter(w => !(w.items ? w.items.every(i => skipped.has(i)) : skipped.has(w.item)) && w.kind !== 'numbering');
   r.warnings.push(...numberingChecks(state.project.settings, keys, state.config));
   r.warnings.push(...sheetWarnings(m));
 }
 // all rows of the Audit Report (with the Google Sheet rows), plus an empty row for every item number
 // from the first item number (project setup) up to the highest one that has no data, so the list lines up
-const reportRows = () => withEmptyRows(state.merge?.rows ?? state.report.rows);
+const reportRows = () => withEmptyRows(state.merge?.rows ?? outputRows());
 
 function withEmptyRows(rows) {
   const settings = state.project.settings;
@@ -125,7 +148,7 @@ function changed({ rerender = true } = {}) {
 
 // ---------- undo / redo for edits in the Review and Manual entries tables ----------
 const history = { undo: [], redo: [] };
-const snapshot = () => JSON.stringify({ manual: state.project.manual, overrides: state.project.overrides });
+const snapshot = () => JSON.stringify({ manual: state.project.manual, overrides: state.project.overrides, simsOverrides: state.project.simsOverrides });
 function recordEdit() {
   history.undo.push(snapshot());
   if (history.undo.length > 200) history.undo.shift();
@@ -182,6 +205,7 @@ function renderChrome() {
   const saved = $('#saveState');
   saved.textContent = !state.project.savedToFile ? 'Unsaved changes' : state.fileName ? `Saved · ${state.fileName}` : '';
   saved.classList.toggle('dirty', !state.project.savedToFile);
+  document.querySelectorAll('select[data-output]').forEach(sel => { sel.value = s.output || 'shuru'; });
   saved.title = state.fileName ? `Save (Ctrl+S) writes to ${state.fileName}` : 'Save (Ctrl+S) will ask where to save the project file';
   // Review shows how many checks there are: red = problems, yellow = warnings, gray = notes
   const levels = { error: 'problem', warn: 'warning', info: 'note' };
@@ -296,7 +320,7 @@ function renderData(main) {
     <div class="card-head">
       <div><h2>Rows already in the Google Sheet <span class="muted">optional</span></h2>
       <p class="hint">If some items are already filled in the project's Google Sheet, copy those rows there (from the first item row down past the last filled one,
-      same columns as the export) and paste them here. On Review and in Export they show up in their place and are copied back as they are,
+      same columns as the export) and paste them here.${isSims() ? ' This project\'s output is SIMS, so copy them from the SIMS sheet, columns D (Item No) to T (Blancco Result).' : ''} On Review and in Export they show up in their place and are copied back as they are,
       instead of Audit Builder's rows for the same items.</p></div>
       ${inp.sheet.trim() ? '<div class="actions"><button class="btn ghost" id="sheetClear">Clear</button></div>' : ''}
     </div>
@@ -510,7 +534,8 @@ function renderReview(main) {
     issues.set(w.item, cur);
   }
   const issueItems = new Set(issues.keys());
-  const REPORT_COLUMNS = reportColumns(state.config);
+  const REPORT_COLUMNS = reviewColumns();
+  const sims = isSims();
   const q = state.reviewFilter.trim().toLowerCase();
   const allRows = reportRows();
   const rows = allRows.filter(row =>
@@ -531,11 +556,14 @@ function renderReview(main) {
   </section>` : ''}
   <section class="card">
     <div class="card-head">
-      <div><h2>Audit Report</h2><p class="hint">Works like a spreadsheet: arrow keys, Shift to select, type or double-click to change a cell, Ctrl+C / Ctrl+V, Ctrl+Z to undo.
+      <div><h2>${sims ? 'SIMS report' : 'Audit Report'}</h2><p class="hint">Works like a spreadsheet: arrow keys, Shift to select, type or double-click to change a cell, Ctrl+C / Ctrl+V, Ctrl+Z to undo.
       Edited cells are highlighted; clear a cell (Delete) to go back to the calculated value.
-      ${state.merge ? 'Green rows are already in the Google Sheet (pasted on the Data tab) and stay as they are.' : ''}
+      ${sims ? 'SIMS layout: columns D (Item No) to T (Blancco Result) of the SIMS sheet. Serial No, asset tag, Diagnostics and weight are the same as in the Shuru layout; changing another column only changes the SIMS output. Codes come from Dictionary › SIMS diagnostics.' : ''}
+      ${state.merge ? `Green rows are already in the ${sims ? 'SIMS' : 'Google'} sheet (pasted on the Data tab) and stay as they are.` : ''}
       Empty yellow rows are item numbers with no data yet; typing in one adds a manual entry.</p></div>
       <div class="actions">
+        <label class="output-pick" title="Which sheet layout Review and Export use: ours (Shuru) or a contractor's (SIMS). Saved with the project; the data stays the same.">Output
+          <select data-output><option value="shuru" ${sims ? '' : 'selected'}>Shuru</option><option value="sims" ${sims ? 'selected' : ''}>SIMS</option></select></label>
         <input type="search" id="reviewSearch" placeholder="Search…" value="${esc(state.reviewFilter)}">
         <label class="check"><input type="checkbox" id="issuesOnly" ${state.reviewIssuesOnly ? 'checked' : ''}> Only items with issues</label>
         <label class="check"><input type="checkbox" id="hideEmptyReview" ${state.hideEmpty.review ? 'checked' : ''}> Hide empty rows</label>
@@ -549,7 +577,7 @@ function renderReview(main) {
         <tbody>${rows.map((row, i) => row._sheet ? sheetReviewRow(row, i, issues) : `
           <tr data-code="${esc(row.itemLookup)}" class="${row._empty ? 'empty-row issue-warn' : issues.has(row.itemLookup) ? 'issue-' + issues.get(row.itemLookup).level : ''}"${row._empty ? ' title="No data yet for this item"' : ''}>
             ${REPORT_COLUMNS.map(([k], j) => {
-              if (!EDITABLE.has(k)) return `<th class="${j === 0 ? 'sticky ' : ''}s${j}" data-r="${i}" data-c="${j}" ${j === 0 && issues.has(row.itemLookup) ? `title="${esc(issues.get(row.itemLookup).texts.join('\n'))}"` : ''}>${esc(row[k])}${j === 0 ? sourceBadges(row) : ''}</th>`;
+              if (!isEditable(k)) return `<th class="${j === 0 ? 'sticky ' : ''}s${j}" data-r="${i}" data-c="${j}" ${j === 0 && issues.has(row.itemLookup) ? `title="${esc(issues.get(row.itemLookup).texts.join('\n'))}"` : ''}>${esc(row[k])}${j === 0 ? sourceBadges(row) : ''}</th>`;
               const edited = row._edited.includes(k);
               return `<td data-r="${i}" data-c="${j}" class="${edited ? 'edited' : ''}" ${edited ? `title="Edited. Calculated value: ${esc(row._base[k] || '(empty)')}"` : ''}>${esc(row[k])}</td>`;
             }).join('')}
@@ -571,10 +599,11 @@ function renderReview(main) {
   if (table) grid('review').attach(table, {
     rows: rows.length, cols: REPORT_COLUMNS.length,
     value: (r, c) => (c === 0 && rows[r]._sheet ? rows[r]._sheet.code : rows[r][REPORT_COLUMNS[c][0]] ?? ''),
-    editable: (r, c) => !rows[r]._sheet && EDITABLE.has(REPORT_COLUMNS[c][0]),
+    // in SIMS layout, an item with no data yet only takes the columns that are also in the Shuru layout
+    editable: (r, c) => !rows[r]._sheet && isEditable(REPORT_COLUMNS[c][0]) && !(sims && rows[r]._empty && !SIMS_SHARED.has(REPORT_COLUMNS[c][0])),
     commit: changes => {
       recordEdit();
-      const ov = state.project.overrides, man = state.project.manual;
+      const man = state.project.manual;
       for (const { r, c, value } of changes) {
         const row = rows[r], code = row.itemLookup, f = REPORT_COLUMNS[c][0];
         if (row._empty) { // an item with no data yet: what's typed becomes its manual entry
@@ -585,6 +614,8 @@ function renderReview(main) {
         }
         const base = String(row._edited.includes(f) ? row._base[f] ?? '' : row[f] ?? '');
         const next = value === base ? '' : value; // the calculated value (or an empty cell) removes the edit
+        // SIMS-only columns are kept apart, so they don't change the Shuru layout
+        const ov = sims && !SIMS_SHARED.has(f) ? state.project.simsOverrides : state.project.overrides;
         ov[code] = ov[code] || {};
         if (next) ov[code][f] = next; else delete ov[code][f];
         if (!Object.keys(ov[code]).length) delete ov[code];
@@ -609,14 +640,14 @@ function renderReview(main) {
 
 // a row that is already in the Google Sheet: shown as it is, not editable here
 function sheetReviewRow(row, i, issues) {
-  const REPORT_COLUMNS = reportColumns(state.config);
+  const REPORT_COLUMNS = reviewColumns();
   const issue = issues.get(row.itemLookup);
   return `
-    <tr data-code="${esc(row.itemLookup)}" class="from-sheet ${issue ? 'issue-' + issue.level : ''}" title="Already in the Google Sheet. Change it on the Data tab.">
+    <tr data-code="${esc(row.itemLookup)}" class="from-sheet ${issue ? 'issue-' + issue.level : ''}" title="Already in the ${isSims() ? 'SIMS' : 'Google'} sheet. Change it on the Data tab.">
       ${REPORT_COLUMNS.map(([k], j) => {
         const at = `data-r="${i}" data-c="${j}"`;
         if (j === 0) return `<th class="sticky s0" ${at}>${esc(row._sheet.code || '—')}<span class="badges"><i title="Google Sheet">G</i></span></th>`;
-        if (j === 1) return `<th class="s1" ${at}>${esc(row[k])}</th>`;
+        if (k === 'item') return `<th class="s${j}" ${at}>${esc(row[k])}</th>`;
         return `<td ${at}>${esc(row[k])}</td>`;
       }).join('')}
     </tr>`;
@@ -629,12 +660,19 @@ function sourceBadges(row) {
 
 // ---------- Export window ----------
 // Which columns to export is remembered on this computer; which rows is per session (new items start ticked).
+// Columns are [key, header in the sheet, name shown here when the header is empty].
 const STORE_EXPORT_COLS = 'auditApp.exportHiddenCols';
 const EXPORT_SHEETS = {
-  report: { title: 'Audit Report', cols: () => exportColumns(state.config), rows: r => r.rows },
-  locked: { title: 'Locked and Faulty', cols: () => lockedColumns(state.config), rows: r => r.lockedFaulty },
+  report: { title: 'Audit Report', cols: () => exportColumns(state.config), rows: () => reportRows() },
+  sims: { title: 'Item per service project', cols: () => SIMS_COLUMNS, rows: () => reportRows() },
+  hdd: { title: 'HDD', cols: () => HDD_COLUMNS, rows: () => hddRows(state.report.rows) },
+  locked: { title: 'Locked and Faulty', cols: () => lockedColumns(state.config), rows: () => state.report.lockedFaulty },
 };
-const exportPrefs = { hiddenCols: load(STORE_EXPORT_COLS, { report: [], locked: [] }), excludedRows: { report: new Set(), locked: new Set() }, anchor: {} };
+// the sheets of the chosen output; the first one is the main list (with empty rows and the Google Sheet rows)
+const exportKinds = () => (isSims() ? ['sims', 'hdd', 'locked'] : ['report', 'locked']);
+const isMainSheet = kind => kind === 'report' || kind === 'sims';
+const exportPrefs = { hiddenCols: load(STORE_EXPORT_COLS, { report: [], locked: [] }), excludedRows: {}, anchor: {} };
+const rowKey = row => row._key ?? row.itemLookup; // HDD rows: one per serial, so several per item
 
 const exportCols = kind => {
   const hidden = new Set(exportPrefs.hiddenCols[kind] || []);
@@ -644,32 +682,46 @@ const exportCols = kind => {
 function exportSelection(kind) {
   const sheet = EXPORT_SHEETS[kind];
   const hidden = new Set(exportPrefs.hiddenCols[kind] || []);
-  const excluded = exportPrefs.excludedRows[kind];
-  const allRows = kind === 'report' ? reportRows() : sheet.rows(state.report);
+  const excluded = (exportPrefs.excludedRows[kind] ??= new Set());
+  const allRows = sheet.rows();
   return {
     sheet, allRows, cols: exportCols(kind),
-    rows: allRows.filter(r => !excluded.has(r.itemLookup)),
+    rows: allRows.filter(r => !excluded.has(rowKey(r))),
     hidden, excluded,
   };
 }
 
+const EXPORT_HINTS = {
+  report: () => (state.merge ? 'Green rows are already in the Google Sheet and are copied back as they are. Paste at the ITEM cell of the first item row in the Google Sheet.'
+    : 'Untick rows or columns you don\'t want, then copy and paste into the Google Sheet. Your column choice is remembered.'),
+  sims: () => `Columns D (Item No) to T (Blancco Result) of the SIMS sheet: paste at the Item No cell of the first item row.${state.merge ? ' Green rows are already in the SIMS sheet and are copied back as they are.' : ''} Your column choice is remembered.`,
+  hdd: () => 'One row per data carrier serial (from S.N. Data carrier). Paste under the headers on the HDD tab.',
+  locked: () => 'Devices with a lock or fault. Send this list along with the report.',
+};
+const EXPORT_EMPTY = {
+  hdd: 'No data carrier serials (S.N. Data carrier) in this project, so you don\'t need this sheet.',
+  locked: 'No locked or faulty devices in this project, so you don\'t need this sheet.',
+};
+
 function renderExport(main) {
   const r = state.report;
+  const sims = isSims();
 
   const section = kind => {
     const { sheet, allRows, cols, rows, hidden, excluded } = exportSelection(kind);
-    if (kind === 'locked' && !allRows.length) {
-      return `<section class="card"><div class="card-head"><div><h2>${sheet.title} <span class="muted">0 items</span></h2>
-        <p class="hint">No locked or faulty devices in this project, so you don't need this sheet.</p></div></div></section>`;
+    const isMain = isMainSheet(kind);
+    if (!isMain && !allRows.length) {
+      return `<section class="card"><div class="card-head"><div><h2>${sheet.title} <span class="muted">0 rows</span></h2>
+        <p class="hint">${EXPORT_EMPTY[kind]}</p></div></div></section>`;
     }
-    const allRowsOn = allRows.every(x => !excluded.has(x.itemLookup));
+    const allRowsOn = allRows.every(x => !excluded.has(rowKey(x)));
     // empty rows can be hidden from view, but are always copied (so the rows line up with the sheet)
-    const shown = kind === 'report' && state.hideEmpty.export ? allRows.filter(x => !x._empty) : allRows;
+    const shown = isMain && state.hideEmpty.export ? allRows.filter(x => !x._empty) : allRows;
     return `
     <section class="card" data-sheet="${kind}">
       <div class="card-head">
         <div><h2>${sheet.title} <span class="muted">${rows.length} of ${plural(allRows.length, 'row')} · ${cols.length} of ${sheet.cols().length} columns</span></h2>
-        <p class="hint">${kind === 'report' && state.merge ? 'Green rows are already in the Google Sheet and are copied back as they are. Paste at the ITEM cell of the first item row in the Google Sheet.' : kind === 'report' ? 'Untick rows or columns you don\'t want, then copy and paste into the Google Sheet. Your column choice is remembered.' : 'Devices with a lock or fault. Send this list along with the report.'}</p></div>
+        <p class="hint">${EXPORT_HINTS[kind]()}</p></div>
         <div class="actions">
           <button class="btn primary" data-copy ${rows.length && cols.length ? '' : 'disabled'}>Copy rows</button>
           <button class="btn" data-copy-h ${rows.length && cols.length ? '' : 'disabled'}>Copy with headers</button>
@@ -682,19 +734,19 @@ function renderExport(main) {
         <button class="btn small" data-rows="none">None</button>
         <button class="btn small" data-rows="invert">Invert</button>
         ${hidden.size ? '<button class="btn small" data-all-cols>Show all columns</button>' : ''}
-        ${kind === 'report' ? `<label class="check" title="Only hides them here. Empty rows are still copied, so the rows line up with the Google Sheet."><input type="checkbox" id="hideEmptyExport" ${state.hideEmpty.export ? 'checked' : ''}> Hide empty rows</label>` : ''}
+        ${isMain ? `<label class="check" title="Only hides them here. Empty rows are still copied, so the rows line up with the sheet."><input type="checkbox" data-hide-empty ${state.hideEmpty.export ? 'checked' : ''}> Hide empty rows</label>` : ''}
         <span class="hint">Tip: tick one row, then hold Shift and click another to tick or untick everything in between.</span>
       </div>
       <div class="table-wrap export">
         <table class="grid pick">
           <thead><tr>
             <th class="sticky pick-col"><input type="checkbox" data-all-rows ${allRowsOn ? 'checked' : ''} title="Select all rows"></th>
-            ${sheet.cols().map(([k, l]) => `<th class="${hidden.has(k) ? 'off' : ''}"><label class="col-pick"><input type="checkbox" data-col="${k}" ${hidden.has(k) ? '' : 'checked'}>${esc(l)}</label></th>`).join('')}
+            ${sheet.cols().map(([k, l, name]) => `<th class="${hidden.has(k) ? 'off' : ''}"><label class="col-pick"><input type="checkbox" data-col="${k}" ${hidden.has(k) ? '' : 'checked'}>${esc(name ?? l)}</label></th>`).join('')}
           </tr></thead>
           <tbody>${shown.map(row => {
-            const off = excluded.has(row.itemLookup);
+            const off = excluded.has(rowKey(row));
             return `<tr class="${off ? 'off' : ''}${row._sheet ? ' from-sheet' : ''}${row._empty ? ' empty-row' : ''}">
-              <th class="sticky pick-col"><input type="checkbox" data-row="${esc(row.itemLookup)}" ${off ? '' : 'checked'} title="${esc(row._sheet ? 'Already in the Google Sheet' : row.itemLookup)}"></th>
+              <th class="sticky pick-col"><input type="checkbox" data-row="${esc(rowKey(row))}" ${off ? '' : 'checked'} title="${esc(row._sheet ? 'Already in the sheet' : row.itemLookup)}"></th>
               ${sheet.cols().map(([k]) => `<td class="${hidden.has(k) ? 'off' : ''}">${esc(row[k])}</td>`).join('')}
             </tr>`;
           }).join('')}</tbody>
@@ -705,21 +757,29 @@ function renderExport(main) {
   };
 
   main.innerHTML = `
-  ${section('report')}
-  ${section('locked')}
+  ${exportKinds().map(section).join('')}
   <section class="card">
+    ${sims ? `
+    <div class="card-head">
+      <div><h2>SIMS Excel file</h2><p class="hint">Fills the SIMS template with the selected rows and columns: Item per service project, HDD and Diagnostic codes (from the Dictionary).
+      Their logos, comments and Summary stay as they are; the Summary counts itself when the file is opened.
+      The template is <code>${SIMS_TEMPLATE.folder}\\${SIMS_TEMPLATE.file}</code> in the shared Audit Builder folder; when SIMS sends a new one, replace that file.</p></div>
+      <div class="actions"><button class="btn primary" id="dlSims" ${r.rows.length ? '' : 'disabled'}>Download SIMS .xlsx</button>
+        <button class="btn ghost" id="dlSimsPick" ${r.rows.length ? '' : 'disabled'} title="Fill a template file you choose instead of the shared one">Other template…</button>
+        <button class="btn" id="dlLocked" ${r.lockedFaulty.length ? '' : 'disabled'}>Download Locked and Faulty .xlsx</button></div>
+    </div>` : `
     <div class="card-head">
       <div><h2>Excel file</h2><p class="hint">Download the selected rows and columns of both sheets as an .xlsx file.</p></div>
       <div class="actions"><button class="btn" id="dlXlsx" ${r.rows.length ? '' : 'disabled'}>Download .xlsx</button></div>
-    </div>
+    </div>`}
   </section>`;
 
   main.querySelectorAll('[data-sheet]').forEach(card => {
     const kind = card.dataset.sheet;
     const { allRows, excluded } = exportSelection(kind);
-    const shown = kind === 'report' && state.hideEmpty.export ? allRows.filter(x => !x._empty) : allRows;
+    const shown = isMainSheet(kind) && state.hideEmpty.export ? allRows.filter(x => !x._empty) : allRows;
     const saveCols = () => store(STORE_EXPORT_COLS, exportPrefs.hiddenCols);
-    const hideEmpty = card.querySelector('#hideEmptyExport');
+    const hideEmpty = card.querySelector('[data-hide-empty]');
     if (hideEmpty) hideEmpty.onchange = () => { state.hideEmpty.export = hideEmpty.checked; render(); };
 
     card.querySelectorAll('[data-col]').forEach(cb => cb.onchange = () => {
@@ -729,18 +789,18 @@ function renderExport(main) {
     });
     // Shift-click: give every row between the last clicked one and this one the same state
     card.querySelectorAll('[data-row]').forEach(cb => cb.onclick = e => {
-      const code = cb.dataset.row, on = cb.checked;
+      const key = cb.dataset.row, on = cb.checked;
       const anchor = exportPrefs.anchor[kind];
-      const a = shown.findIndex(x => x.itemLookup === anchor), b = shown.findIndex(x => x.itemLookup === code);
+      const a = shown.findIndex(x => rowKey(x) === anchor), b = shown.findIndex(x => rowKey(x) === key);
       const range = e.shiftKey && a >= 0 ? shown.slice(Math.min(a, b), Math.max(a, b) + 1) : [shown[b]];
-      for (const x of range) { if (on) excluded.delete(x.itemLookup); else excluded.add(x.itemLookup); }
-      exportPrefs.anchor[kind] = code;
+      for (const x of range) { if (on) excluded.delete(rowKey(x)); else excluded.add(rowKey(x)); }
+      exportPrefs.anchor[kind] = key;
       render();
     });
     card.querySelectorAll('[data-rows]').forEach(btn => btn.onclick = () => {
       const op = btn.dataset.rows;
       for (const x of allRows) {
-        const k = x.itemLookup;
+        const k = rowKey(x);
         if (op === 'all') excluded.delete(k);
         else if (op === 'none') excluded.add(k);
         else if (excluded.has(k)) excluded.delete(k); else excluded.add(k);
@@ -749,7 +809,7 @@ function renderExport(main) {
     });
     const all = card.querySelector('[data-all-rows]');
     if (all) all.indeterminate = excluded.size > 0 && excluded.size < allRows.length;
-    if (all) all.onchange = () => { if (all.checked) excluded.clear(); else allRows.forEach(x => excluded.add(x.itemLookup)); render(); };
+    if (all) all.onchange = () => { if (all.checked) excluded.clear(); else allRows.forEach(x => excluded.add(rowKey(x))); render(); };
     const allCols = card.querySelector('[data-all-cols]');
     if (allCols) allCols.onclick = () => { exportPrefs.hiddenCols[kind] = []; saveCols(); recompute(); render(); };
 
@@ -762,10 +822,61 @@ function renderExport(main) {
     card.querySelector('[data-copy-h]').onclick = () => copy(true);
   });
 
-  $('#dlXlsx').onclick = () => {
-    const sheets = Object.keys(EXPORT_SHEETS).map(kind => { const s = exportSelection(kind); return { name: s.sheet.title, cols: s.cols, rows: s.rows }; });
-    if (!downloadXlsx(sheets, state.project.settings)) toast('Nothing selected to export', 'bad');
+  const settings = state.project.settings;
+  if (!sims) {
+    $('#dlXlsx').onclick = () => {
+      const sheets = exportKinds().map(kind => { const s = exportSelection(kind); return { name: s.sheet.title, cols: s.cols, rows: s.rows }; });
+      if (!downloadXlsx(sheets, settings)) toast('Nothing selected to export', 'bad');
+    };
+    return;
+  }
+  $('#dlSims').onclick = () => downloadSims();
+  $('#dlSimsPick').onclick = () => downloadSims({ pick: true });
+  $('#dlLocked').onclick = () => {
+    const s = exportSelection('locked');
+    if (!downloadXlsx([{ name: s.sheet.title, cols: s.cols, rows: s.rows }], settings, 'Locked and Faulty')) toast('Nothing selected to export', 'bad');
   };
+}
+
+// the SIMS template: Templates\SIMS.xlsx in the shared folder, or a file the person picks
+async function simsTemplate({ pick = false } = {}) {
+  if (!pick && folder.handle) {
+    if (folder.pending) await useFolder(folder.handle, true);
+    if (folder.handle && !folder.pending) {
+      const h = await folderFile(folder.handle, SIMS_TEMPLATE.folder, SIMS_TEMPLATE.file);
+      if (h) return new Uint8Array(await (await h.getFile()).arrayBuffer());
+      toast(`The shared folder has no ${SIMS_TEMPLATE.folder}\\${SIMS_TEMPLATE.file}. Choose the template file.`, 'bad');
+    }
+  } else if (!pick) {
+    toast(`The shared folder isn't connected, so choose the SIMS template file (${SIMS_TEMPLATE.folder}\\${SIMS_TEMPLATE.file}).`);
+  }
+  const file = await pickFile('.xlsx');
+  return file ? new Uint8Array(await file.arrayBuffer()) : null;
+}
+
+function pickFile(accept) {
+  return new Promise(resolve => {
+    const input = Object.assign(document.createElement('input'), { type: 'file', accept });
+    input.onchange = () => resolve(input.files[0] || null);
+    input.oncancel = () => resolve(null);
+    input.click();
+  });
+}
+
+async function downloadSims({ pick = false } = {}) {
+  try {
+    const bytes = await simsTemplate({ pick });
+    if (!bytes) return;
+    const items = exportSelection('sims'), hdd = exportSelection('hdd');
+    const value = (k, v) => (k === 'weight' && v !== '' && v != null && !Number.isNaN(Number(v)) ? Number(v) : v ?? '');
+    const out = fillSimsTemplate(bytes, {
+      items: items.rows.map(row => SIMS_COLUMNS.map(([k]) => (items.hidden.has(k) ? '' : value(k, row[k])))),
+      hdd: hdd.rows.map(row => HDD_COLUMNS.map(([k]) => (hdd.hidden.has(k) ? '' : row[k]))),
+      codes: state.models.simsCodes.map(c => [c.category, c.code, c.description]),
+    });
+    downloadBytes(out, `${state.project.settings.projectNumber || 'Audit'} - SIMS.xlsx`);
+    toast(`Downloaded the SIMS file: ${plural(items.rows.length, 'item')}, ${plural(hdd.rows.length, 'data carrier')}`);
+  } catch (err) { toast(`Couldn't fill the SIMS template: ${err.message}`, 'bad'); }
 }
 
 // checks for the Google Sheet rows pasted on the Data tab (shown on the Review tab)
@@ -819,7 +930,25 @@ const MODEL_TABS = {
     cols: [['_', 'Remove this text']] },
   diagCodes: { label: 'Diagnostic codes', key: 'diagCodes', hint: 'Type a code (e.g. LM) in any diagnostics field and the report shows the description instead. Case-sensitive.',
     cols: [['code', 'Code'], ['description', 'Description']], unique: 'code' },
+  // used only when a project's output is SIMS
+  simsDiag: { label: 'SIMS diagnostics', key: 'simsAliases', custom: nav => renderSimsDiag(nav), count: () => state.models.simsAliases.filter(a => String(a.aliases ?? '').trim()).length,
+    hint: 'Our diagnostics, as they come out in the report, next to the SIMS issue they mean. Every device gets the code of its category: Notebook LPT107, PC BSU107 … Capitals, extra spaces and dashes don\'t matter. A diagnostic on two issues gets both codes (BIOS locked: password protected + no audit). Diagnostics written exactly like a SIMS issue (e.g. Fan defect) work without being listed. Diagnostics with no code go to Item Remark, with the category\'s "see remarks" code.' },
+  simsCodes: { label: 'SIMS codes', key: 'simsCodes', hint: 'The SIMS diagnostic codes per category (from their template). A code ends in the issue number, which means the same in every category (LPT107 and BSU107 are both keyboard defect). Also written to the Diagnostic codes tab of the SIMS file.',
+    cols: [['category', 'Category'], ['code', 'Code'], ['description', 'Description']], unique: 'code', filters: { category: 'category' }, noMove: true },
+  simsCategories: { label: 'SIMS categories', key: 'simsCategories', hint: 'Turns our device type into the SIMS Category column. "Codes from" is the category in SIMS codes whose codes the device gets, when it isn\'t the same (Switch uses Network Switch codes, loose disks use Data Carrier codes). Not case-sensitive.',
+    cols: [['type', 'Our type'], ['category', 'SIMS category'], ['codes', 'Codes from']], unique: 'type', uniqueText: 'Each type can only be used once.', banner: () => simsCategoriesBanner() },
 };
+
+// SIMS categories: rows whose codes aren't in the SIMS codes list, and our types (from Weights) with no SIMS category
+function simsCategoriesBanner() {
+  const m = state.models, norm = v => String(v ?? '').trim().toLowerCase();
+  const codeCats = new Set(m.simsCodes.map(c => norm(c.category)));
+  const bad = m.simsCategories.filter(c => norm(c.category) && !codeCats.has(norm(c.codes || c.category))).map(c => c.codes || c.category);
+  const types = new Set(m.simsCategories.map(c => norm(c.type)));
+  const missing = m.typeWeights.map(t => String(t.type ?? '').trim()).filter(t => t && !types.has(norm(t)) && !codeCats.has(norm(t)));
+  return `${bad.length ? `<div class="banner bad">Not a category in SIMS codes: <b>${esc([...new Set(bad)].join(', '))}</b>. Those devices get no codes.</div>` : ''}
+    ${missing.length ? `<div class="banner bad">Types in Weights with no SIMS category: <b>${esc(missing.join(', '))}</b>.</div>` : ''}`;
+}
 
 // ---------- shared Dictionary file (models.json) ----------
 // One models.json in the shared Drive folder. Everyone connects to it once; the app loads it on start
@@ -830,7 +959,8 @@ const shared = { handle: null, status: canSaveInPlace ? 'off' : 'unsupported', t
 const isModelsData = m => m && ['models', 'typeMap', 'typeWeights', 'cleanupRules', 'diagCodes'].every(k => Array.isArray(m[k]));
 // lists added in later versions: a Dictionary saved before them gets the built-in ones
 function withNewLists(m) {
-  return !m || Array.isArray(m.makeMap) ? m : { ...m, makeMap: structuredClone(defaultModels.makeMap) };
+  const missing = m ? ['makeMap', 'simsCodes', 'simsAliases', 'simsIgnore', 'simsCategories'].filter(k => !Array.isArray(m[k])) : [];
+  return missing.length ? { ...m, ...Object.fromEntries(missing.map(k => [k, structuredClone(defaultModels[k])])) } : m;
 }
 const modelsText = m => JSON.stringify(m, null, 1);
 
@@ -1020,6 +1150,39 @@ function renderShared() {
 
 function renderModels() {
   const t = MODEL_TABS[state.modelsTab];
+  const nav = `<nav class="subtabs">${Object.entries(MODEL_TABS).map(([id, x]) => `${id === 'simsDiag' ? '<span class="subtab-sep">SIMS output:</span>' : ''}<button data-mt="${id}" class="${id === state.modelsTab ? 'active' : ''}">${x.label} <span class="muted">${x.count ? x.count() : state.models[x.key].length}</span></button>`).join('')}</nav>
+    <p class="hint">${esc(t.hint)}</p>`;
+  if (t.custom) t.custom(nav); else renderModelList(t, nav);
+  document.querySelectorAll('[data-mt]').forEach(b => b.onclick = () => { state.modelsTab = b.dataset.mt; renderModels(); });
+}
+
+// filters above the big lists (SIMS codes): text search and a category
+const modelsFilter = id => (state.modelsFilter[id] ??= { q: '', category: '', mapped: false });
+function filterBar(id, { categories, mapped, shown, total }) {
+  const f = modelsFilter(id);
+  return `<div class="pick-bar filter-bar">
+    <input type="search" id="modelsSearch" placeholder="Search…" value="${esc(f.q)}">
+    ${categories ? `<select id="modelsCategory"><option value="">All categories</option>${categories.map(c => `<option ${c === f.category ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>` : ''}
+    ${mapped ? `<label class="check"><input type="checkbox" id="modelsMapped" ${f.mapped ? 'checked' : ''}> ${esc(mapped)}</label>` : ''}
+    <span class="muted">${shown === total ? plural(total, 'row') : `${shown} of ${plural(total, 'row')} shown`}</span>
+  </div>`;
+}
+function attachFilterBar(id) {
+  const f = modelsFilter(id);
+  let timer;
+  const search = $('#modelsSearch');
+  if (search) search.oninput = e => {
+    f.q = e.target.value;
+    clearTimeout(timer);
+    timer = setTimeout(() => { const pos = e.target.selectionStart; renderModels(); const s = $('#modelsSearch'); s.focus(); s.setSelectionRange(pos, pos); }, 150);
+  };
+  const cat = $('#modelsCategory');
+  if (cat) cat.onchange = e => { f.category = e.target.value; renderModels(); };
+  const mapped = $('#modelsMapped');
+  if (mapped) mapped.onchange = e => { f.mapped = e.target.checked; renderModels(); };
+}
+
+function renderModelList(t, nav) {
   const list = state.models[t.key];
   const val = (item, k) => (k === '_' ? item : item[k]);
   // tabs with a unique column (diagnostic codes): find values used more than once
@@ -1029,18 +1192,27 @@ function renderModels() {
   const isDup = item => t.unique && (counts.get(keyOf(item)) || 0) > 1;
   const dups = [...new Set(list.filter(isDup).map(item => String(val(item, t.unique)).trim()))];
 
-  $('#modelsBody').innerHTML = `
-    <nav class="subtabs">${Object.entries(MODEL_TABS).map(([id, x]) => `<button data-mt="${id}" class="${id === state.modelsTab ? 'active' : ''}">${x.label} <span class="muted">${state.models[x.key].length}</span></button>`).join('')}</nav>
-    <p class="hint">${esc(t.hint)}</p>
+  // filtered tabs show only the matching rows (each keeps its place in the list, data-i)
+  const f = t.filters ? modelsFilter(state.modelsTab) : null;
+  const q = f?.q.trim().toLowerCase() || '';
+  const rows = list.map((item, i) => [item, i]).filter(([item]) => !f
+    || ((!f.category || String(item[t.filters.category] ?? '').trim() === f.category)
+    && (!q || t.cols.some(([k]) => String(val(item, k) ?? '').toLowerCase().includes(q)))));
+  const filtering = f && (q || f.category);
+  const categories = t.filters?.category ? [...new Set(list.map(x => String(x[t.filters.category] ?? '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b)) : null;
+
+  $('#modelsBody').innerHTML = `${nav}
+    ${t.banner ? t.banner() : ''}
     ${dups.length ? `<div class="banner bad">Used more than once: <b>${esc(dups.join(', '))}</b>. Only the first one counts. Remove or rename the extra rows (highlighted).</div>` : ''}
+    ${f ? filterBar(state.modelsTab, { categories, shown: rows.length, total: list.length }) : ''}
     <div class="table-wrap tall"><table class="grid">
       <thead><tr><th>#</th>${t.cols.map(([, l]) => `<th>${esc(l)}</th>`).join('')}<th></th></tr></thead>
-      <tbody>${list.map((item, i) => `<tr data-i="${i}" class="${isDup(item) ? 'issue-error' : ''}"><th>${i + 1}</th>${t.cols.map(([k]) => `<td contenteditable="plaintext-only" data-k="${k}">${esc(val(item, k))}</td>`).join('')}
-        <td class="row-tools"><button class="icon-btn" data-up="${i}" title="Move up">↑</button><button class="icon-btn" data-rm="${i}" title="Remove">✕</button></td></tr>`).join('')}
+      <tbody>${rows.map(([item, i]) => `<tr data-i="${i}" class="${isDup(item) ? 'issue-error' : ''}"><th>${i + 1}</th>${t.cols.map(([k]) => `<td contenteditable="plaintext-only" data-k="${k}">${esc(val(item, k))}</td>`).join('')}
+        <td class="row-tools">${t.noMove || filtering ? '' : `<button class="icon-btn" data-up="${i}" title="Move up">↑</button>`}<button class="icon-btn" data-rm="${i}" title="Remove">✕</button></td></tr>`).join('')}
       </tbody></table></div>
     <button class="btn" id="modelsAdd">Add row</button>`;
 
-  document.querySelectorAll('[data-mt]').forEach(b => b.onclick = () => { state.modelsTab = b.dataset.mt; renderModels(); });
+  if (f) attachFilterBar(state.modelsTab);
   const save = () => { saveModels(); };
   document.querySelectorAll('#modelsBody td[data-k]').forEach(td => {
     td.onblur = () => {
@@ -1050,7 +1222,7 @@ function renderModels() {
         if (other >= 0) {
           // not allowed: put the old value back and point at the existing row
           td.textContent = val(list[i], k) ?? '';
-          toast(`${val(list[other], k)} already exists (row ${other + 1}). Each code can only be used once.`, 'bad');
+          toast(`${val(list[other], k)} already exists (row ${other + 1}). ${t.uniqueText || 'Each code can only be used once.'}`, 'bad');
           const tr = document.querySelector(`#modelsBody tr[data-i="${other}"]`);
           tr?.scrollIntoView({ block: 'nearest' });
           tr?.classList.remove('flash'); void tr?.offsetWidth; tr?.classList.add('flash');
@@ -1059,9 +1231,10 @@ function renderModels() {
       }
       const num = /^(year|screen|weight)$/.test(k) && v !== '' && !Number.isNaN(Number(v)) ? Number(v) : v;
       const before = val(list[i], k);
+      if (before === num || (before ?? '') === v) return;
       if (k === '_') list[i] = v; else list[i][k] = num;
       save();
-      if (k === t.unique && before !== v) renderModels(); // refresh duplicate highlighting
+      if ((k === t.unique && before !== v) || t.banner) renderModels(); // refresh duplicate highlighting / warnings
     };
     td.onkeydown = gridKeys;
   });
@@ -1071,11 +1244,72 @@ function renderModels() {
     [list[i - 1], list[i]] = [list[i], list[i - 1]]; save(); renderModels();
   });
   $('#modelsAdd').onclick = () => {
-    list.push(t.key === 'cleanupRules' ? '' : Object.fromEntries(t.cols.map(([k]) => [k, ''])));
+    const row = t.key === 'cleanupRules' ? '' : Object.fromEntries(t.cols.map(([k]) => [k, '']));
+    // a new SIMS code starts in the category being looked at
+    if (f) { if (f.category) row[t.filters.category] = f.category; f.q = ''; }
+    list.push(row);
     save(); renderModels();
     const cells = document.querySelectorAll('#modelsBody tbody tr:last-child td[data-k]');
-    cells[0]?.scrollIntoView({ block: 'nearest' }); cells[0]?.focus();
+    const cell = [...cells].find(c => !c.textContent) || cells[0];
+    cell?.scrollIntoView({ block: 'nearest' }); cell?.focus();
   };
+}
+
+// SIMS diagnostics: one row per SIMS issue (from the SIMS codes), with our diagnostics that mean it.
+// The first row lists diagnostics that are left out of the SIMS output altogether (e.g. Ok).
+function renderSimsDiag(nav) {
+  const m = state.models;
+  const issues = simsIssues(m);
+  const known = new Set(issues.map(i => i.no));
+  const aliasOf = new Map(m.simsAliases.map(a => [String(a.no).trim(), String(a.aliases ?? '')]));
+  // our diagnostics on an issue number the SIMS codes don't have (any more)
+  const orphans = [...aliasOf].filter(([no, a]) => !known.has(no) && a.trim()).map(([no, aliases]) => ({ no, description: '(not in SIMS codes)', categories: [], aliases, orphan: true }));
+  const all = [
+    { no: '', description: 'Leave out: no code and nothing in Item Remark', categories: [], aliases: m.simsIgnore.join(', '), ignore: true },
+    ...issues.map(i => ({ ...i, aliases: aliasOf.get(i.no) || '' })), ...orphans,
+  ];
+  const f = modelsFilter('simsDiag');
+  const q = f.q.trim().toLowerCase();
+  const rows = all.filter(r => r.ignore || ((!f.mapped || r.aliases.trim()) && (!q || [r.no, r.description, r.aliases].some(v => v.toLowerCase().includes(q)))));
+  // a diagnostic that is left out but also written on an issue
+  const ignored = new Set(m.simsIgnore.flatMap(splitList).map(normDiag));
+  const clash = [...new Set(m.simsAliases.flatMap(a => splitList(a.aliases)).filter(d => ignored.has(normDiag(d))))];
+  const mappedCount = issues.filter(i => (aliasOf.get(i.no) || '').trim()).length;
+
+  $('#modelsBody').innerHTML = `${nav}
+    ${clash.length ? `<div class="banner bad">Written under "Leave out" and on an issue as well: <b>${esc(clash.join(', '))}</b>. "Leave out" wins; remove one of them.</div>` : ''}
+    ${orphans.length ? `<div class="banner bad">Our diagnostics on issue numbers that aren't in SIMS codes: <b>${esc(orphans.map(o => o.no).join(', '))}</b>. They give no code; move them to an issue that exists.</div>` : ''}
+    ${filterBar('simsDiag', { mapped: 'Only issues with our diagnostics', shown: rows.length - 1, total: all.length - 1 })}
+    <div class="table-wrap tall"><table class="grid sims-diag">
+      <thead><tr><th>No.</th><th>SIMS issue</th><th>Our diagnostics <span class="muted">(separate with commas)</span></th><th>Categories</th></tr></thead>
+      <tbody>${rows.map(r => `<tr data-no="${esc(r.no)}" class="${r.ignore ? 'ignore-row' : r.orphan ? 'issue-error' : ''}">
+        <th>${r.ignore ? '—' : esc(r.no)}</th><td class="${r.ignore ? '' : 'muted-cell'}">${esc(r.description)}</td>
+        <td contenteditable="plaintext-only" data-aliases>${esc(r.aliases)}</td>
+        <td class="muted-cell" title="${esc(r.categories.join(', '))}">${r.ignore ? '' : r.categories.length === 1 ? esc(r.categories[0]) : r.categories.length ? `${r.categories.length} categories` : ''}</td></tr>`).join('')}
+      </tbody></table></div>
+    <p class="hint">${plural(mappedCount, 'issue')} with our diagnostics. To add a new SIMS code or category, use the SIMS codes tab.</p>`;
+
+  attachFilterBar('simsDiag');
+  document.querySelectorAll('#modelsBody td[data-aliases]').forEach(td => {
+    td.onblur = () => {
+      const no = td.parentElement.dataset.no, list = splitList(td.textContent);
+      if (no === '') {
+        if (list.join(', ') === m.simsIgnore.join(', ')) return;
+        m.simsIgnore = list;
+      } else {
+        const text = list.join(', ');
+        const i = m.simsAliases.findIndex(a => String(a.no).trim() === no);
+        if ((i >= 0 ? String(m.simsAliases[i].aliases ?? '') : '') === text) return;
+        if (i >= 0 && text) m.simsAliases[i].aliases = text;
+        else if (i >= 0) m.simsAliases.splice(i, 1);
+        else if (text) m.simsAliases.push({ no, aliases: text });
+      }
+      td.textContent = list.join(', ');
+      saveModels();
+      renderModels();
+    };
+    td.onkeydown = gridKeys;
+  });
 }
 
 // ---------- tabs & top-level actions ----------
@@ -1176,6 +1410,7 @@ function init() {
 
   document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => setTab(b.dataset.tab));
   $('#projectChip').onclick = () => openSetup();
+  document.addEventListener('change', e => { if (e.target.matches?.('select[data-output]')) setOutput(e.target.value); });
   $('#btnSave').onclick = () => saveProject();
   $('#btnSaveAs').hidden = !canSaveInPlace;
   $('#btnSaveAs').onclick = () => saveProject({ saveAs: true });

@@ -214,6 +214,9 @@ const TEXTS = {
   appleIdLock: ['Mac with Activation Lock on', 'Written in Diagnostics and Locked or Faulty'],
   remoteLocked: ['Mac with a remote management lock', 'Written in Diagnostics and Locked or Faulty'],
   batteryService: ['Mac whose battery health says Service', 'Written in Diagnostics'],
+  simsErased: ['SIMS output: Blancco Result for a passed erasure', 'Written once per erased disk, e.g. "Erased Erased"'],
+  simsNotErased: ['SIMS output: Blancco Result for a failed erasure', ''],
+  simsNoSpecs: ['SIMS output: Purchase Description with no CPU, RAM or disk', ''],
 };
 const ERASURE = {
   passText: ['Blancco result for a passed erasure', 'A result starting with this gets the Data Destruction Method, and "Yes" under Wiped on Locked and Faulty'],
