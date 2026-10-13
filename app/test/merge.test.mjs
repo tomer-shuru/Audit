@@ -1,43 +1,86 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseTsv, mergeWithSheet } from '../src/ui/merge.js';
+import { parseTsv, readSheetRows } from '../src/ui/merge.js';
+import { buildReport } from '../src/engine/report.js';
+import { buildSims } from '../src/engine/sims.js';
+import models from '../src/data/default-models.json' with { type: 'json' };
 
 const cols = [['item', 'ITEM'], ['sn', 'S.N.'], ['type', 'Type']];
-const row = (n, sn) => ({ itemLookup: `BM${String(n).padStart(2, '0')}`, item: `ITD-SHR1-BM${String(n).padStart(2, '0')}`, sn, type: 'Laptop' });
-const items = m => m.rows.map(r => [r.item, r.sn, r._sheet ? 'sheet' : 'app']);
 
 test('Google Sheets copies with quoted cells are read as-is', () => {
   assert.deepEqual(parseTsv('a\t"x\ty"\t"say ""hi"""\r\n"two\nlines"\t\tc\n'), [['a', 'x\ty', 'say "hi"'], ['two\nlines', '', 'c']]);
 });
 
-test('rows already in the sheet take the place of the app rows for the same item', () => {
-  const m = mergeWithSheet({ sheetText: 'ITD-SHR1-BM02\tSHEET-SN\tDesktop\n\n', cols, rows: [row(1, 'A'), row(2, 'B'), row(3, 'C')], prefix: 'BM' });
-  assert.deepEqual(items(m), [['ITD-SHR1-BM01', 'A', 'app'], ['ITD-SHR1-BM02', 'SHEET-SN', 'sheet'], ['ITD-SHR1-BM03', 'C', 'app']]);
-  assert.equal(m.rows[1].type, 'Desktop');
-  assert.deepEqual(m.skipped, ['BM02']);
-  assert.deepEqual(m.sheetCodes, ['BM02']);
-});
-
-test('headers are left out, rows without a code go last, sort is numeric', () => {
-  const sheetText = 'ITEM\tS.N.\tType\nITD-SHR1-BM10\tX\tDesktop\tnote\nsomething else\nITD-SHR1-BM09\tY\t';
-  const m = mergeWithSheet({ sheetText, cols, rows: [row(1, 'A'), row(11, 'K')], prefix: 'bm' });
-  assert.deepEqual(m.rows.map(r => r.item), ['ITD-SHR1-BM01', 'ITD-SHR1-BM09', 'ITD-SHR1-BM10', 'ITD-SHR1-BM11', 'something else']);
+test('sheet rows become records per item code; headers, rows without a code and repeats are counted', () => {
+  const sheetText = 'ITEM\tS.N.\tType\nITD-SHR1-BM10\tX\tDesktop\tnote\nsomething else\nITD-SHR1-BM09\tY\t\nITD-SHR1-BM10\tZ\tLaptop\n';
+  const m = readSheetRows({ sheetText, cols, prefix: 'bm' });
+  assert.deepEqual(m.codes, ['BM09', 'BM10']);
+  assert.deepEqual(m.records.BM10, { item: 'ITD-SHR1-BM10', sn: 'X', type: 'Desktop' }); // the first row of a code counts
+  assert.deepEqual(m.records.BM09, { item: 'ITD-SHR1-BM09', sn: 'Y', type: '' });
   assert.equal(m.headerRows, 1);
   assert.equal(m.otherRows, 1);
-  assert.equal(new Set(m.rows.map(r => r.itemLookup)).size, 5); // every row can be ticked on its own
+  assert.deepEqual(m.duplicates, ['BM10']);
 });
 
 test('the item code is found in another column when ITEM is not exported', () => {
-  const m = mergeWithSheet({ sheetText: 'SN1\tBM05\n', cols: [['sn', 'S.N.'], ['asset', 'Asset']], rows: [{ itemLookup: 'BM05', sn: 'Z' }], prefix: 'BM' });
-  assert.deepEqual(m.sheetCodes, ['BM05']);
-  assert.deepEqual(m.rows.map(r => [r.sn, r.asset]), [['SN1', 'BM05']]);
+  const m = readSheetRows({ sheetText: 'SN1\tBM05\n', cols: [['sn', 'S.N.'], ['asset', 'Asset']], prefix: 'BM' });
+  assert.deepEqual(m.codes, ['BM05']);
+  assert.deepEqual(m.records.BM05, { sn: 'SN1', asset: 'BM05' });
 });
 
 test('without a prefix, numbers are only taken as item codes from the ITEM column', () => {
-  const rows = [{ itemLookup: '01', item: 'ITD-SHR1-01', sn: 'A' }, { itemLookup: '2', item: 'ITD-SHR1-2', sn: 'B' }];
-  const m = mergeWithSheet({ sheetText: 'ITD-SHR1-02\tSHEET\n', cols: [['item', 'ITEM'], ['sn', 'S.N.']], rows, prefix: '' });
-  assert.deepEqual(m.rows.map(r => [r.item, r.sn]), [['ITD-SHR1-01', 'A'], ['ITD-SHR1-02', 'SHEET']]);
-  assert.deepEqual(m.skipped, ['2']);
-  const noItemCol = mergeWithSheet({ sheetText: '2020\t7\n', cols: [['sn', 'S.N.'], ['year', 'Year']], rows: [], prefix: '' });
-  assert.deepEqual(noItemCol.sheetCodes, []);
+  const m = readSheetRows({ sheetText: 'ITD-SHR1-02\tSHEET\n', cols: [['item', 'ITEM'], ['sn', 'S.N.']], prefix: '' });
+  assert.deepEqual(m.codes, ['2']);
+  assert.deepEqual(readSheetRows({ sheetText: '2020\t7\n', cols: [['sn', 'S.N.'], ['year', 'Year']], prefix: '' }).codes, []);
+});
+
+// the sheet is the last input: every other input wins where it has a value, the sheet fills in the rest
+const project = (extra = {}) => ({
+  settings: { projectNumber: 'SHR1', prefix: 'BM', endClient: 'X' },
+  inputs: { reports: '', blanccoFiles: [] }, manual: {}, overrides: {}, simsOverrides: {}, ...extra,
+});
+const blancco = rows => ({ blanccoFiles: [{ name: 'b.csv', table: [
+  ['Device Identifier', 'System serial', 'System manufacturer', 'System model', 'Asset Tag', 'Erasure state', 'System chassis type', 'CPU model', 'Comment'],
+  ...rows] }] });
+
+test('Blancco wins over the sheet where it has a value; an empty Blancco value keeps the sheet\'s', () => {
+  const sheet = { BM01: { sn: 'SHEET-SN', asset: '4004001', model: 'Sheet model', cpu: 'i5-SHEET', diagnostics: 'Chassis damage B', weight: '1.7', comments: 'from sheet' } };
+  const p = project({ inputs: blancco([['BM01', 'CSV-SN', 'Dell Inc.', 'Latitude 5420', '', 'Successful', 'Notebook', '', 'LM C']]) });
+  const r = buildReport(p, models, undefined, sheet).rows[0];
+  assert.equal(r.sn, 'CSV-SN');          // Blancco has it
+  assert.equal(r.model, 'Latitude 5420');
+  assert.equal(r.asset, '4004001');      // Blancco's is empty: the sheet's stays
+  assert.equal(r.cpu, 'i5-SHEET');
+  assert.equal(r.diagnostics, 'Label marks C'); // Blancco has diagnostics, so they win
+  assert.equal(r.weight, '1.7');         // the sheet's weight comes before the type's usual weight
+  assert.equal(r.comments, 'from sheet');
+  assert.deepEqual(r._fromSheet.sort(), ['asset', 'comments', 'cpu', 'weight']);
+  assert.ok(r._sources.sheet && r._sources.blancco);
+});
+
+test('manual entries and Review edits win over the sheet; an item only in the sheet is a normal row', () => {
+  const sheet = { BM01: { sn: 'SHEET-SN', type: 'Laptop', diagnostics: 'Outdated' }, BM02: { sn: 'ONLY-SHEET', type: 'Desktop SFF', diagnostics: 'Ok' } };
+  const p = project({ manual: { BM01: { sn: 'MANUAL-SN' } }, overrides: { BM02: { diagnostics: 'Dead' } } });
+  const [a, b] = buildReport(p, models, undefined, sheet).rows;
+  assert.equal(a.sn, 'MANUAL-SN');
+  assert.equal(a.diagnostics, 'Outdated');
+  assert.equal(a.weight, 2); // no weight anywhere: the type's usual one
+  assert.equal(b.itemLookup, 'BM02');
+  assert.equal(b.sn, 'ONLY-SHEET');
+  assert.equal(b.diagnostics, 'Dead');
+  assert.ok(b._edited.includes('diagnostics') && !b._fromSheet.includes('diagnostics'));
+  assert.ok(b._fromSheet.includes('sn'));
+});
+
+test('SIMS: a SIMS column the app has nothing for comes from the SIMS sheet rows', () => {
+  const sheet = { BM01: { item: 'ITD-SHR1-BM01', sn: 'S1', category: 'Notebook', modelLine: 'Apple,Pro A1502,13', purchase: 'i5,8 GB,256 GB SSD', diagnostics: 'Bios Locked', codes: 'LPT151,LPT131', grade: 'B', erased: 'Erased' } };
+  const p = project({ manual: { BM01: { type: 'Laptop', make: 'Apple', model: 'Pro A2251' } } });
+  const report = buildReport(p, models, undefined, sheet);
+  const row = buildSims(report, p, models, undefined, sheet).rows[0];
+  assert.equal(row.modelLine, 'Apple,Pro A2251');     // the app has it
+  assert.equal(row.purchase, 'i5,8 GB,256 GB SSD');   // the app has no CPU / RAM / disk ("n/a"): the sheet's
+  assert.equal(row.codes, 'LPT131,LPT151');           // made from the diagnostics (which came from the sheet)
+  assert.equal(row.grade, 'B');
+  assert.equal(row.erased, 'Erased');
+  assert.ok(row._fromSheet.includes('purchase') && row._fromSheet.includes('diagnostics') && !row._fromSheet.includes('modelLine'));
 });

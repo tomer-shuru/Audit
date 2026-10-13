@@ -48,13 +48,19 @@ test('diagnostics become the codes of the category', () => {
   assert.equal(translateDiagnostics('BIOS locked', notebook, lk).codes, 'LPT131,LPT151');
   // written like the SIMS issue itself
   assert.equal(translateDiagnostics('Fan defect', notebook, lk).codes, 'LPT083');
+  // "Key * defect": any key
+  for (const d of ['Key P defect', 'Key Capslock defect', 'key ctrl  DEFECT', 'Key left shift defect']) assert.equal(translateDiagnostics(d, notebook, lk).codes, 'LPT107', d);
+  assert.equal(translateDiagnostics('Key defect', notebook, lk).codes, 'LPT172'); // needs a word in between
+  assert.equal(translateDiagnostics('Keyboard defect', notebook, lk).codes, 'LPT107'); // the SIMS issue itself
+  assert.equal(translateDiagnostics('Liquid marks, Battery Service', notebook, lk).codes, 'LPT116,LPT014');
+  assert.equal(translateDiagnostics('Liquid marks', lk.codesFor('Monitor TFT'), lk).codes, 'TFT116');
 });
 
 test('diagnostics without a code go to Item Remark with "see remarks"; Ok is left out; codes only once', () => {
-  const t = translateDiagnostics('Screen scratches B, Display B, Liquid marks, Speaker defect, Chassis damage C', notebook, lk);
+  const t = translateDiagnostics('Screen scratches B, Display B, Physical desertion, Speaker defect, Chassis damage C', notebook, lk);
   assert.equal(t.codes, 'LPT077,LPT057,LPT032,LPT172');
-  assert.equal(t.remark, 'Liquid marks,Speaker defect');
-  assert.deepEqual(t.unknown, ['Liquid marks']);
+  assert.equal(t.remark, 'Physical desertion,Speaker defect');
+  assert.deepEqual(t.unknown, ['Physical desertion']);
   assert.deepEqual(t.missing, [{ diag: 'Speaker defect', nos: ['178'] }]); // a SIMS issue, but notebooks have no code for it
   assert.deepEqual(translateDiagnostics('Ok', notebook, lk), { codes: '', remark: '', unknown: [], missing: [] });
   assert.equal(translateDiagnostics('Battery C, Battery D, Ok', notebook, lk).codes, 'LPT014');
@@ -78,7 +84,7 @@ test('Blancco result, Purchase Description', () => {
 test('SIMS rows from the report, with SIMS edits and checks', () => {
   const p = project({
     manual: {
-      GG01: { sn: 'C02', asset: '3878696', type: 'Laptop', make: 'Apple', model: 'Pro A2251', screen: '13', year: '2020', cpu: 'i7', ram: '32 GB', disk: '2 TB SSD', diagnostics: 'Liquid marks, Chassis damage C', blancco: 'Pass' },
+      GG01: { sn: 'C02', asset: '3878696', type: 'Laptop', make: 'Apple', model: 'Pro A2251', screen: '13', year: '2020', cpu: 'i7', ram: '32 GB', disk: '2 TB SSD', diagnostics: 'Physical desertion, Chassis damage C', blancco: 'Pass' },
       GG02: { sn: 'X1', type: 'Smart board', diagnostics: 'Outdated' },
       GG03: { sn: 'X2', type: 'Monitor', diagnostics: 'Outdated', snDataCarrier: 'S66X, W620' },
     },
@@ -93,7 +99,7 @@ test('SIMS rows from the report, with SIMS edits and checks', () => {
   assert.equal(a.category, 'Tablet');
   assert.equal(a._base.category, 'Notebook');
   assert.equal(a.codes, 'TAB032,TAB172'); // codes of the typed category
-  assert.equal(a.remark, 'Liquid marks');
+  assert.equal(a.remark, 'Physical desertion');
   assert.equal(a.modelLine, 'Apple,Pro A2251,13,2020');
   assert.equal(a.purchase, 'i7,32 GB,2 TB SSD');
   assert.equal(a.erased, 'Erased');
@@ -104,7 +110,7 @@ test('SIMS rows from the report, with SIMS edits and checks', () => {
   assert.equal(c.codes, 'TFT144');
   assert.equal(c.remark, 'checked');
   const texts = s.warnings.map(w => w.text);
-  assert.ok(texts.some(t => t.includes('"Liquid marks" has no SIMS code') && t.includes('GG01')));
+  assert.ok(texts.some(t => t.includes('"Physical desertion" has no SIMS code') && t.includes('GG01')));
   assert.ok(texts.some(t => t.includes('type "Smart board" has no SIMS category')));
   assert.deepEqual(hddRows(buildReport(p, models).rows).map(r => [r.item, r.serial]), [['ITD-SHR1-GG03', 'S66X'], ['ITD-SHR1-GG03', 'W620']]);
 });

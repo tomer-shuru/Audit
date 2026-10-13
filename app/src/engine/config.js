@@ -33,7 +33,8 @@ export const CHECKS = {
   simsNoCode: 'SIMS output: a diagnostic has no SIMS code (it goes to Item Remark)',
   simsNoCategory: 'SIMS output: a device type has no SIMS category or codes',
 };
-export const CHECK_LEVELS = ['error', 'warn', 'info', 'off'];
+// sims (blue): SIMS output notes, kept apart from the warnings
+export const CHECK_LEVELS = ['error', 'warn', 'info', 'sims', 'off'];
 
 export const DEFAULT_CONFIG = {
   version: 1,
@@ -81,7 +82,7 @@ export const DEFAULT_CONFIG = {
     outsideNumbering: 'warn', numberingStart: 'warn', belowStart: 'warn', numberingGaps: 'warn',
     unknownMacModel: 'warn', cpuNotShortened: 'warn', erasureFailed: 'error', noErasureMac: 'warn',
     noErasureWindows: 'info', diagnosticsEmpty: 'warn', duplicateAsset: 'warn',
-    simsNoCode: 'warn', simsNoCategory: 'warn',
+    simsNoCode: 'sims', simsNoCategory: 'sims',
   },
   reportColumns: REPORT.map(([key, label]) => ({ key, label })),
   lockedColumns: LOCKED.map(([key, label]) => ({ key, label })),

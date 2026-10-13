@@ -7,20 +7,40 @@
 <style>/*CSS*/</style>
 </head>
 <body>
+<!-- menu bar, like a Windows program: File, Settings, Tools -->
+<nav class="menubar" id="menubar">
+  <div class="menu">
+    <button class="menu-btn" aria-haspopup="menu" aria-expanded="false">File</button>
+    <div class="menu-list" role="menu">
+      <button role="menuitem" id="btnNew">New project</button>
+      <button role="menuitem" id="btnOpen" title="Open a saved project (.audit.json) or import an old Audit.xlsm">Open…</button>
+      <hr>
+      <button role="menuitem" id="btnSave">Save project<kbd>Ctrl+S</kbd></button>
+      <button role="menuitem" id="btnSaveAs" title="Save to a different file">Save as…<kbd>Ctrl+Shift+S</kbd></button>
+    </div>
+  </div>
+  <div class="menu">
+    <button class="menu-btn" aria-haspopup="menu" aria-expanded="false">Settings</button>
+    <div class="menu-list" role="menu">
+      <button role="menuitem" id="btnModels" title="Models, make names, types, weights, diagnostic codes and the SIMS lists used to build the report">Dictionary…</button>
+      <button role="menuitem" id="btnDev" title="Developer mode: change the rules the report is built with (password)">DevMode…</button>
+    </div>
+  </div>
+  <div class="menu">
+    <button class="menu-btn" aria-haspopup="menu" aria-expanded="false">Tools</button>
+    <div class="menu-list" role="menu">
+      <button role="menuitem" id="btnBios" title="Passwords from Microsoft's BulkBiosPasswordDetails file, matched to the items, with QR codes">Microsoft BIOS passwords…</button>
+    </div>
+  </div>
+  <div class="spacer"></div>
+  <button class="btn ghost theme-btn" id="btnTheme" aria-label="Toggle light or dark mode"></button>
+</nav>
 <header class="topbar">
-  <div class="brand">Audit Builder <span class="version" title="Version of this app. Compare with the newest zip in the shared folder.">{{VERSION}}</span></div>
+  <div class="brand">Audit Builder <span class="version" title="Version of this app">{{VERSION}}</span></div>
   <button id="projectChip" class="project-chip" title="Edit project settings"></button>
   <label class="output-pick" title="Which sheet layout Review and Export use: ours (Shuru) or a contractor's (SIMS). Saved with the project; the data stays the same.">Output
     <select data-output><option value="shuru">Shuru</option><option value="sims">SIMS</option></select></label>
   <span id="saveState" class="save-state"></span>
-  <div class="spacer"></div>
-  <button class="btn ghost" id="btnNew">New</button>
-  <button class="btn ghost" id="btnOpen" title="Open a saved project (.audit.json) or import an old Audit.xlsm">Open…</button>
-  <button class="btn" id="btnSave" title="Save (Ctrl+S)">Save project</button>
-  <button class="btn ghost" id="btnSaveAs" title="Save to a different file (Ctrl+Shift+S)">Save as…</button>
-  <button class="btn ghost" id="btnModels" title="Models, make names, types, weights and diagnostic codes used to build the report">Dictionary</button>
-  <button class="btn ghost" id="btnDev" title="Developer mode: change the rules the report is built with (password)">DevMode</button>
-  <button class="btn ghost theme-btn" id="btnTheme" aria-label="Toggle light or dark mode"></button>
   <input type="file" id="openFile" accept=".json,.xlsm,.xlsx" hidden>
 </header>
 
@@ -74,6 +94,21 @@
     <select data-output><option value="shuru">Shuru</option><option value="sims">SIMS</option></select></label><button class="btn primary" id="exportClose">Done</button></div>
   </div>
   <div id="exportBody"></div>
+</dialog>
+
+<dialog id="biosDialog" class="full">
+  <div class="dialog-head">
+    <div><h2>Microsoft BIOS passwords</h2><p class="hint">Load the BulkBiosPasswordDetails .txt file from Microsoft. Each asset tag is matched to its item; select a device to get a QR code of its password.
+      The passwords are not saved with the project.</p></div>
+    <div class="actions">
+      <button class="btn" id="biosLoad">Load password file…</button>
+      <button class="btn" id="biosCopy" title="Copy the list to paste into a sheet">Copy with headers</button>
+      <button class="btn" id="biosXlsx">Download .xlsx</button>
+      <button class="btn primary" id="biosClose">Done</button>
+    </div>
+  </div>
+  <div id="biosBody"></div>
+  <input type="file" id="biosFile" accept=".txt,.csv,text/plain" hidden>
 </dialog>
 
 <dialog id="devLogin">

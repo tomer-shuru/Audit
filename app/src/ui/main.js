@@ -7,9 +7,11 @@ import {
   readTableFiles, parsePastedTable, importWorkbook, downloadXlsx, toTsv,
   copyText, downloadJson, readJsonFile,
 } from './io.js';
-import { mergeWithSheet } from './merge.js';
+import { readSheetRows } from './merge.js';
 import { buildSims, hddRows, simsIssues, splitList, normDiag, SIMS_COLUMNS, SIMS_SHARED, HDD_COLUMNS, simsEditable } from '../engine/sims.js';
 import { fillSimsTemplate, downloadBytes, SIMS_TEMPLATE } from './simstemplate.js';
+import { parseBiosPasswords, matchBiosPasswords } from '../engine/biospw.js';
+import qrcode from 'qrcode-generator';
 import { initDevMode, STORE_CONFIG, attachConfigFile, reconnectConfigFile, renderConfigBar } from './devmode.js';
 import { grid } from './grid.js';
 import {
@@ -82,11 +84,21 @@ function setOutput(value) {
 }
 
 function recompute() {
-  state.report = buildReport(state.project, state.models, state.config);
+  state.sheet = readSheet();
+  const sheet = state.sheet?.records ?? null;
+  state.report = buildReport(state.project, state.models, state.config, sheet);
   // the SIMS layout is made from the finished report rows; its checks join the report's
-  state.sims = isSims() ? buildSims(state.report, state.project, state.models, state.config) : null;
+  state.sims = isSims() ? buildSims(state.report, state.project, state.models, state.config, sheet) : null;
   if (state.sims) state.report.warnings.push(...state.sims.warnings);
-  mergeSheetRows();
+  if (state.sheet) state.report.warnings.push(...sheetWarnings(state.sheet));
+}
+
+// Rows already in the Google Sheet (Data tab): one more input for the report, the last in line. They are
+// read with the columns ticked in the Export window (of the chosen output), the way they get pasted back.
+function readSheet() {
+  const text = state.project.inputs.sheet;
+  if (!text.trim()) return null;
+  return readSheetRows({ sheetText: text, cols: exportCols(isSims() ? 'sims' : 'report'), prefix: state.project.settings.prefix, itemPrefix: state.config.texts.itemPrefix });
 }
 // the rows of the chosen output (Shuru: the Audit Report, SIMS: the SIMS rows)
 const outputRows = () => state.sims?.rows ?? state.report.rows;
@@ -94,32 +106,15 @@ const outputRows = () => state.sims?.rows ?? state.report.rows;
 const reviewColumns = () => (isSims() ? [['itemLookup', 'Item Lookup'], ...SIMS_COLUMNS.map(([k, l, name]) => [k, name ?? l])] : reportColumns(state.config));
 const isEditable = k => (isSims() ? k !== 'itemLookup' && simsEditable(k) : EDITABLE.has(k));
 
-// Rows already in the Google Sheet (Data tab) take the place of the report rows for the same items.
-// They are lined up with the Audit Report columns ticked in the Export window, the way they get pasted back.
-// state.merge.rows is then the full list shown on Review and Export; its checks join the report's warnings.
-function mergeSheetRows() {
-  state.merge = null;
-  const r = state.report;
-  if (!state.project.inputs.sheet.trim()) return;
-  const cols = exportCols(isSims() ? 'sims' : 'report');
-  const m = mergeWithSheet({ sheetText: state.project.inputs.sheet, cols, rows: outputRows(), prefix: state.project.settings.prefix, itemPrefix: state.config.texts.itemPrefix });
-  state.merge = m;
-  // the app's rows for items the sheet already has aren't used, so neither are their checks
-  const skipped = new Set(m.skipped);
-  const keys = m.rows.map(x => (x._sheet ? x._sheet.code : itemKey(x.itemLookup))).filter(Boolean);
-  r.warnings = r.warnings.filter(w => !(w.items ? w.items.every(i => skipped.has(i)) : skipped.has(w.item)) && w.kind !== 'numbering');
-  r.warnings.push(...numberingChecks(state.project.settings, keys, state.config));
-  r.warnings.push(...sheetWarnings(m));
-}
-// all rows of the Audit Report (with the Google Sheet rows), plus an empty row for every item number
-// from the first item number (project setup) up to the highest one that has no data, so the list lines up
-const reportRows = () => withEmptyRows(state.merge?.rows ?? outputRows());
+// all rows of the chosen output, plus an empty row for every item number from the first item number
+// (project setup) up to the highest one that has no data, so the list lines up with the sheet
+const reportRows = () => withEmptyRows(outputRows());
 
 function withEmptyRows(rows) {
   const settings = state.project.settings;
   const byNumber = new Map(), rest = [];
   for (const row of rows) {
-    const key = row._sheet ? row._sheet.code : itemKey(row.itemLookup);
+    const key = itemKey(row.itemLookup);
     const n = key ? codeNumber(settings, key) : null;
     if (n === null) rest.push(row);
     else { if (!byNumber.has(n)) byNumber.set(n, []); byNumber.get(n).push(row); }
@@ -208,13 +203,13 @@ function renderChrome() {
   document.querySelectorAll('select[data-output]').forEach(sel => { sel.value = s.output || 'shuru'; });
   saved.title = state.fileName ? `Save (Ctrl+S) writes to ${state.fileName}` : 'Save (Ctrl+S) will ask where to save the project file';
   // Review shows how many checks there are: red = problems, yellow = warnings, gray = notes
-  const levels = { error: 'problem', warn: 'warning', info: 'note' };
+  const levels = { error: 'problem', warn: 'warning', sims: 'SIMS note', info: 'note' };
   const checks = Object.entries(levels).map(([l, word]) => {
     const n = r.warnings.filter(w => w.level === l).length;
     return n ? `<span class="badge ${l}" title="${plural(n, word)}">${n}</span>` : '';
   }).join('');
   const counts = {
-    data: r.counts.mac + r.counts.win + r.counts.blancco + (state.merge?.sheetCodes.length || 0) || '',
+    data: r.counts.mac + r.counts.win + r.counts.blancco + (state.sheet?.codes.length || 0) || '',
     manual: r.counts.manual || '',
     review: checks,
     export: '',
@@ -320,8 +315,8 @@ function renderData(main) {
     <div class="card-head">
       <div><h2>Rows already in the Google Sheet <span class="muted">optional</span></h2>
       <p class="hint">If some items are already filled in the project's Google Sheet, copy those rows there (from the first item row down past the last filled one,
-      same columns as the export) and paste them here.${isSims() ? ' This project\'s output is SIMS, so copy them from the SIMS sheet, columns D (Item No) to T (Blancco Result).' : ''} On Review and in Export they show up in their place and are copied back as they are,
-      instead of Audit Builder's rows for the same items.</p></div>
+      same columns as the export) and paste them here. They are used like the other inputs, last in line: Blancco, the Mac and Windows reports and manual entries
+      win wherever they have a value, and the sheet fills in what they leave empty (green cells on Review). Review edits and manual entries can change them.${isSims() ? ' This project\'s output is SIMS, so copy them from the SIMS sheet, columns D (Item No) to T (Blancco Result).' : ''} </p></div>
       ${inp.sheet.trim() ? '<div class="actions"><button class="btn ghost" id="sheetClear">Clear</button></div>' : ''}
     </div>
     <textarea id="sheetInput" class="mono" rows="4" spellcheck="false" placeholder="Paste the Google Sheet rows here">${esc(inp.sheet)}</textarea>
@@ -389,9 +384,9 @@ function reportsStatus(text) {
 }
 
 function sheetStatus() {
-  const m = state.merge;
+  const m = state.sheet;
   if (!m) return 'Nothing pasted';
-  return `${plural(m.sheetCodes.length, 'row')} with an item code`;
+  return `${plural(m.codes.length, 'item')} read from the sheet`;
 }
 
 // ---------- Manual entries tab ----------
@@ -527,7 +522,7 @@ function renderReview(main) {
   // worst warning level per item, used to tint the row (notes don't tint)
   const issues = new Map();
   for (const w of r.warnings) {
-    if (!w.item || w.level === 'info') continue;
+    if (!w.item || w.level === 'info' || w.level === 'sims') continue; // notes don't tint rows
     const cur = issues.get(w.item) || { level: 'warn', texts: [] };
     if (w.level === 'error') cur.level = 'error';
     cur.texts.push(w.text);
@@ -542,14 +537,15 @@ function renderReview(main) {
     !(state.hideEmpty.review && row._empty) &&
     (!state.reviewIssuesOnly || issueItems.has(row.itemLookup) || row.locked || row._empty) &&
     (!q || REPORT_COLUMNS.some(([k]) => String(row[k] ?? '').toLowerCase().includes(q))));
-  const levelIcon = { error: '✖', warn: '!', info: 'i' };
+  const levelIcon = { error: '✖', warn: '!', sims: 'S', info: 'i' };
+  const levelWord = { error: 'problem', warn: 'warning', sims: 'SIMS note', info: 'note' };
 
   main.innerHTML = `
   ${r.warnings.length ? `
   <section class="card warnings">
     <details ${r.warnings.some(w => w.level === 'error') ? 'open' : ''}>
       <summary><h2>Checks</h2>
-        ${['error', 'warn', 'info'].map(l => { const n = r.warnings.filter(w => w.level === l).length; return n ? `<span class="pill ${l}">${n} ${l === 'error' ? 'problem' + (n > 1 ? 's' : '') : l === 'warn' ? 'warning' + (n > 1 ? 's' : '') : 'note' + (n > 1 ? 's' : '')}</span>` : ''; }).join('')}
+        ${['error', 'warn', 'sims', 'info'].map(l => { const n = r.warnings.filter(w => w.level === l).length; return n ? `<span class="pill ${l}">${n} ${levelWord[l]}${n > 1 ? 's' : ''}</span>` : ''; }).join('')}
       </summary>
       <ul>${r.warnings.map(w => `<li class="${w.level}${w.item ? ' link' : ''}" ${w.item ? `data-goto-item="${esc(w.item)}" title="Show ${esc(w.item)} in the table"` : ''}><span class="lvl">${levelIcon[w.level]}</span>${esc(w.text)}</li>`).join('')}</ul>
     </details>
@@ -559,7 +555,7 @@ function renderReview(main) {
       <div><h2>${sims ? 'SIMS report' : 'Audit Report'}</h2><p class="hint">Works like a spreadsheet: arrow keys, Shift to select, type or double-click to change a cell, Ctrl+C / Ctrl+V, Ctrl+Z to undo.
       Edited cells are highlighted; clear a cell (Delete) to go back to the calculated value.
       ${sims ? 'SIMS layout: columns D (Item No) to T (Blancco Result) of the SIMS sheet. Serial No, asset tag, Diagnostics and weight are the same as in the Shuru layout; changing another column only changes the SIMS output. Codes come from Dictionary › SIMS diagnostics.' : ''}
-      ${state.merge ? `Green rows are already in the ${sims ? 'SIMS' : 'Google'} sheet (pasted on the Data tab) and stay as they are.` : ''}
+      ${state.sheet ? 'Green cells come from the Google Sheet rows on the Data tab (the other inputs had nothing there).' : ''}
       Empty yellow rows are item numbers with no data yet; typing in one adds a manual entry.</p></div>
       <div class="actions">
         <label class="output-pick" title="Which sheet layout Review and Export use: ours (Shuru) or a contractor's (SIMS). Saved with the project; the data stays the same.">Output
@@ -574,12 +570,12 @@ function renderReview(main) {
     <div class="table-wrap tall">
       <table class="grid review">
         <thead><tr>${REPORT_COLUMNS.map(([k, l], j) => `<th class="${j === 0 ? 'sticky ' : ''}s${j}" data-hc="${j}">${esc(l)}</th>`).join('')}</tr></thead>
-        <tbody>${rows.map((row, i) => row._sheet ? sheetReviewRow(row, i, issues) : `
+        <tbody>${rows.map((row, i) => `
           <tr data-code="${esc(row.itemLookup)}" class="${row._empty ? 'empty-row issue-warn' : issues.has(row.itemLookup) ? 'issue-' + issues.get(row.itemLookup).level : ''}"${row._empty ? ' title="No data yet for this item"' : ''}>
             ${REPORT_COLUMNS.map(([k], j) => {
               if (!isEditable(k)) return `<th class="${j === 0 ? 'sticky ' : ''}s${j}" data-r="${i}" data-c="${j}" ${j === 0 && issues.has(row.itemLookup) ? `title="${esc(issues.get(row.itemLookup).texts.join('\n'))}"` : ''}>${esc(row[k])}${j === 0 ? sourceBadges(row) : ''}</th>`;
-              const edited = row._edited.includes(k);
-              return `<td data-r="${i}" data-c="${j}" class="${edited ? 'edited' : ''}" ${edited ? `title="Edited. Calculated value: ${esc(row._base[k] || '(empty)')}"` : ''}>${esc(row[k])}</td>`;
+              const edited = row._edited.includes(k), sheet = row._fromSheet?.includes(k);
+              return `<td data-r="${i}" data-c="${j}" class="${edited ? 'edited' : sheet ? 'from-sheet' : ''}" ${edited ? `title="Edited. Calculated value: ${esc(row._base[k] || '(empty)')}"` : sheet ? 'title="From the Google Sheet rows (Data tab)"' : ''}>${esc(row[k])}</td>`;
             }).join('')}
           </tr>`).join('')}
         </tbody>
@@ -598,9 +594,9 @@ function renderReview(main) {
   const table = main.querySelector('table.review');
   if (table) grid('review').attach(table, {
     rows: rows.length, cols: REPORT_COLUMNS.length,
-    value: (r, c) => (c === 0 && rows[r]._sheet ? rows[r]._sheet.code : rows[r][REPORT_COLUMNS[c][0]] ?? ''),
+    value: (r, c) => rows[r][REPORT_COLUMNS[c][0]] ?? '',
     // in SIMS layout, an item with no data yet only takes the columns that are also in the Shuru layout
-    editable: (r, c) => !rows[r]._sheet && isEditable(REPORT_COLUMNS[c][0]) && !(sims && rows[r]._empty && !SIMS_SHARED.has(REPORT_COLUMNS[c][0])),
+    editable: (r, c) => isEditable(REPORT_COLUMNS[c][0]) && !(sims && rows[r]._empty && !SIMS_SHARED.has(REPORT_COLUMNS[c][0])),
     commit: changes => {
       recordEdit();
       const man = state.project.manual;
@@ -638,24 +634,9 @@ function renderReview(main) {
   });
 }
 
-// a row that is already in the Google Sheet: shown as it is, not editable here
-function sheetReviewRow(row, i, issues) {
-  const REPORT_COLUMNS = reviewColumns();
-  const issue = issues.get(row.itemLookup);
-  return `
-    <tr data-code="${esc(row.itemLookup)}" class="from-sheet ${issue ? 'issue-' + issue.level : ''}" title="Already in the ${isSims() ? 'SIMS' : 'Google'} sheet. Change it on the Data tab.">
-      ${REPORT_COLUMNS.map(([k], j) => {
-        const at = `data-r="${i}" data-c="${j}"`;
-        if (j === 0) return `<th class="sticky s0" ${at}>${esc(row._sheet.code || '—')}<span class="badges"><i title="Google Sheet">G</i></span></th>`;
-        if (k === 'item') return `<th class="s${j}" ${at}>${esc(row[k])}</th>`;
-        return `<td ${at}>${esc(row[k])}</td>`;
-      }).join('')}
-    </tr>`;
-}
-
 function sourceBadges(row) {
   const s = row._sources;
-  return `<span class="badges">${s.mac ? '<i title="Mac report">M</i>' : ''}${s.win ? '<i title="Windows report">W</i>' : ''}${s.blancco ? '<i title="Blancco export">B</i>' : ''}${s.manual ? '<i title="Manual entry">H</i>' : ''}</span>`;
+  return `<span class="badges">${s.mac ? '<i title="Mac report">M</i>' : ''}${s.win ? '<i title="Windows report">W</i>' : ''}${s.blancco ? '<i title="Blancco export">B</i>' : ''}${s.manual ? '<i title="Manual entry">H</i>' : ''}${s.sheet ? '<i title="Google Sheet rows (Data tab)">G</i>' : ''}</span>`;
 }
 
 // ---------- Export window ----------
@@ -692,9 +673,8 @@ function exportSelection(kind) {
 }
 
 const EXPORT_HINTS = {
-  report: () => (state.merge ? 'Green rows are already in the Google Sheet and are copied back as they are. Paste at the ITEM cell of the first item row in the Google Sheet.'
-    : 'Untick rows or columns you don\'t want, then copy and paste into the Google Sheet. Your column choice is remembered.'),
-  sims: () => `Columns D (Item No) to T (Blancco Result) of the SIMS sheet: paste at the Item No cell of the first item row.${state.merge ? ' Green rows are already in the SIMS sheet and are copied back as they are.' : ''} Your column choice is remembered.`,
+  report: () => `Untick rows or columns you don't want, then copy and paste at the ITEM cell of the first item row in the Google Sheet.${state.sheet ? ' Values from the Google Sheet rows (Data tab) are included, so pasting back keeps them.' : ''} Your column choice is remembered.`,
+  sims: () => `Columns D (Item No) to T (Blancco Result) of the SIMS sheet: paste at the Item No cell of the first item row.${state.sheet ? ' Values from the sheet rows (Data tab) are included, so pasting back keeps them.' : ''} Your column choice is remembered.`,
   hdd: () => 'One row per data carrier serial (from S.N. Data carrier). Paste under the headers on the HDD tab.',
   locked: () => 'Devices with a lock or fault. Send this list along with the report.',
 };
@@ -745,9 +725,9 @@ function renderExport(main) {
           </tr></thead>
           <tbody>${shown.map(row => {
             const off = excluded.has(rowKey(row));
-            return `<tr class="${off ? 'off' : ''}${row._sheet ? ' from-sheet' : ''}${row._empty ? ' empty-row' : ''}">
-              <th class="sticky pick-col"><input type="checkbox" data-row="${esc(rowKey(row))}" ${off ? '' : 'checked'} title="${esc(row._sheet ? 'Already in the sheet' : row.itemLookup)}"></th>
-              ${sheet.cols().map(([k]) => `<td class="${hidden.has(k) ? 'off' : ''}">${esc(row[k])}</td>`).join('')}
+            return `<tr class="${off ? 'off' : ''}${row._empty ? ' empty-row' : ''}">
+              <th class="sticky pick-col"><input type="checkbox" data-row="${esc(rowKey(row))}" ${off ? '' : 'checked'} title="${esc(row.itemLookup)}"></th>
+              ${sheet.cols().map(([k]) => `<td class="${hidden.has(k) ? 'off' : row._fromSheet?.includes(k) ? 'from-sheet' : ''}">${esc(row[k])}</td>`).join('')}
             </tr>`;
           }).join('')}</tbody>
         </table>
@@ -884,14 +864,12 @@ function sheetWarnings(m) {
   const settings = state.project.settings;
   const list = codes => (codes.length > 12 ? `${codes.slice(0, 12).join(', ')} and ${codes.length - 12} more` : codes.join(', '));
   const out = [];
-  if (!m.sheetCodes.length) {
+  if (!m.codes.length) {
     out.push({ level: 'error', text: `Google Sheet rows (Data tab): no item codes found. Copy them including the ITEM column (codes like ${itemName(settings, itemCode(settings, 1), state.config)}).` });
     return out;
   }
-  const sheetRow = code => m.rows.find(x => x._sheet?.code === itemKey(code))?.itemLookup;
-  for (const code of m.skipped) out.push({ level: 'info', item: sheetRow(code), text: `${code}: already in the Google Sheet, so the sheet's row is used` });
-  if (m.duplicates.length) out.push({ level: 'warn', text: `Google Sheet rows: ${list(m.duplicates)} more than once. Every copy is kept.` });
-  if (m.otherRows) out.push({ level: 'warn', text: `Google Sheet rows: ${plural(m.otherRows, 'row')} without an item code moved to the bottom` });
+  if (m.duplicates.length) out.push({ level: 'warn', item: m.duplicates[0], text: `Google Sheet rows: ${list(m.duplicates)} more than once. Only the first row of each is used.` });
+  if (m.otherRows) out.push({ level: 'warn', text: `Google Sheet rows: ${plural(m.otherRows, 'row')} without an item code left out. Pasting back over the same range will replace ${m.otherRows === 1 ? 'it' : 'them'}.` });
   if (m.headerRows) out.push({ level: 'info', text: `Google Sheet rows: ${plural(m.headerRows, 'row')} above the first item (headers) left out` });
   if (m.lineBreaks) out.push({ level: 'info', text: 'Google Sheet rows: some cells have line breaks; they will be pasted on one line' });
   return out;
@@ -932,7 +910,7 @@ const MODEL_TABS = {
     cols: [['code', 'Code'], ['description', 'Description']], unique: 'code' },
   // used only when a project's output is SIMS
   simsDiag: { label: 'SIMS diagnostics', key: 'simsAliases', custom: nav => renderSimsDiag(nav), count: () => state.models.simsAliases.filter(a => String(a.aliases ?? '').trim()).length,
-    hint: 'Our diagnostics, as they come out in the report, next to the SIMS issue they mean. Every device gets the code of its category: Notebook LPT107, PC BSU107 … Capitals, extra spaces and dashes don\'t matter. A diagnostic on two issues gets both codes (BIOS locked: password protected + no audit). Diagnostics written exactly like a SIMS issue (e.g. Fan defect) work without being listed. Diagnostics with no code go to Item Remark, with the category\'s "see remarks" code.' },
+    hint: 'Our diagnostics, as they come out in the report, next to the SIMS issue they mean. Every device gets the code of its category: Notebook LPT107, PC BSU107 … Capitals, extra spaces and dashes don\'t matter; * stands for any word(s), e.g. Key * defect. A diagnostic on two issues gets both codes (BIOS locked: password protected + no audit). Diagnostics written exactly like a SIMS issue (e.g. Fan defect) work without being listed. Diagnostics with no code go to Item Remark, with the category\'s "see remarks" code.' },
   simsCodes: { label: 'SIMS codes', key: 'simsCodes', hint: 'The SIMS diagnostic codes per category (from their template). A code ends in the issue number, which means the same in every category (LPT107 and BSU107 are both keyboard defect). Also written to the Diagnostic codes tab of the SIMS file.',
     cols: [['category', 'Category'], ['code', 'Code'], ['description', 'Description']], unique: 'code', filters: { category: 'category' }, noMove: true },
   simsCategories: { label: 'SIMS categories', key: 'simsCategories', hint: 'Turns our device type into the SIMS Category column. "Codes from" is the category in SIMS codes whose codes the device gets, when it isn\'t the same (Switch uses Network Switch codes, loose disks use Data Carrier codes). Not case-sensitive.',
@@ -1312,6 +1290,187 @@ function renderSimsDiag(nav) {
   });
 }
 
+// ---------- menu bar (File, Settings, Tools) ----------
+// Click a menu to open it; while one is open, moving over another opens that one (like Windows).
+// Esc or a click elsewhere closes it; arrow keys move through the items.
+function initMenus() {
+  const menus = [...document.querySelectorAll('#menubar .menu')];
+  let open = null;
+  const show = m => {
+    for (const x of menus) {
+      x.classList.toggle('open', x === m);
+      x.querySelector('.menu-btn').setAttribute('aria-expanded', String(x === m));
+    }
+    open = m;
+  };
+  for (const m of menus) {
+    const btn = m.querySelector('.menu-btn');
+    btn.onclick = () => show(open === m ? null : m);
+    btn.onmouseenter = () => { if (open && open !== m) show(m); };
+    // an item's own click handler runs, then the menu closes
+    m.querySelector('.menu-list').addEventListener('click', e => { if (e.target.closest('button')) show(null); });
+    m.addEventListener('keydown', e => {
+      const items = [...m.querySelectorAll('.menu-list button:not([hidden])')];
+      const i = items.indexOf(document.activeElement);
+      if (e.key === 'ArrowDown') { e.preventDefault(); if (open !== m) show(m); items[(i + 1) % items.length]?.focus(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); if (open !== m) show(m); items[(i - 1 + items.length) % items.length]?.focus(); }
+      else if (e.key === 'Escape' && open) { show(null); btn.focus(); }
+    });
+  }
+  document.addEventListener('mousedown', e => { if (open && !e.target.closest('#menubar .menu')) show(null); });
+}
+
+// ---------- Tools › Microsoft BIOS passwords ----------
+// The loaded file is only kept while the app is open, so BIOS passwords never go into the project file.
+const bios = { fileName: '', parsed: null, selected: '', q: '', projectOnly: false };
+
+function biosMatch() {
+  const settings = state.project.settings;
+  const rows = outputRows();
+  const order = r => { const k = itemKey(r.itemLookup); return k ? codeNumber(settings, k) : null; };
+  return matchBiosPasswords(bios.parsed, rows, order);
+}
+// the list as a sheet: one column per password (most devices have one or two)
+function biosSheet(rows) {
+  const n = Math.max(1, ...rows.map(r => r.passwords.length));
+  const cols = [['item', 'Item'], ['sn', 'S.N.'], ['asset', 'Asset tag'], ['device', 'Device'],
+    ...Array.from({ length: n }, (_, i) => [`pw${i}`, n === 1 ? 'Password' : `Password ${i + 1}`])];
+  return { cols, rows: rows.map(r => ({ ...r, ...Object.fromEntries(r.passwords.map((p, i) => [`pw${i}`, p])) })) };
+}
+function biosShown(m) {
+  const q = bios.q.trim().toLowerCase();
+  return m.rows.filter(r => (!bios.projectOnly || r.inProject)
+    && (!q || [r.item, r.asset, r.sn, r.device, ...r.passwords].some(v => String(v).toLowerCase().includes(q))));
+}
+
+// a QR code of the text, black on white so scanners read it in dark mode too
+function qrSvg(text) {
+  const q = qrcode(0, 'M');
+  q.addData(text);
+  q.make();
+  return q.createSvgTag({ cellSize: 4, margin: 4, scalable: true });
+}
+
+function renderBios() {
+  const body = $('#biosBody');
+  $('#biosCopy').disabled = $('#biosXlsx').disabled = !bios.parsed;
+  if (!bios.parsed) {
+    body.innerHTML = `<div class="dropzone bios-drop" id="biosDrop"><p><b>Drop the password file here</b>, or click "Load password file…".</p>
+      <p class="hint">The BulkBiosPasswordDetails….txt file from Microsoft: one line per password, "AssetNo;Password".</p></div>`;
+    attachBiosDrop($('#biosDrop'));
+    return;
+  }
+  const m = biosMatch();
+  const rows = biosShown(m);
+  if (!rows.some(r => r.key === bios.selected)) bios.selected = rows[0]?.key ?? '';
+  const sel = m.rows.find(r => r.key === bios.selected);
+  const { cols } = biosSheet(m.rows);
+  const p = bios.parsed;
+  const lockedList = m.lockedWithout.map(r => `${r.itemLookup}${r.asset ? ` (asset ${r.asset})` : ' (no asset tag)'}`);
+
+  body.innerHTML = `
+    <div class="bios-summary dropzone" id="biosDrop">
+      <b>${esc(bios.fileName)}</b>: ${plural(p.count, 'password')} for ${plural(p.assets.length, 'asset tag')}; <b>${m.matched}</b> of them are items in this project.
+      ${p.skipped ? `<span class="muted">${plural(p.skipped, 'line')} that weren't "asset;password" were skipped.</span>` : ''}
+      <span class="muted">Drop another file here to replace it.</span>
+    </div>
+    ${lockedList.length ? `<div class="banner warn">BIOS locked in this project, but not in the file: <b>${esc(lockedList.join(', '))}</b></div>` : ''}
+    <div class="bios-layout">
+      <section class="card bios-list">
+        <div class="pick-bar">
+          <input type="search" id="biosSearch" placeholder="Search item, asset tag, S.N.…" value="${esc(bios.q)}">
+          <label class="check"><input type="checkbox" id="biosProjectOnly" ${bios.projectOnly ? 'checked' : ''}> Only devices in this project</label>
+          <span class="muted">${rows.length === m.rows.length ? plural(rows.length, 'device') : `${rows.length} of ${plural(m.rows.length, 'device')}`}</span>
+          <span class="hint">Click a device or use the arrow keys.</span>
+        </div>
+        <div class="table-wrap"><table class="grid bios-table" tabindex="0">
+          <thead><tr>${cols.map(([, l]) => `<th>${esc(l)}</th>`).join('')}</tr></thead>
+          <tbody>${rows.map(r => `<tr data-key="${r.key}" class="${r.key === bios.selected ? 'selected' : ''}${r.inProject ? '' : ' not-in-project'}" ${r.inProject ? '' : 'title="This asset tag isn\'t on any item in this project"'}>
+            <th>${esc(r.item || '—')}</th><td>${esc(r.sn)}</td><td>${esc(r.asset)}</td><td>${esc(r.device)}</td>
+            ${cols.slice(4).map((c, i) => `<td class="mono">${esc(r.passwords[i] ?? '')}</td>`).join('')}</tr>`).join('')}
+          </tbody></table></div>
+      </section>
+      <aside class="card bios-qr">${sel ? `
+        <h2>${esc(sel.item || 'Not in this project')}</h2>
+        <p class="hint">Asset tag <b>${esc(sel.asset)}</b>${sel.sn ? ` · S.N. ${esc(sel.sn)}` : ''}${sel.device ? ` · ${esc(sel.device)}` : ''}</p>
+        ${sel.passwords.map((pw, i) => `
+          <figure class="qr-box">
+            ${sel.passwords.length > 1 ? `<div class="muted">Password ${i + 1} of ${sel.passwords.length}</div>` : ''}
+            <div class="qr" title="QR code of the password">${qrSvg(pw)}</div>
+            <figcaption><code>${esc(pw)}</code><button class="btn small" data-copy-pw="${i}">Copy</button></figcaption>
+          </figure>`).join('')}` : '<p class="empty">Select a device.</p>'}
+      </aside>
+    </div>`;
+
+  attachBiosDrop($('#biosDrop'));
+  // redrawing keeps the list where it was scrolled; only the arrow keys scroll it (just enough to show the row)
+  const select = (key, byKey = false) => {
+    const wrap = () => $('#biosBody .bios-list .table-wrap');
+    const top = wrap().scrollTop, left = wrap().scrollLeft;
+    bios.selected = key;
+    renderBios();
+    Object.assign(wrap(), { scrollTop: top, scrollLeft: left });
+    const t = $('#biosBody .bios-table');
+    t.focus({ preventScroll: true });
+    // scroll just enough to show the row below the header, which stays at the top of the list
+    const row = byKey && t.querySelector('tr.selected');
+    if (row) {
+      const w = wrap(), wr = w.getBoundingClientRect(), rr = row.getBoundingClientRect();
+      const top = wr.top + w.clientTop + t.tHead.offsetHeight, bottom = wr.top + w.clientTop + w.clientHeight;
+      if (rr.top < top) w.scrollTop -= top - rr.top;
+      else if (rr.bottom > bottom) w.scrollTop += rr.bottom - bottom;
+    }
+  };
+  body.querySelectorAll('tbody tr').forEach(tr => tr.onclick = () => select(tr.dataset.key));
+  body.querySelector('.bios-table').onkeydown = e => {
+    const i = rows.findIndex(r => r.key === bios.selected);
+    const next = e.key === 'ArrowDown' ? i + 1 : e.key === 'ArrowUp' ? i - 1 : e.key === 'Home' ? 0 : e.key === 'End' ? rows.length - 1 : null;
+    if (next === null) return;
+    e.preventDefault();
+    if (rows[next]) select(rows[next].key, true);
+  };
+  const search = $('#biosSearch');
+  search.oninput = e => { bios.q = e.target.value; const pos = e.target.selectionStart; renderBios(); const s = $('#biosSearch'); s.focus(); s.setSelectionRange(pos, pos); };
+  // Enter in the search box goes to the list, so the arrow keys work straight away
+  search.onkeydown = e => { if (e.key === 'Enter' || e.key === 'ArrowDown') { e.preventDefault(); $('#biosBody .bios-table').focus(); } };
+  $('#biosProjectOnly').onchange = e => { bios.projectOnly = e.target.checked; renderBios(); };
+  body.querySelectorAll('[data-copy-pw]').forEach(b => b.onclick = async () => {
+    const ok = await copyText(sel.passwords[Number(b.dataset.copyPw)]);
+    toast(ok ? 'Password copied' : 'Copy failed. Try again.', ok ? 'ok' : 'bad');
+  });
+}
+
+function attachBiosDrop(zone) {
+  zone.ondragover = e => { e.preventDefault(); zone.classList.add('dragging'); };
+  zone.ondragleave = () => zone.classList.remove('dragging');
+  zone.ondrop = e => { e.preventDefault(); zone.classList.remove('dragging'); if (e.dataTransfer.files[0]) loadBiosFile(e.dataTransfer.files[0]); };
+}
+
+async function loadBiosFile(file) {
+  const parsed = parseBiosPasswords(await file.text());
+  if (!parsed.assets.length) { toast(`${file.name} has no "asset;password" lines`, 'bad'); return; }
+  Object.assign(bios, { fileName: file.name, parsed, selected: '', q: '' });
+  renderBios();
+  const m = biosMatch();
+  toast(`Loaded ${plural(parsed.count, 'password')} for ${plural(parsed.assets.length, 'asset tag')}; ${m.matched} found in this project`);
+}
+
+function initBios() {
+  $('#btnBios').onclick = () => { renderBios(); $('#biosDialog').showModal(); };
+  $('#biosClose').onclick = () => $('#biosDialog').close();
+  $('#biosLoad').onclick = () => $('#biosFile').click();
+  $('#biosFile').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) loadBiosFile(f); };
+  $('#biosCopy').onclick = async () => {
+    const { cols, rows } = biosSheet(biosShown(biosMatch()));
+    const ok = await copyText(toTsv(cols, rows, true));
+    toast(ok ? `Copied ${plural(rows.length, 'device')}. Paste it into a sheet.` : 'Copy failed. Try again.', ok ? 'ok' : 'bad');
+  };
+  $('#biosXlsx').onclick = () => {
+    const { cols, rows } = biosSheet(biosShown(biosMatch()));
+    if (!downloadXlsx([{ name: 'BIOS passwords', cols, rows }], state.project.settings, 'BIOS passwords')) toast('Nothing to download', 'bad');
+  };
+}
+
 // ---------- tabs & top-level actions ----------
 function setTab(tab) {
   state.tab = tab; store(STORE_TAB, tab);
@@ -1408,6 +1567,8 @@ function init() {
     store(STORE_THEME, next); applyTheme(next);
   };
 
+  initMenus();
+  initBios();
   document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => setTab(b.dataset.tab));
   $('#projectChip').onclick = () => openSetup();
   document.addEventListener('change', e => { if (e.target.matches?.('select[data-output]')) setOutput(e.target.value); });

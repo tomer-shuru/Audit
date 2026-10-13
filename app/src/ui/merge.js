@@ -1,6 +1,6 @@
-// Merge the Audit Report with rows that are already in the project's Google Sheet.
-// Rows the sheet already has are kept exactly as they are; the app's rows fill in around them,
-// everything sorted by item code, so the result can be pasted back over the same range in one go.
+// Rows that are already in the project's Google Sheet, pasted on the Data tab.
+// They are one more input for the report, the last in line: every other input (Mac / Windows reports,
+// Blancco, manual entries) wins where it has a value, and the sheet fills in the rest.
 import { itemKey } from '../engine/sources.js';
 
 // Tab-separated text as Google Sheets / Excel copy it (cells with tabs, line breaks or quotes come in "quotes")
@@ -26,11 +26,11 @@ export function parseTsv(text) {
 const escRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // sheetText: rows copied from the Google Sheet (same columns as the export, starting at the first item row)
-// cols: the export columns that are ticked; rows: the report rows; prefix: the project's item code prefix;
+// cols: the export columns that are ticked; prefix: the project's item code prefix;
 // itemPrefix: the start of the ITEM column ("ITD", from the config)
-// Returns the report rows with the sheet's rows merged in. A sheet row is a row object like the others
-// (its cells spread over cols), with _sheet set and itemLookup "sheet:<n>".
-export function mergeWithSheet({ sheetText, cols, rows, prefix, itemPrefix = 'ITD' }) {
+// Returns records: { [item code]: { column key: value } } (the first row of a code counts), codes (sorted),
+// and what was left out: duplicates, headerRows (above the first item), otherRows (no item code), lineBreaks.
+export function readSheetRows({ sheetText, cols, prefix, itemPrefix = 'ITD' }) {
   const table = parseTsv(sheetText);
   const itemCol = cols.findIndex(([k]) => k === 'item');
   // "ITD-SHR11734-BM20" or just "BM20". Without a prefix a bare number is only taken from the ITEM column,
@@ -45,35 +45,18 @@ export function mergeWithSheet({ sheetText, cols, rows, prefix, itemPrefix = 'IT
     }
     return null;
   };
-  const sheetRow = (cells, code, n) => ({
-    ...Object.fromEntries(cols.map(([k], j) => [k, cells[j] ?? ''])),
-    itemLookup: `sheet:${n}`, _sheet: { code, cells },
-  });
 
-  let headerRows = 0;
-  const found = [], other = [];
-  table.forEach((cells, n) => {
-    if (cells.every(v => !v.trim())) return;
-    const code = codeOf(cells);
-    if (code) found.push(sheetRow(cells, code, n));
-    else if (!found.length) headerRows++;   // headers above the first item are left out
-    else other.push(sheetRow(cells, '', n)); // rows without a code go last
-  });
-
-  const inSheet = new Set(found.map(r => r._sheet.code));
-  const skipped = rows.filter(r => inSheet.has(itemKey(r.itemLookup))).map(r => r.itemLookup);
-  const key = r => (r._sheet ? r._sheet.code : itemKey(r.itemLookup));
-  const merged = [...found, ...rows.filter(r => !inSheet.has(itemKey(r.itemLookup)))]
-    .sort((a, b) => key(a).localeCompare(key(b), undefined, { numeric: true }));
-
-  const counts = new Map();
-  for (const r of found) counts.set(r._sheet.code, (counts.get(r._sheet.code) || 0) + 1);
-  const sheetCodes = found.map(r => r._sheet.code).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-  return {
-    rows: [...merged, ...other],
-    sheetCodes, skipped,
-    duplicates: [...counts].filter(([, n]) => n > 1).map(([c]) => c),
-    headerRows, otherRows: other.length,
-    lineBreaks: [...found, ...other].some(r => r._sheet.cells.some(v => /[\t\n]/.test(v))),
-  };
+  const records = {}, duplicates = new Set();
+  let headerRows = 0, otherRows = 0, lineBreaks = false, found = 0;
+  for (const cells of table) {
+    if (cells.every(v => !v.trim())) continue;
+    const c = codeOf(cells);
+    if (!c) { if (found) otherRows++; else headerRows++; continue; } // headers above the first item, then rows without a code
+    found++;
+    if (cells.some(v => /[\t\n]/.test(v))) lineBreaks = true;
+    if (records[c]) { duplicates.add(c); continue; }
+    records[c] = Object.fromEntries(cols.map(([k], j) => [k, String(cells[j] ?? '').trim()]));
+  }
+  const codes = Object.keys(records).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  return { records, codes, duplicates: [...duplicates], headerRows, otherRows, lineBreaks };
 }

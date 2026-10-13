@@ -56,7 +56,10 @@ const first = (...vals) => { for (const v of vals) if (!isBlank(v)) return v; re
  * }
  */
 // config: the DevMode rules (config.json); left out = the built-in defaults
-export function buildReport(project, models, config) {
+// sheet: rows already in the project's Google Sheet, { [itemCode]: { column key: value } } (Data tab).
+//   They are the last input in line: manual entries, the reports and Blancco win where they have a value,
+//   the sheet fills in the rest (row._fromSheet lists those columns). Review edits still win over everything.
+export function buildReport(project, models, config, sheet = null) {
   const cfg = withDefaults(config);
   const lk = makeLookups(models, cfg);
   const { settings, inputs = {}, manual = {}, overrides = {} } = project;
@@ -102,9 +105,11 @@ export function buildReport(project, models, config) {
   for (const [code, rec] of Object.entries(manual)) {
     if (rec && Object.values(rec).some(v => !isBlank(v))) manBy.set(itemKey(code), { ...rec, item: code });
   }
+  const sheetBy = new Map();
+  for (const [code, rec] of Object.entries(sheet || {})) if (itemKey(code)) sheetBy.set(itemKey(code), { ...rec, item: code });
 
   // order: codes in the project's numbering first, then anything else
-  const keys = new Set([...manBy.keys(), ...macBy.keys(), ...winBy.keys(), ...csvBy.keys()]);
+  const keys = new Set([...manBy.keys(), ...macBy.keys(), ...winBy.keys(), ...csvBy.keys(), ...sheetBy.keys()]);
   const numOf = k => codeNumber(settings, k);
   const sorted = [...keys].sort((a, b) => {
     const na = numOf(a), nb = numOf(b);
@@ -121,30 +126,39 @@ export function buildReport(project, models, config) {
 
   const rows = sorted.map(k => {
     const man = manBy.get(k) || {};
-    const m = macBy.get(k), w = winBy.get(k), c = csvBy.get(k);
-    const code = man.item ?? m?.item ?? w?.item ?? c?.item ?? k;
-    const pick = f => first(man[f], m?.[f], w?.[f], c?.[f]);
+    const m = macBy.get(k), w = winBy.get(k), c = csvBy.get(k), sh = sheetBy.get(k);
+    const code = man.item ?? m?.item ?? w?.item ?? c?.item ?? sh?.item ?? k;
+    // the Google Sheet only fills a column the other inputs left empty
+    const fromSheet = [];
+    const orSheet = (f, v) => {
+      if (!isBlank(v) || !sh || isBlank(sh[f])) return v;
+      fromSheet.push(f);
+      return str(sh[f]).trim();
+    };
+    const pick = f => orSheet(f, first(man[f], m?.[f], w?.[f], c?.[f]));
 
     const row = {
       itemLookup: code,
       item: itemName(settings, code, cfg),
       sn: pick('sn'), asset: pick('asset'), type: pick('type'),
       // make names from the Dictionary's Make names list; Blancco's otherwise in PROPER case
-      make: first(...[man.make, m?.make, w?.make].map(v => lk.make(v) ?? v), c ? lk.make(c.make) ?? proper(c.make) : ''),
+      make: orSheet('make', first(...[man.make, m?.make, w?.make].map(v => lk.make(v) ?? v), c ? lk.make(c.make) ?? proper(c.make) : '')),
       model: pick('model'),
       // Screen: Mac, then Windows, then typed (blank Blancco screens are never used)
-      screen: first(man.screen, m ? m.screen : (w ? w.screen : '')),
+      screen: orSheet('screen', first(man.screen, m ? m.screen : (w ? w.screen : ''))),
       year: pick('year'), cpu: pick('cpu'), ram: pick('ram'), disk: pick('disk'),
-      diagnostics: formatDiagnostics(expandDiagCodes(joinNonEmpty(', ', man.locked, man.diagnostics, m?.diagnostics, w?.diagnostics, c?.diagnostics), lk.diagCodes)),
+      diagnostics: orSheet('diagnostics', formatDiagnostics(expandDiagCodes(joinNonEmpty(', ', man.locked, man.diagnostics, m?.diagnostics, w?.diagnostics, c?.diagnostics), lk.diagCodes))),
       blancco: pick('blancco'),
-      snDataCarrier: str(man.snDataCarrier), noDataCarrier: str(man.noDataCarrier),
-      comments: str(man.comments), powerSupply: str(man.powerSupply),
-      itemStatus: str(man.itemStatus), estValue: str(man.estValue),
-      locked: expandDiagCodes(joinNonEmpty(', ', man.locked, m?.locked, w?.locked), lk.diagCodes),
+      snDataCarrier: orSheet('snDataCarrier', str(man.snDataCarrier)), noDataCarrier: orSheet('noDataCarrier', str(man.noDataCarrier)),
+      comments: orSheet('comments', str(man.comments)), powerSupply: orSheet('powerSupply', str(man.powerSupply)),
+      itemStatus: orSheet('itemStatus', str(man.itemStatus)), estValue: orSheet('estValue', str(man.estValue)),
+      locked: orSheet('locked', expandDiagCodes(joinNonEmpty(', ', man.locked, m?.locked, w?.locked), lk.diagCodes)),
     };
-    row.destruction = first(man.destruction, passed(row.blancco) ? cfg.erasure.destruction : '');
-    row.weight = first(man.weight, lk.weight(row.type) ?? '');
-    row._sources = { manual: manBy.has(k), mac: !!m, win: !!w, blancco: !!c };
+    row.destruction = orSheet('destruction', first(man.destruction, passed(row.blancco) ? cfg.erasure.destruction : ''));
+    // a weight in the sheet comes before the type's usual weight from the Dictionary
+    row.weight = first(orSheet('weight', str(man.weight).trim()), lk.weight(row.type) ?? '');
+    row._sources = { manual: manBy.has(k), mac: !!m, win: !!w, blancco: !!c, sheet: !!sh };
+    row._fromSheet = fromSheet;
     row._manual = Object.keys(man).filter(f => f !== 'item' && !isBlank(man[f]));
     // edits made in the Review table replace the final value; diagnostic codes work there too
     const edits = overrides[code] || overrides[k] || {};
@@ -152,7 +166,10 @@ export function buildReport(project, models, config) {
       : f === 'locked' ? expandDiagCodes(v, lk.diagCodes) : v);
     row._edited = []; row._base = {};
     for (const [f, v] of Object.entries(edits)) {
-      if (EDITABLE.has(f) && !isBlank(v)) { row._base[f] = row[f]; row[f] = reviewValue(f, v); row._edited.push(f); }
+      if (EDITABLE.has(f) && !isBlank(v)) {
+        row._base[f] = row[f]; row[f] = reviewValue(f, v); row._edited.push(f);
+        row._fromSheet = row._fromSheet.filter(x => x !== f);
+      }
     }
 
     if (m?.unknownModel) add('unknownMacModel', { item: code, text: `${code}: Mac model "${m.unknownModel}" isn't in the Models list` });
@@ -190,7 +207,7 @@ export function buildReport(project, models, config) {
     wiped: passed(r.blancco) ? 'Yes' : 'No',
   }));
 
-  return { rows, lockedFaulty, warnings, counts: { mac: mac.length, win: win.length, blancco: csv.length, blanccoRows: blanccoTable.rows.length, manual: manBy.size } };
+  return { rows, lockedFaulty, warnings, counts: { mac: mac.length, win: win.length, blancco: csv.length, blanccoRows: blanccoTable.rows.length, manual: manBy.size, sheet: sheetBy.size } };
 }
 
 // the number in an item code of this project's numbering (GG07 -> 7), or null

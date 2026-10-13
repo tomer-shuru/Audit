@@ -4,6 +4,7 @@
 // per SIMS issue number), simsIgnore (diagnostics left out) and simsCategories (our type -> SIMS category).
 import { str, isBlank, joinNonEmpty } from './rules.js';
 import { DEFAULT_CONFIG, withDefaults } from './config.js';
+import { itemKey } from './sources.js';
 
 // Columns D to T of the SIMS sheet, in order. label = the header in their template (some are empty),
 // name = what the app calls the column. The empty columns are kept so a paste at column D lines up.
@@ -50,12 +51,24 @@ export function makeSimsLookups(models) {
   const issues = simsIssues(models);
   const description = new Map(issues.map(i => [i.no, i.description]));
   // our diagnostics -> issue numbers (one diagnostic may give several codes, e.g. BIOS locked)
-  const aliases = new Map();
+  // "*" stands for any word(s): "Key * defect" covers "Key P defect", "Key Capslock defect"…
+  const aliases = new Map(), patterns = [];
   const addAlias = (text, no) => {
     const k = normDiag(text);
     if (!k) return;
+    if (k.includes('*')) {
+      const re = new RegExp(`^${k.split('*').map(p => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.+')}$`);
+      const p = patterns.find(x => x.text === k) || patterns[patterns.push({ text: k, re, nos: [] }) - 1];
+      if (!p.nos.includes(no)) p.nos.push(no);
+      return;
+    }
     if (!aliases.has(k)) aliases.set(k, []);
     if (!aliases.get(k).includes(no)) aliases.get(k).push(no);
+  };
+  // exact spellings first, then the ones with "*"
+  const numbersOf = diag => {
+    const k = normDiag(diag);
+    return aliases.get(k) || [...new Set(patterns.filter(p => p.re.test(k)).flatMap(p => p.nos))];
   };
   for (const a of models.simsAliases || []) for (const t of splitList(a.aliases)) addAlias(t, str(a.no).trim());
   // a diagnostic written exactly like a SIMS issue ("Fan defect") needs no alias
@@ -72,7 +85,7 @@ export function makeSimsLookups(models) {
   }
   return {
     description, seeRemarks, ignore,
-    numbers: diag => aliases.get(normDiag(diag)) || [],
+    numbers: numbersOf,
     isIgnored: diag => ignore.has(normDiag(diag)),
     // the SIMS category for one of our types ('' when there is none); a type that is already a SIMS category is kept
     category: type => types.get(normName(type))?.category ?? (byCategory.has(normName(type)) || categories.has(normName(type)) ? str(type).trim() : ''),
@@ -122,10 +135,12 @@ export function purchaseDescription(row, cfg = DEFAULT_CONFIG) {
 
 /**
  * report: buildReport()'s result; project: for the SIMS edits (project.simsOverrides: { [itemCode]: { column: value } })
+ * sheet: rows already in the SIMS sheet (Data tab), { [itemCode]: { SIMS column key: value } }: a SIMS column
+ * the app has nothing for is taken from there (the shared columns already came through buildReport).
  * Returns { rows, warnings }: one SIMS row per report row (keys from SIMS_COLUMNS, plus itemLookup and the
- * row's _sources / _edited / _base), and the SIMS checks.
+ * row's _sources / _edited / _base / _fromSheet), and the SIMS checks.
  */
-export function buildSims(report, project, models, config) {
+export function buildSims(report, project, models, config, sheet = null) {
   const cfg = withDefaults(config);
   const lk = makeSimsLookups(models);
   const edits = project.simsOverrides || {};
@@ -133,22 +148,34 @@ export function buildSims(report, project, models, config) {
   const add = (check, w) => { const level = cfg.checks[check]; if (level && level !== 'off') warnings.push({ ...w, level }); };
   const noCategory = new Map(), noCodes = new Map(), unknown = new Map(), missing = new Map();
   const note = (map, key, item, extra) => { if (!map.has(key)) map.set(key, { items: [], ...extra }); map.get(key).items.push(item); };
+  const sheetBy = new Map(Object.entries(sheet || {}).map(([c, rec]) => [itemKey(c), rec]));
 
   const rows = report.rows.map(r => {
     const code = r.itemLookup;
     const ov = edits[code] || {};
+    const sh = sheetBy.get(itemKey(code));
+    // a SIMS column the app has nothing for comes from the SIMS sheet rows
+    const fromSheet = r._fromSheet.filter(f => SIMS_SHARED.has(f));
+    const orSheet = (k, v, empty = isBlank(v)) => {
+      if (!empty || !sh || isBlank(sh[k])) return v;
+      fromSheet.push(k);
+      return str(sh[k]).trim();
+    };
+    const purchase = purchaseDescription(r, cfg);
     const row = {
-      itemLookup: code, item: r.item, sn: r.sn, asset: r.asset, blankG: '', imei: '',
-      category: lk.category(r.type), modelLine: joinNonEmpty(',', r.make, r.model, r.screen, r.year), modelNo: '',
-      blankL: '', purchase: purchaseDescription(r, cfg), diagnostics: r.diagnostics,
-      grade: '', status: '', weight: r.weight, erased: simsErasure(r.blancco, cfg),
-      locked: r.locked, _sources: r._sources, _edited: r._edited.filter(f => SIMS_SHARED.has(f)), _base: { ...r._base },
+      itemLookup: code, item: r.item, sn: r.sn, asset: r.asset, blankG: orSheet('blankG', ''), imei: orSheet('imei', ''),
+      category: orSheet('category', lk.category(r.type)), modelLine: orSheet('modelLine', joinNonEmpty(',', r.make, r.model, r.screen, r.year)),
+      modelNo: orSheet('modelNo', ''), blankL: orSheet('blankL', ''),
+      purchase: orSheet('purchase', purchase, purchase === cfg.texts.simsNoSpecs), diagnostics: r.diagnostics,
+      grade: orSheet('grade', ''), status: orSheet('status', ''), weight: r.weight, erased: orSheet('erased', simsErasure(r.blancco, cfg)),
+      locked: r.locked, _sources: r._sources, _edited: r._edited.filter(f => SIMS_SHARED.has(f)), _base: { ...r._base }, _fromSheet: fromSheet,
     };
     // SIMS-only edits replace the value; a typed category also decides which codes are used
     const apply = keys => {
       for (const k of keys) {
         if (isBlank(ov[k]) || SIMS_SHARED.has(k) || !simsEditable(k)) continue;
         row._base[k] = row[k]; row[k] = str(ov[k]); row._edited.push(k);
+        row._fromSheet = row._fromSheet.filter(x => x !== k);
       }
     };
     apply(SIMS_COLUMNS.map(([k]) => k).filter(k => k !== 'codes' && k !== 'remark'));
@@ -164,6 +191,11 @@ export function buildSims(report, project, models, config) {
       for (const d of t.unknown) note(unknown, normDiag(d), code, { diag: d });
       for (const m of t.missing) note(missing, `${normDiag(m.diag)}|${row.category.toLowerCase()}`, code, { ...m, category: row.category });
     } else { row.codes = ''; row.remark = ''; }
+    // no codes from the diagnostics: the sheet's codes and Item Remark, if it has them
+    if (isBlank(row.codes) && sh && !isBlank(sh.codes)) {
+      row.codes = str(sh.codes).trim(); row.remark = str(sh.remark).trim();
+      row._fromSheet.push('codes', ...(row.remark ? ['remark'] : []));
+    }
     apply(['codes', 'remark']);
     return row;
   });

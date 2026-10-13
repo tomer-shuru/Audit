@@ -20,7 +20,7 @@ const simsCodes = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }).slice(
 // our diagnostics -> SIMS issue number (the digits at the end of a code: LPT107, BSU107 = 107 keyboard defect).
 // From the SIMS report of SHR11708 and the earlier SIMS.xlsx; capitals, spaces and dashes don't matter.
 const ALIASES = {
-  '014': 'Battery C, Battery D, Battery defect',
+  '014': 'Battery C, Battery D, Battery defect, Battery service',
   '016': 'Battery missing',
   '018': 'Bezel broken',
   '030': 'Broken chassis, Chassis broken',
@@ -44,9 +44,10 @@ const ALIASES = {
   '098': 'Storage defect',
   '101': 'Storage missing',
   '104': 'USB defect, L1 USB defect, L2 USB defect, L3 USB defect, R1 USB defect, R2 USB defect, R3 USB defect, USB L1 defect, USB L2 defect, USB L3 defect',
-  '107': 'Sticky kb, KB sticky, KB defect',
+  '107': 'Sticky kb, KB sticky, KB defect, Key * defect',
   '109': 'KB missing',
   '110': 'KB discolored B, KB discolored C, KB discolored D',
+  '116': 'Liquid marks',
   '120': 'Bad MB',
   '124': 'No RAM',
   '131': 'BIOS locked, Apple ID, Apple ID lock, Apple ID locked, Find My locked, Find My lock, Remote locked, Remote management, Prototype',

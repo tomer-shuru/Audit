@@ -60,10 +60,22 @@ The version (date and time) is shown at the top left of the app, next to its
 name, in case you want to check you have the latest one.
 
 
+THE MENUS
+---------
+
+The menu bar at the very top works like in a Windows program:
+- File: New project, Open..., Save project (Ctrl+S), Save as... (Ctrl+Shift+S)
+- Settings: Dictionary..., DevMode...
+- Tools: Microsoft BIOS passwords... (see below)
+The sun / moon button at the right switches between light and dark.
+Under the menus: the project (click it to change the project setup), the
+Output picker (Shuru or SIMS) and whether the project is saved.
+
+
 DOING A PROJECT
 ---------------
 
-1. New project: click "New" and fill in the project number, end client and
+1. New project: choose File > New project and fill in the project number, end client and
    item code prefix (for example GG; leave it empty if the item codes are
    just numbers) and the first item number (usually 1; e.g. 4000 if the
    client numbers from there).
@@ -96,8 +108,9 @@ The Review and Manual entries tables work like a spreadsheet:
      fills all of it.
    - Delete clears the selected cells, Ctrl+D fills down.
    - Ctrl+Z undoes, Ctrl+Y redoes.
-   The item code columns and green rows (already in the Google Sheet)
-   can be selected and copied but not changed.
+   The item code columns can be selected and copied but not changed.
+   Green cells are values from the Google Sheet rows (Data tab); they can
+   be changed like any other cell.
 5. Export (the "Export..." button on the Review tab, only for getting the
    finished report out): click "Copy rows" and paste into the Google Sheet.
    If there are locked or faulty devices, copy that list too. Untick
@@ -118,12 +131,17 @@ by hand):
       and copy them.
    b. Paste them in "Rows already in the Google Sheet" on the Data tab. It is
       saved with the project.
-   c. On Review and Export those rows show up green, in their place, instead
-      of Audit Builder's rows for the same items. Any problem with them (for
-      example no item codes found) is listed on the Review tab.
-   d. In Export (button on Review) click "Copy rows", click the ITEM cell of the first
-      item row in the Google Sheet and paste. The green rows get their own
-      values back (formulas in them become plain values).
+   c. The sheet's values are used like any other input, but last in line:
+      for every cell, Blancco, the Mac / Windows reports and manual entries
+      win if they have a value; if they leave it empty, the sheet's value
+      stays. Values that came from the sheet are green on Review. An item
+      that is only in the sheet is a normal row.
+   d. You can change them like anything else: a manual entry or a Review
+      edit wins over the sheet. Any problem (for example no item codes
+      found) is listed on the Review tab.
+   e. In Export (button on Review) click "Copy rows", click the ITEM cell of
+      the first item row in the Google Sheet and paste. The sheet's values
+      are included, so they aren't lost (formulas become plain values).
 
 
 SIMS PROJECTS (A DIFFERENT SHEET LAYOUT)
@@ -147,7 +165,7 @@ the Manual entries stay exactly the same; only the output changes.
 3. Diagnostic codes: each diagnostic becomes the SIMS code of the device's
    category (e.g. "Sticky kb" on a laptop is LPT107). A diagnostic with no
    SIMS code goes to Item Remark and the device gets the "see remarks" code
-   (e.g. LPT172). Review lists those as yellow warnings, so you can add them
+   (e.g. LPT172). Review lists those as blue SIMS notes, so you can add them
    to the Dictionary. "Ok" is left out.
 4. Export (button on Review) has three lists: Item per service project
    (paste at the Item No cell, column D, of the first item row), HDD (one
@@ -163,7 +181,9 @@ the Manual entries stay exactly the same; only the output changes.
 The SIMS lists are in the Dictionary (after "SIMS output:"):
 - SIMS diagnostics: one row per SIMS issue. Write our diagnostics next to
   the issue they mean, separated by commas (e.g. "Sticky kb, KB sticky" next
-  to keyboard defect). Capitals, spaces and dashes don't matter. One issue
+  to keyboard defect). Capitals, spaces and dashes don't matter, and *
+  stands for any word(s): "Key * defect" covers Key P defect, Key Capslock
+  defect and so on. One issue
   works for every category: keyboard defect is LPT107 on a laptop and would
   be BSU107 on a PC. Writing a diagnostic on two issues gives two codes
   (BIOS locked = password protected + no audit). The first row, "Leave out",
@@ -182,16 +202,16 @@ SAVING AND SHARING PROJECTS
 - The app keeps your current work automatically, so closing the window by
   accident doesn't lose anything. That copy only exists on your computer
   and in that browser, though.
-- "Save project" (or Ctrl+S): the first time, it asks where to save the
+- File > Save project (or Ctrl+S): the first time, it asks where to save the
   project file (named after the end client and project number, e.g.
   Acme_SHR11734.audit.json).
   After that it saves over the same file without asking. The top bar shows
   which file you're saving to.
 - After reopening the browser, the first save may show a small "allow this
   site to edit the file?" message. Click Allow (or "Edit file").
-- "Save as..." (Ctrl+Shift+S) saves to a different file, which becomes the
+- File > Save as... (Ctrl+Shift+S) saves to a different file, which becomes the
   one used from then on.
-- Opening a project file with "Open..." also makes it the file that Save
+- Opening a project file with File > Open... also makes it the file that Save
   updates. Starting a "New" project asks again on the first save.
 - Save project files in G:\My Drive\Audit Builder\Projects. Google Drive
   syncs them, so everyone can open them with "Open...", and continue each
@@ -206,7 +226,7 @@ SHARED DICTIONARY AND RULES
 ---------------------------
 
 Everyone shares two files in the Audit Builder folder on the Drive:
-- Models\models.json: the Dictionary (button "Dictionary"): models, make names,
+- Models\models.json: the Dictionary (Settings > Dictionary...): models, make names,
   type mapping, weights, model cleanup, diagnostic codes and the SIMS lists. "Make names"
   turns the make the tools report into the one in the report, e.g.
   "Dell Inc." into "Dell".
@@ -232,5 +252,29 @@ After that:
 If the Dictionary window says "Not shared", your changes stay on your computer
 only. Connect the folder as above.
 
-The "DevMode" button is for the person who maintains the rules and asks for
+Settings > DevMode... is for the person who maintains the rules and asks for
 a password.
+
+
+MICROSOFT BIOS PASSWORDS (Tools menu)
+-------------------------------------
+
+For Microsoft devices that are BIOS locked: Microsoft sends a file like
+BulkBiosPasswordDetails-29065708.txt with the asset tag and password(s) of
+each device.
+
+1. Open the project, then Tools > Microsoft BIOS passwords...
+2. Click "Load password file..." (or drop the .txt file in the window).
+3. The list shows every asset tag in the file with its item number, S.N.
+   and device from the project, items first (by item number), then asset
+   tags that aren't in the project. Some devices have more than one
+   password; each gets its own column.
+4. Click a device (or move with the arrow keys) and its password appears
+   as a QR code on the right, ready to scan into the BIOS. "Copy" copies
+   the password.
+5. Search finds an item, asset tag or S.N.; "Only devices in this project"
+   hides the rest. "Copy with headers" and "Download .xlsx" give you the
+   list as a sheet.
+A yellow note lists items that are BIOS locked in the project but have no
+password in the file.
+The passwords are NOT saved with the project: load the file again next time.

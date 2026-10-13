@@ -11188,7 +11188,7 @@
   },
   {
    "no": "107",
-   "aliases": "Sticky kb, KB sticky, KB defect"
+   "aliases": "Sticky kb, KB sticky, KB defect, Key * defect"
   },
   {
    "no": "109",
@@ -11197,6 +11197,10 @@
   {
    "no": "110",
    "aliases": "KB discolored B, KB discolored C, KB discolored D"
+  },
+  {
+   "no": "116",
+   "aliases": "Liquid marks"
   },
   {
    "no": "120",
@@ -11236,7 +11240,7 @@
   },
   {
    "no": "014",
-   "aliases": "Battery C, Battery D, Battery defect"
+   "aliases": "Battery C, Battery D, Battery defect, Battery service"
   },
   {
    "no": "016",

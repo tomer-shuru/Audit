@@ -197,9 +197,8 @@ dialog form label input { font-weight: 400; }
 .toast.bad { background: var(--bad); color: #fff; }
 
 /* rows already in the Google Sheet (pasted on the Data tab), on Review and Export */
-.grid.pick tr.from-sheet > td, .grid.review tr.from-sheet > * { background: var(--good-soft); }
-.grid.review tr.from-sheet th.s0 { box-shadow: inset 3px 0 0 var(--good); }
-.grid.pick tr.from-sheet > th.pick-col { box-shadow: inset 3px 0 var(--good); }
+/* a value that came from the Google Sheet rows (Data tab) */
+.grid td.from-sheet { background: var(--good-soft); }
 
 /* Review and Manual entries tables behave like a spreadsheet (grid.js) */
 .grid-sink { position: fixed; top: 0; left: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; border: 0; padding: 0; resize: none; }
@@ -281,3 +280,43 @@ select { font: inherit; color: var(--text); background: var(--surface); border: 
 .grid .muted-cell { color: var(--muted); }
 .grid.sims-diag td[data-aliases] { min-width: 320px; }
 .grid tr.ignore-row > * { background: var(--warn-soft); }
+
+/* menu bar: File, Settings, Tools (like a Windows program) */
+.menubar { display: flex; align-items: center; gap: 2px; padding: 2px 12px; background: var(--surface-2); border-bottom: 1px solid var(--border); font-size: 13px; }
+.menubar .theme-btn { padding: 3px 8px; }
+.menu { position: relative; }
+.menu-btn { font: inherit; border: 0; background: none; color: var(--text); padding: 5px 10px; border-radius: 4px; cursor: pointer; }
+.menu-btn:hover, .menu.open .menu-btn { background: var(--accent-soft); }
+.menu-list { display: none; position: absolute; top: 100%; left: 0; z-index: 50; min-width: 240px; padding: 4px; margin-top: 2px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgb(10 14 22 / .18); }
+.menu.open .menu-list { display: flex; flex-direction: column; }
+.menu-list button { font: inherit; display: flex; justify-content: space-between; gap: 24px; align-items: center; text-align: left;
+  border: 0; background: none; color: var(--text); padding: 7px 12px; border-radius: 5px; cursor: pointer; white-space: nowrap; }
+.menu-list button:hover, .menu-list button:focus-visible { background: var(--accent-soft); outline: none; }
+.menu-list kbd { font: inherit; font-size: 12px; color: var(--muted); }
+.menu-list hr { border: 0; border-top: 1px solid var(--border); margin: 4px 6px; }
+.topbar { padding: 8px 20px; }
+
+/* Tools › Microsoft BIOS passwords */
+dialog.full #biosBody { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; }
+.bios-drop { padding: 40px; text-align: center; }
+.bios-summary { padding: 10px 14px; }
+.banner.warn { background: var(--warn-soft); color: var(--warn); }
+.bios-layout { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; }
+.bios-list { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+.bios-list .table-wrap { flex: 1; min-height: 0; overflow: auto; }
+.bios-table:focus { outline: none; }
+.bios-table tbody tr { cursor: pointer; }
+.bios-table tr.not-in-project > * { color: var(--muted); }
+.grid .mono, .bios-qr code { font-family: var(--mono); }
+.bios-qr { overflow: auto; }
+.qr-box { margin: 12px 0 0; display: flex; flex-direction: column; gap: 6px; }
+.qr-box .qr { background: #fff; padding: 8px; border-radius: 8px; width: 240px; max-width: 100%; }
+.qr-box .qr svg { display: block; width: 100%; height: auto; }
+.qr-box figcaption { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.qr-box code { font-size: 15px; word-break: break-all; }
+
+/* SIMS output notes (blue) */
+.badge.sims { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent); }
+.pill.sims { background: var(--accent-soft); color: var(--accent); }
+li.sims .lvl { background: var(--accent-soft); color: var(--accent); }

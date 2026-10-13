@@ -12,7 +12,11 @@ Coworkers open it from the shared Drive folder (via Drive for desktop), so they 
 
 **SIMS output**: the "Output" picker (top bar, also on Review and in the Export window) switches a project to the SIMS contractor's layout (columns D to T of their "Item per service project" sheet), with our diagnostics turned into SIMS diagnostic codes. The data and Manual entries stay the same. Export then copies the SIMS rows and the HDD list, and fills their template (`G:\My Drive\Audit Builder\Templates\SIMS.xlsx`) keeping its logos, comments and Summary formulas. The SIMS codes, our diagnostics per SIMS issue and the type → category list are in the Dictionary.
 
-**DevMode** (button in the top bar, password protected): edit the rules the report is built with: battery grades, Blancco messages and comment columns, erasure words and texts, disk types, texts (ITD, "-", lock texts), "no asset tag" values, makes whose model is in System version, check levels (red / yellow / gray / off), report and Locked and Faulty column order and headers, Blancco column names. Changes are previewed against the open project and only apply when saved. They are saved to the shared `G:\My Drive\Audit Builder\Config\config.json` (everyone connects to it once, like the Dictionary), which keeps its last 20 versions for restoring. Only a hash of the password is stored; the default is set in `src/engine/config.js` and can be changed in DevMode.
+**Menus** (top, like a Windows program): File (New project, Open…, Save project, Save as…), Settings (Dictionary…, DevMode…), Tools (Microsoft BIOS passwords…).
+
+**Microsoft BIOS passwords** (Tools): loads Microsoft's BulkBiosPasswordDetails .txt (`AssetNo;Password`), matches the asset tags to the project's items, shows the list (copy / .xlsx) and a QR code of the selected device's password(s). The passwords are kept in memory only, never in the project file.
+
+**DevMode** (Settings menu, password protected): edit the rules the report is built with: battery grades, Blancco messages and comment columns, erasure words and texts, disk types, texts (ITD, "-", lock texts), "no asset tag" values, makes whose model is in System version, check levels (red / yellow / gray / off), report and Locked and Faulty column order and headers, Blancco column names. Changes are previewed against the open project and only apply when saved. They are saved to the shared `G:\My Drive\Audit Builder\Config\config.json` (everyone connects to it once, like the Dictionary), which keeps its last 20 versions for restoring. Only a hash of the password is stored; the default is set in `src/engine/config.js` and can be changed in DevMode.
 
 **Save project** writes a `.audit.json` file; **Open…** loads one again. Open also imports an old `Audit.xlsm`.
 Work is also auto-saved in the browser, but the project file is the real record.
@@ -31,6 +35,7 @@ npm run package # optional: also writes dist/AuditBuilder <version>.zip (app + g
 - `src/engine/config.js` – DevMode rules: defaults (= the workbook's behaviour), filling in missing values, validation
 - `src/engine/sims.js` – the SIMS layout: rows, diagnostic codes, checks, HDD list
 - `src/ui/simstemplate.js` – fills the SIMS template .xlsx (edits its XML, so their styles and formulas stay)
+- `src/engine/biospw.js` – reads the Microsoft BIOS password file and matches it to the items (QR codes: `qrcode-generator`, bundled)
 - `scripts/extract-sims.mjs` – reloads the SIMS codes from a SIMS template into `default-models.json` (with the built-in translations)
 - `src/ui/devmode.js` – DevMode window, password, shared config.json
 

@@ -231,7 +231,7 @@ const BLANCCO = {
   comment1: 'Comment 1', comment2: 'Comment 2', comment3: 'Comment 3', comment4: 'Comment 4', comment5: 'Comment 5', comment6: 'Comment 6',
   comment7: 'Comment 7', comment8: 'Comment 8',
 };
-const LEVELS = { error: 'Problem (red)', warn: 'Warning (yellow)', info: 'Note (gray)', off: 'Off' };
+const LEVELS = { error: 'Problem (red)', warn: 'Warning (yellow)', info: 'Note (gray)', sims: 'SIMS (blue)', off: 'Off' };
 const defaultLabel = (k, key) => DEFAULT_CONFIG[k].find(x => x.key === key)?.label ?? key;
 
 const SECTIONS = {
@@ -437,7 +437,7 @@ function preview() {
     if (!rb) continue;
     for (const [k, label] of cols) if (String(ra[k] ?? '') !== String(rb[k] ?? '')) cells.push({ item: ra.itemLookup, label, from: ra[k], to: rb[k] });
   }
-  const count = ws => Object.fromEntries(['error', 'warn', 'info'].map(l => [l, ws.filter(w => w.level === l).length]));
+  const count = ws => Object.fromEntries(['error', 'warn', 'info', 'sims'].map(l => [l, ws.filter(w => w.level === l).length]));
   return {
     cells, checks: [count(a.warnings), count(b.warnings)],
     columns: JSON.stringify(exportColumns(config)) !== JSON.stringify(cols) || JSON.stringify(lockedColumns(config)) !== JSON.stringify(lockedColumns(draft)),
@@ -454,8 +454,8 @@ function renderFooter() {
     return;
   }
   const p = preview();
-  const words = { error: 'problems', warn: 'warnings', info: 'notes' };
-  const checkText = ['error', 'warn', 'info'].filter(l => p.checks[0][l] !== p.checks[1][l]).map(l => `${words[l]} ${p.checks[0][l]} → ${p.checks[1][l]}`).join(', ');
+  const words = { error: 'problems', warn: 'warnings', info: 'notes', sims: 'SIMS notes' };
+  const checkText = ['error', 'warn', 'info', 'sims'].filter(l => p.checks[0][l] !== p.checks[1][l]).map(l => `${words[l]} ${p.checks[0][l]} → ${p.checks[1][l]}`).join(', ');
   const shown = p.cells.slice(0, 200);
   foot.innerHTML = `
     ${problems.length ? `<div class="banner bad">Fix these before saving:<ul>${problems.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
