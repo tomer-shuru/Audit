@@ -282,18 +282,19 @@ select { font: inherit; color: var(--text); background: var(--surface); border: 
 .grid tr.ignore-row > * { background: var(--warn-soft); }
 
 /* menu bar: File, Settings, Tools (like a Windows program) */
-.menubar { display: flex; align-items: center; gap: 2px; padding: 2px 12px; background: var(--surface-2); border-bottom: 1px solid var(--border); font-size: 13px; }
-.menubar .theme-btn { padding: 3px 8px; }
+.menubar { display: flex; align-items: center; gap: 3px; padding: 3px 14px; background: var(--surface-2); border-bottom: 1px solid var(--border); font-size: 16px; }
+.menubar .theme-btn { padding: 5px 10px; margin-left: 4px; }
+.menubar .theme-btn svg { width: 20px; height: 20px; }
 .menu { position: relative; }
-.menu-btn { font: inherit; border: 0; background: none; color: var(--text); padding: 5px 10px; border-radius: 4px; cursor: pointer; }
+.menu-btn { font: inherit; border: 0; background: none; color: var(--text); padding: 6px 13px; border-radius: 5px; cursor: pointer; }
 .menu-btn:hover, .menu.open .menu-btn { background: var(--accent-soft); }
-.menu-list { display: none; position: absolute; top: 100%; left: 0; z-index: 50; min-width: 240px; padding: 4px; margin-top: 2px;
+.menu-list { display: none; position: absolute; top: 100%; left: 0; z-index: 50; min-width: 280px; padding: 4px; margin-top: 2px;
   background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgb(10 14 22 / .18); }
 .menu.open .menu-list { display: flex; flex-direction: column; }
 .menu-list button { font: inherit; display: flex; justify-content: space-between; gap: 24px; align-items: center; text-align: left;
-  border: 0; background: none; color: var(--text); padding: 7px 12px; border-radius: 5px; cursor: pointer; white-space: nowrap; }
+  border: 0; background: none; color: var(--text); padding: 9px 14px; border-radius: 5px; cursor: pointer; white-space: nowrap; }
 .menu-list button:hover, .menu-list button:focus-visible { background: var(--accent-soft); outline: none; }
-.menu-list kbd { font: inherit; font-size: 12px; color: var(--muted); }
+.menu-list kbd { font: inherit; font-size: 14px; color: var(--muted); }
 .menu-list hr { border: 0; border-top: 1px solid var(--border); margin: 4px 6px; }
 .topbar { padding: 8px 20px; }
 

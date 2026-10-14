@@ -67,7 +67,7 @@ The menu bar at the very top works like in a Windows program:
 - File: New project, Open..., Save project (Ctrl+S), Save as... (Ctrl+Shift+S)
 - Settings: Dictionary..., DevMode...
 - Tools: Microsoft BIOS passwords... (see below)
-The sun / moon button at the right switches between light and dark.
+The sun / moon button next to Tools switches between light and dark.
 Under the menus: the project (click it to change the project setup), the
 Output picker (Shuru or SIMS) and whether the project is saved.
 
