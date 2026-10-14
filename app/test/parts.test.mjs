@@ -108,9 +108,19 @@ test('the newest Google Sheet paste counts; inputs are added together', () => {
   a.part.inputs = { reports: 'GG1*mac line\n', blanccoFiles: [{ name: 'a.csv', table: [['h']] }] };
   b.part.inputs = { reports: '', blanccoFiles: [{ name: 'b.csv', table: [['h']] }] };
   assert.deepEqual(combinedInputs([a.part, b.part]), {
+    bios: null,
     reports: 'GG1*mac line',
     blanccoFiles: [{ name: 'a.csv', table: [['h']], by: 'Avi' }, { name: 'b.csv', table: [['h']], by: 'Ben' }],
   });
+});
+
+test('the newest BIOS password file anyone loaded counts, and removing it is a change too', () => {
+  const a = emptyPart('Avi'), b = emptyPart('Ben');
+  a.inputs.bios = { fileName: 'old.txt', text: '1;x', at: 100 };
+  b.inputs.bios = { fileName: 'new.txt', text: '1;y', at: 200 };
+  assert.equal(combinedInputs([a, b]).bios.fileName, 'new.txt');
+  a.inputs.bios = { at: 300 }; // Avi removed it
+  assert.equal(combinedInputs([b, a]).bios.text, undefined);
 });
 
 test('every computer combines the parts the same way, whatever order it reads them in', () => {

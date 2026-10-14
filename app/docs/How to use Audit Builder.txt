@@ -321,4 +321,6 @@ each device.
    list as a sheet.
 A yellow note lists items that are BIOS locked in the project but have no
 password in the file.
-The passwords are NOT saved with the project: load the file again next time.
+The password file is saved with the project (also in a shared project, where
+everyone sees it; the newest file anyone loaded is used), so you only load it
+once. "Remove" takes the passwords out of the project.

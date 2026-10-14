@@ -31,7 +31,7 @@ const emptyProject = () => ({
   version: 2,
   // output: which sheet layout Review and Export use ('shuru' or 'sims')
   settings: { projectNumber: '', prefix: '', endClient: '', startNumber: 1, output: 'shuru' },
-  inputs: { reports: '', blanccoFiles: [], sheet: '' },
+  inputs: { reports: '', blanccoFiles: [], sheet: '', bios: null }, // bios: the Microsoft BIOS password file { fileName, text, at }
   manual: {}, overrides: {},
   simsOverrides: {}, // edits of SIMS-only columns, made in the Review table in SIMS layout
   savedToFile: true,
@@ -1350,14 +1350,23 @@ function initMenus() {
 }
 
 // ---------- Tools › Microsoft BIOS passwords ----------
-// The loaded file is only kept while the app is open, so BIOS passwords never go into the project file.
-const bios = { fileName: '', parsed: null, selected: '', q: '', projectOnly: false };
+// The loaded file is kept in the project (inputs.bios), so it's saved in the project file. In a shared project
+// the newest file anyone loaded is used.
+const bios = { selected: '', q: '', projectOnly: false, cache: null };
+
+// { fileName, parsed } of the project's password file, or null
+function biosFile() {
+  const f = reportProject().inputs.bios;
+  if (!f?.text) return null;
+  if (bios.cache?.text !== f.text) bios.cache = { text: f.text, parsed: parseBiosPasswords(f.text) };
+  return { fileName: f.fileName, parsed: bios.cache.parsed };
+}
 
 function biosMatch() {
   const settings = state.project.settings;
   const rows = outputRows();
   const order = r => { const k = itemKey(r.itemLookup); return k ? codeNumber(settings, k) : null; };
-  return matchBiosPasswords(bios.parsed, rows, order);
+  return matchBiosPasswords(biosFile().parsed, rows, order);
 }
 // the list as a sheet: one column per password (most devices have one or two)
 function biosSheet(rows) {
@@ -1382,8 +1391,9 @@ function qrSvg(text) {
 
 function renderBios() {
   const body = $('#biosBody');
-  $('#biosCopy').disabled = $('#biosXlsx').disabled = !bios.parsed;
-  if (!bios.parsed) {
+  const file = biosFile();
+  $('#biosCopy').disabled = $('#biosXlsx').disabled = !file;
+  if (!file) {
     body.innerHTML = `<div class="dropzone bios-drop" id="biosDrop"><p><b>Drop the password file here</b>, or click "Load password file…".</p>
       <p class="hint">The BulkBiosPasswordDetails….txt file from Microsoft: one line per password, "AssetNo;Password".</p></div>`;
     attachBiosDrop($('#biosDrop'));
@@ -1394,14 +1404,15 @@ function renderBios() {
   if (!rows.some(r => r.key === bios.selected)) bios.selected = rows[0]?.key ?? '';
   const sel = m.rows.find(r => r.key === bios.selected);
   const { cols } = biosSheet(m.rows);
-  const p = bios.parsed;
+  const p = file.parsed;
   const lockedList = m.lockedWithout.map(r => `${r.itemLookup}${r.asset ? ` (asset ${r.asset})` : ' (no asset tag)'}`);
 
   body.innerHTML = `
     <div class="bios-summary dropzone" id="biosDrop">
-      <b>${esc(bios.fileName)}</b>: ${plural(p.count, 'password')} for ${plural(p.assets.length, 'asset tag')}; <b>${m.matched}</b> of them are items in this project.
+      <b>${esc(file.fileName)}</b>: ${plural(p.count, 'password')} for ${plural(p.assets.length, 'asset tag')}; <b>${m.matched}</b> of them are items in this project.
       ${p.skipped ? `<span class="muted">${plural(p.skipped, 'line')} that weren't "asset;password" were skipped.</span>` : ''}
-      <span class="muted">Drop another file here to replace it.</span>
+      <span class="muted">Saved with the project. Drop another file here to replace it.</span>
+      <button class="btn small ghost" id="biosRemove" title="Take the passwords out of this project">Remove</button>
     </div>
     ${lockedList.length ? `<div class="banner warn">BIOS locked in this project, but not in the file: <b>${esc(lockedList.join(', '))}</b></div>` : ''}
     <div class="bios-layout">
@@ -1432,6 +1443,11 @@ function renderBios() {
     </div>`;
 
   attachBiosDrop($('#biosDrop'));
+  $('#biosRemove').onclick = () => {
+    if (!confirm('Remove the BIOS passwords from this project?' + (state.collab ? '\n\nThey are removed for everyone in the shared project.' : ''))) return;
+    setBiosFile(null);
+    toast('BIOS passwords removed from the project');
+  };
   // redrawing keeps the list where it was scrolled; only the arrow keys scroll it (just enough to show the row)
   const select = (key, byKey = false) => {
     const wrap = () => $('#biosBody .bios-list .table-wrap');
@@ -1476,12 +1492,20 @@ function attachBiosDrop(zone) {
 }
 
 async function loadBiosFile(file) {
-  const parsed = parseBiosPasswords(await file.text());
+  const text = await file.text();
+  const parsed = parseBiosPasswords(text);
   if (!parsed.assets.length) { toast(`${file.name} has no "asset;password" lines`, 'bad'); return; }
-  Object.assign(bios, { fileName: file.name, parsed, selected: '', q: '' });
-  renderBios();
+  Object.assign(bios, { selected: '', q: '' });
+  setBiosFile({ fileName: file.name, text });
   const m = biosMatch();
   toast(`Loaded ${plural(parsed.count, 'password')} for ${plural(parsed.assets.length, 'asset tag')}; ${m.matched} found in this project`);
+}
+
+// a removed file is kept as { at } (no text), so in a shared project the removal is newer than the file it removes
+function setBiosFile(f) {
+  state.project.inputs.bios = { ...f, at: Math.max(Date.now(), (reportProject().inputs.bios?.at || 0) + 1) };
+  changed();
+  if ($('#biosDialog').open) renderBios();
 }
 
 function initBios() {
@@ -1658,9 +1682,10 @@ function recordMine() {
   c.base = now;
   // setting a cell again (having seen the other value) settles a clash
   if (ops.length && c.conflicts.length) c.conflicts = combineParts([c.mine, ...otherParts()]).conflicts;
-  const inputs = { reports: state.project.inputs.reports, blanccoFiles: state.project.inputs.blanccoFiles };
-  const inputsChanged = inputs.reports !== c.mine.inputs.reports || JSON.stringify(inputs.blanccoFiles) !== JSON.stringify(c.mine.inputs.blanccoFiles);
-  c.mine.inputs = { reports: inputs.reports, blanccoFiles: structuredClone(inputs.blanccoFiles) };
+  const inputs = { reports: state.project.inputs.reports, blanccoFiles: state.project.inputs.blanccoFiles, bios: state.project.inputs.bios };
+  const inputsChanged = inputs.reports !== c.mine.inputs.reports || JSON.stringify(inputs.blanccoFiles) !== JSON.stringify(c.mine.inputs.blanccoFiles)
+    || inputs.bios?.at !== c.mine.inputs.bios?.at;
+  c.mine.inputs = { reports: inputs.reports, blanccoFiles: structuredClone(inputs.blanccoFiles), bios: inputs.bios };
   const settings = JSON.stringify(state.project.settings);
   if (settings !== c.settingsText && canEditSettings()) { c.settingsText = settings; c.settingsAt = Date.now(); c.settingsDirty = true; }
   if (ops.length || inputsChanged) c.dirty = true;
@@ -1999,7 +2024,7 @@ async function joinShared(entry, { again = false } = {}) {
     setCollab(null);
     state.project = Object.assign(migrate({
       settings: info.settings || {},
-      inputs: { reports: mine.inputs.reports, blanccoFiles: mine.inputs.blanccoFiles, sheet: view.sheet },
+      inputs: { reports: mine.inputs.reports, blanccoFiles: mine.inputs.blanccoFiles, sheet: view.sheet, bios: mine.inputs.bios },
       manual: view.manual, overrides: view.overrides, simsOverrides: view.simsOverrides,
     }), { savedToFile: true });
     setCollab(newCollab({

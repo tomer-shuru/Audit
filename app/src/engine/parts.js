@@ -3,7 +3,8 @@
 // is ever written by two people and Drive never has to choose between two versions.
 //
 // A part holds:
-//   inputs: { reports, blanccoFiles }   what this person pasted / added (everyone's are added together)
+//   inputs: { reports, blanccoFiles, bios }   what this person pasted / added (everyone's are added together;
+//                                       bios, the BIOS password file { fileName, text, at }: the newest one counts)
 //   sheet: { v, at, prev }              the Google Sheet rows: one shared box, the newest paste counts
 //   items: { [code]: { at, deleted } }  manual entries this person added or deleted
 //   cells: { manual | overrides | simsOverrides: { [code]: { [field]: { v, at, prev } } } }
@@ -15,7 +16,7 @@ export const COLLECTIONS = ['manual', 'overrides', 'simsOverrides'];
 
 export const emptyPart = (person, device = '') => ({
   version: 1, person, device, updatedAt: 0,
-  inputs: { reports: '', blanccoFiles: [] },
+  inputs: { reports: '', blanccoFiles: [], bios: null },
   sheet: null, items: {},
   cells: { manual: {}, overrides: {}, simsOverrides: {} },
 });
@@ -171,9 +172,12 @@ export function combineParts(parts) {
   return { view, stamps, conflicts };
 }
 
-// the inputs everyone added, together: reports one after the other, Blancco files in one list (each knows whose it is)
+// the inputs everyone added, together: reports one after the other, Blancco files in one list (each knows whose it is),
+// the newest BIOS password file (or its removal)
 export function combinedInputs(parts) {
+  const bios = parts.map(p => p.inputs?.bios).filter(b => b?.at).reduce((a, b) => (!a || b.at > a.at ? b : a), null);
   return {
+    bios,
     reports: parts.map(p => String(p.inputs?.reports ?? '').trim()).filter(Boolean).join('\n'),
     blanccoFiles: parts.flatMap(p => (p.inputs?.blanccoFiles || []).map(f => ({ ...f, by: p.person }))),
   };
