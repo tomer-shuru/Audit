@@ -18,8 +18,10 @@ Coworkers open it from the shared Drive folder (via Drive for desktop), so they 
 
 **DevMode** (Settings menu, password protected): edit the rules the report is built with: battery grades, Blancco messages and comment columns, erasure words and texts, disk types, texts (ITD, "-", lock texts), "no asset tag" values, makes whose model is in System version, check levels (red / yellow / gray / off), report and Locked and Faulty column order and headers, Blancco column names. Changes are previewed against the open project and only apply when saved. They are saved to the shared `G:\My Drive\Audit Builder\Config\config.json` (everyone connects to it once, like the Dictionary), which keeps its last 20 versions for restoring. Only a hash of the password is stored; the default is set in `src/engine/config.js` and can be changed in DevMode.
 
-**Save project** writes a `.audit.json` file; **Open…** loads one again. Open also imports an old `Audit.xlsm`.
+**Save project** writes a `.audit.json` file (a new project goes straight into `G:\My Drive\Audit Builder\Projects` when the folder is connected). **Open…** is an in-app list of that Projects folder (shared projects and project files, with search); Browse… opens any file, also an old `Audit.xlsm`.
 Work is also auto-saved in the browser, but the project file is the real record.
+
+**Shared projects** (File › Share project; File › Open lists them): several people work on one project at once through the shared folder. Each project is a folder `G:\My Drive\Audit Builder\Projects\<End client_Project number>\` with `project.json` (settings, written only by the person who shared it) and one `<name>.part.json` per person, written only by that person, so Drive never sees two versions of one file. A part holds that person's inputs and every cell they changed, with the time; the app combines everyone's parts cell by cell (newest wins, clashes become a note on Review). Each app saves its own part ~1.5 s after a change (status in the top bar: Saving… / Saved to Drive) and reads the others' every 15 s and when the window gets focus.
 
 ## Development
 ```
@@ -38,6 +40,8 @@ npm run package # optional: also writes dist/AuditBuilder <version>.zip (app + g
 - `src/engine/biospw.js` – reads the Microsoft BIOS password file and matches it to the items (QR codes: `qrcode-generator`, bundled)
 - `scripts/extract-sims.mjs` – reloads the SIMS codes from a SIMS template into `default-models.json` (with the built-in translations)
 - `src/ui/devmode.js` – DevMode window, password, shared config.json
+- `src/engine/parts.js` – shared projects: recording a person's changes in their part, combining everyone's parts
+- `src/ui/sharedfiles.js` – shared projects on disk (Projects folder, project.json, part files)
 
 To check the app against a workbook: `npm run fixture -- <path-to-Audit.xlsm> <name>` and run `npm test`.
 Fixtures hold client serial numbers, so `test/fixtures/` is git-ignored.

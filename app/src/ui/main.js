@@ -19,6 +19,8 @@ import {
   MODELS_FILE, chooseModelsFile, chooseNewModelsFile, hasPermission, readFileText,
   FOLDER, canUseFolder, chooseFolder, folderFile,
 } from './filesave.js';
+import { emptyPart, normalizePart, diffShared, patchShared, recordOps, combineParts, combinedInputs } from '../engine/parts.js';
+import { PROJECT_JSON, partFileName, projectDirName, projectsDir, projectDir, readJson, writeJson, readParts, listSharedProjects, listProjectFiles } from './sharedfiles.js';
 
 const STORE_PROJECT = 'auditApp.project';
 const STORE_MODELS = 'auditApp.models';
@@ -69,6 +71,7 @@ const state = {
   modelsTab: 'models',
   modelsFilter: {}, // Dictionary filters per tab: { q, category, mapped }
   manualSelected: new Set(),
+  collab: null, // a shared project (see "shared projects" below); null for a project on this computer only
 };
 
 const settingsComplete = s => s.projectNumber.trim() && s.endClient.trim(); // the prefix may be empty (codes that are just numbers)
@@ -78,6 +81,7 @@ const OUTPUTS = { shuru: 'Shuru', sims: 'SIMS' };
 // the Output pickers (top bar, Review, Export window) all change the same project setting
 function setOutput(value) {
   if (!OUTPUTS[value] || value === (state.project.settings.output || 'shuru')) return;
+  if (!canEditSettings()) { renderChrome(); toast(`Only ${state.collab.owner} can change the output of this shared project`, 'bad'); return; }
   state.project.settings.output = value;
   changed();
   toast(`Output: ${OUTPUTS[value]}. Review and Export now use the ${OUTPUTS[value]} layout.`);
@@ -86,11 +90,13 @@ function setOutput(value) {
 function recompute() {
   state.sheet = readSheet();
   const sheet = state.sheet?.records ?? null;
-  state.report = buildReport(state.project, state.models, state.config, sheet);
+  const project = reportProject();
+  state.report = buildReport(project, state.models, state.config, sheet);
   // the SIMS layout is made from the finished report rows; its checks join the report's
-  state.sims = isSims() ? buildSims(state.report, state.project, state.models, state.config, sheet) : null;
+  state.sims = isSims() ? buildSims(state.report, project, state.models, state.config, sheet) : null;
   if (state.sims) state.report.warnings.push(...state.sims.warnings);
   if (state.sheet) state.report.warnings.push(...sheetWarnings(state.sheet));
+  if (state.collab) state.report.warnings.push(...conflictWarnings());
 }
 
 // Rows already in the Google Sheet (Data tab): one more input for the report, the last in line. They are
@@ -136,6 +142,7 @@ function emptyRow(n) {
 }
 function changed({ rerender = true } = {}) {
   state.project.savedToFile = false;
+  if (state.collab) recordMine();
   store(STORE_PROJECT, state.project);
   recompute();
   if (rerender) render(); else renderChrome();
@@ -198,10 +205,15 @@ function renderChrome() {
     ? `<b>${esc(s.projectNumber)}</b><span>${esc(s.endClient)}</span><span>${esc(s.prefix || 'no prefix')}</span>`
     : '<b>No project set up</b>';
   const saved = $('#saveState');
-  saved.textContent = !state.project.savedToFile ? 'Unsaved changes' : state.fileName ? `Saved · ${state.fileName}` : '';
-  saved.classList.toggle('dirty', !state.project.savedToFile);
+  if (state.collab) renderCollabState(saved);
+  else {
+    saved.className = 'save-state';
+    saved.textContent = !state.project.savedToFile ? 'Unsaved changes' : state.fileName ? `Saved · ${state.fileName}` : '';
+    saved.classList.toggle('dirty', !state.project.savedToFile);
+    saved.title = state.fileName ? `Save (Ctrl+S) writes to ${state.fileName}` : 'Save (Ctrl+S) will ask where to save the project file';
+  }
+  renderPeopleChip();
   document.querySelectorAll('select[data-output]').forEach(sel => { sel.value = s.output || 'shuru'; });
-  saved.title = state.fileName ? `Save (Ctrl+S) writes to ${state.fileName}` : 'Save (Ctrl+S) will ask where to save the project file';
   // Review shows how many checks there are: red = problems, yellow = warnings, gray = notes
   const levels = { error: 'problem', warn: 'warning', sims: 'SIMS note', info: 'note' };
   const checks = Object.entries(levels).map(([l, word]) => {
@@ -270,7 +282,11 @@ function keepScroll(main, draw) {
 function renderData(main) {
   const inp = state.project.inputs;
   const files = inp.blanccoFiles;
-  const merged = normalizeBlancco(mergeTables(files.map(f => f.table)), state.config.blanccoColumns);
+  // in a shared project, what the others added is listed too (they change it on their computer)
+  const others = otherParts().filter(p => p.inputs.blanccoFiles.length || p.inputs.reports.trim());
+  const othersFiles = others.flatMap(p => p.inputs.blanccoFiles.map(f => ({ ...f, by: p.person })));
+  const allFiles = [...files, ...othersFiles];
+  const merged = normalizeBlancco(mergeTables(allFiles.map(f => f.table)), state.config.blanccoColumns);
   const serials = new Set(merged.rows.map(r => r.serial).filter(Boolean));
 
   const fileInfo = f => {
@@ -287,15 +303,15 @@ function renderData(main) {
         ${files.length ? '<button class="btn ghost" id="blanccoClear">Remove all</button>' : ''}
       </div>
     </div>
-    ${files.length ? `
-      <ul class="file-list">${files.map((f, i) => { const info = fileInfo(f); return `
+    ${allFiles.length ? `
+      <ul class="file-list">${allFiles.map((f, i) => { const info = fileInfo(f); return `
         <li><span class="file-name">${esc(f.name)}</span>
           <span class="${info.missing.length ? 'bad-text' : 'muted'}">${info.missing.length ? `missing: ${esc(info.missing.join(', '))}` : plural(info.rows, 'row')}</span>
-          <button class="icon-btn" data-rmfile="${i}" title="Remove this file">✕</button></li>`; }).join('')}
+          ${f.by ? `<span class="by" title="Added by ${esc(f.by)} (only they can remove it)">${esc(f.by)}</span>` : `<button class="icon-btn" data-rmfile="${i}" title="Remove this file">✕</button>`}</li>`; }).join('')}
       </ul>
       <div class="status ${merged.missing.length ? 'bad' : 'good'}">
         ${merged.missing.length ? `Missing columns: ${esc(merged.missing.join(', '))} ·` : '✓'}
-        ${plural(files.length, 'file')} · ${plural(merged.rows.length, 'disk row')} · ${plural(serials.size, 'device')}
+        ${plural(allFiles.length, 'file')} · ${plural(merged.rows.length, 'disk row')} · ${plural(serials.size, 'device')}
       </div>` : '<p class="empty drop-hint">Drop Blancco files here</p>'}
     <details>
       <summary>…or paste rows instead (copy the cells including the header row)</summary>
@@ -309,6 +325,11 @@ function renderData(main) {
       Each line is recognised by its number of fields (Mac 17, Windows 11).</p></div></div>
     <textarea id="reportsInput" class="mono" rows="12" spellcheck="false" placeholder="GG23*YT26FYC924*5285978*Laptop*Apple*MacBookPro18,3*…&#10;GG17*4V3SHW3*4004343*Notebook*Dell Inc.*Latitude 5431*…">${esc(inp.reports)}</textarea>
     <div class="status" id="reportsStatus">${reportsStatus(inp.reports)}</div>
+    ${others.filter(p => p.inputs.reports.trim()).map(p => `
+    <details class="others-input">
+      <summary><b>${esc(p.person)}'s reports</b> · ${reportsStatus(p.inputs.reports)} <span class="muted">(only ${esc(p.person)} can change them)</span></summary>
+      <textarea class="mono" rows="6" readonly>${esc(p.inputs.reports)}</textarea>
+    </details>`).join('')}
   </section>
 
   <section class="card">
@@ -316,7 +337,7 @@ function renderData(main) {
       <div><h2>Rows already in the Google Sheet <span class="muted">optional</span></h2>
       <p class="hint">If some items are already filled in the project's Google Sheet, copy those rows there (from the first item row down past the last filled one,
       same columns as the export) and paste them here. They are used like the other inputs, last in line: Blancco, the Mac and Windows reports and manual entries
-      win wherever they have a value, and the sheet fills in what they leave empty (green cells on Review). Review edits and manual entries can change them.${isSims() ? ' This project\'s output is SIMS, so copy them from the SIMS sheet, columns D (Item No) to T (Blancco Result).' : ''} </p></div>
+      win wherever they have a value, and the sheet fills in what they leave empty (green cells on Review). Review edits and manual entries can change them.${isSims() ? ' This project\'s output is SIMS, so copy them from the SIMS sheet, columns D (Item No) to T (Blancco Result).' : ''}${state.collab ? ' Shared project: everyone sees the same rows here, and the newest paste counts.' : ''} </p></div>
       ${inp.sheet.trim() ? '<div class="actions"><button class="btn ghost" id="sheetClear">Clear</button></div>' : ''}
     </div>
     <textarea id="sheetInput" class="mono" rows="4" spellcheck="false" placeholder="Paste the Google Sheet rows here">${esc(inp.sheet)}</textarea>
@@ -881,6 +902,13 @@ function openSetup({ force = false } = {}) {
   const s = state.project.settings;
   const f = $('#setupForm');
   f.projectNumber.value = s.projectNumber; f.prefix.value = s.prefix; f.endClient.value = s.endClient; f.startNumber.value = s.startNumber ?? 1;
+  // a shared project's settings are changed by the person who shared it
+  const locked = !canEditSettings();
+  for (const el of f.querySelectorAll('input')) el.disabled = locked;
+  f.querySelector('[type=submit]').hidden = locked;
+  $('#setupLocked').hidden = !locked;
+  $('#setupLocked').textContent = locked ? `This is a shared project: only ${state.collab.owner} can change these.` : '';
+  $('#setupCancel').textContent = locked ? 'Close' : 'Cancel';
   $('#setupCancel').hidden = force;
   d.dataset.force = force ? '1' : '';
   updateSetupPreview();
@@ -1061,6 +1089,7 @@ async function useFolder(dir, ask) {
   }
   if (config) await attachConfigFile(config, { announce: ask });
   renderShared(); renderConfigBar();
+  if (state.collab) collabConnected(); // a shared project that was waiting for the folder
   return { models: !!models, config: !!config };
 }
 
@@ -1482,6 +1511,7 @@ async function openProjectFile(file) {
     let p;
     if (/\.xls[xm]$/i.test(file.name)) { p = await importWorkbook(file); toast(`Imported ${file.name}`); }
     else { p = await readJsonFile(file); toast(`Opened ${file.name}`); }
+    setCollab(null); // opening a project file leaves a shared project (it stays in the shared folder)
     state.project = Object.assign(migrate(p), { savedToFile: true });
     state.manualSelected.clear();
     clearHistory();
@@ -1498,12 +1528,26 @@ async function openProjectFile(file) {
 
 // Save: the first time asks where, after that overwrites the same file. "Save as" always asks.
 async function saveProject({ saveAs = false } = {}) {
+  // a shared project saves itself; Save just does it now, Save as saves everyone's work together as a normal project file
+  if (state.collab && !saveAs) { await saveMine({ announce: true }); return; }
   const s = state.project.settings;
   // suggested name for a new file: "End client_Project number.audit.json" (characters Windows doesn't allow become -)
   const base = [s.endClient, s.projectNumber].map(v => String(v ?? '').trim().replace(/[\\/:*?"<>|]+/g, '-')).filter(Boolean).join('_');
   const name = `${base || 'project'}.audit.json`;
-  const copy = { ...state.project }; delete copy.savedToFile;
+  const copy = { ...reportProject() }; delete copy.savedToFile;
+  if (state.collab) copy.inputs = { ...copy.inputs, blanccoFiles: copy.inputs.blanccoFiles.map(({ by, ...f }) => f) };
   const text = JSON.stringify(copy, null, 1);
+
+  if (state.collab) { // a copy: the shared project stays open
+    if (!canSaveInPlace) { downloadJson(copy, name); return; }
+    try {
+      const handle = await chooseSaveFile(name, await projectsStart());
+      if (!handle) return;
+      await writeFile(handle, text);
+      toast(`Saved a copy of the shared project to ${handle.name}`);
+    } catch (err) { toast(`Not saved: ${err.message}`, 'bad'); }
+    return;
+  }
 
   if (!canSaveInPlace) {
     downloadJson(copy, name);
@@ -1511,14 +1555,15 @@ async function saveProject({ saveAs = false } = {}) {
     let handle = saveAs ? null : await rememberedFile();
     try {
       if (!handle) {
-        handle = await chooseSaveFile(name);
+        // a new project goes straight into the Projects folder (when it's connected); Save as always asks
+        handle = (!saveAs && await projectFileInFolder(name)) || await chooseSaveFile(name, await projectsStart());
         if (!handle) return; // cancelled
       }
       await writeFile(handle, text);
     } catch (err) {
       if (err.name === 'NotAllowedError') { toast('Not saved: the browser wasn\'t allowed to edit the file. Try again, or use Save as.', 'bad'); return; }
       if (err.name === 'NotFoundError') { // file was moved or deleted: ask again
-        handle = await chooseSaveFile(name);
+        handle = await chooseSaveFile(name, await projectsStart());
         if (!handle) return;
         await writeFile(handle, text);
       } else { toast(`Not saved: ${err.message}`, 'bad'); return; }
@@ -1532,18 +1577,492 @@ async function saveProject({ saveAs = false } = {}) {
   toast(canSaveInPlace ? `Saved to ${state.fileName}` : `Downloaded ${name}`);
 }
 
-async function openProject() {
-  if (!canSaveInPlace) { $('#openFile').click(); return; }
+// Browse… in the Open window: the browser's file picker (starting in the Projects folder)
+async function browseProject() {
   let picked;
-  try { picked = await chooseOpenFile(); } catch (err) { toast(`Couldn't open: ${err.message}`, 'bad'); return; }
-  if (!picked) return;
+  try { picked = await chooseOpenFile(await projectsStart()); } catch (err) { toast(`Couldn't open: ${err.message}`, 'bad'); return; }
+  if (!picked || !okToReplace()) return;
   const isProjectFile = !/\.xls[xm]$/i.test(picked.file.name);
   if (await openProjectFile(picked.file)) {
+    $('#collabDialog').close();
     // saving an opened project writes back to it; an imported workbook is saved as a new file
     await rememberFile(isProjectFile ? picked.handle : null);
     state.fileName = isProjectFile ? picked.handle.name : '';
     renderChrome();
   }
+}
+
+// ---------- shared projects ----------
+// Several people work on one project at the same time (see engine/parts.js). It lives in
+// G:\My Drive\Audit Builder\Projects\<End client_Project number>\: everyone's app writes only its own <name>.part.json
+// (a moment after each change) and reads the others' every few seconds. state.project is everyone's work together:
+// inputs.reports and inputs.blanccoFiles are this person's own (the others' are added in reportProject); manual entries,
+// Review edits and the Google Sheet rows are everyone's. Project settings are changed by the person who shared it.
+const STORE_PERSON = 'auditApp.person', STORE_DEVICE = 'auditApp.device', STORE_COLLAB = 'auditApp.collab';
+const COLLAB_POLL = 15000, SAVE_DELAY = 1500;
+const thisDevice = load(STORE_DEVICE, '') || (() => {
+  const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  store(STORE_DEVICE, id);
+  return id;
+})();
+
+const sharedView = p => structuredClone({ manual: p.manual, overrides: p.overrides, simsOverrides: p.simsOverrides, sheet: p.inputs.sheet });
+const otherParts = () => (state.collab ? Object.values(state.collab.others).map(o => o.part) : []);
+const canEditSettings = () => !state.collab || state.collab.owner === state.collab.me;
+const collabRoot = () => (folder.handle && !folder.pending ? folder.handle : null);
+const collabUnsaved = () => !!state.collab && (state.collab.dirty || state.collab.writing || state.collab.settingsDirty);
+const people = n => (n === 1 ? '1 person' : `${n} people`);
+
+// the project the report is built from: this person's inputs plus everyone else's
+function reportProject() {
+  if (!state.collab) return state.project;
+  const mine = { person: state.collab.me, inputs: state.project.inputs };
+  return { ...state.project, inputs: { ...state.project.inputs, ...combinedInputs([mine, ...otherParts()]) } };
+}
+
+// state.collab: { dir (the project's folder name), owner, me, mine (this person's part), others ({ file: { part, … } }),
+//   base (the shared data as last recorded), stamps, conflicts, settingsText, settingsAt,
+//   dirty / settingsDirty (not written yet), writing, reading, error, savedAt, readAt, timer }
+function newCollab(c) {
+  return {
+    others: {}, base: null, stamps: {}, conflicts: [], settingsText: '', settingsAt: 0,
+    dirty: false, settingsDirty: false, writing: false, reading: false, error: '', savedAt: 0, readAt: 0, timer: 0,
+    ...c,
+  };
+}
+function setCollab(c) {
+  if (state.collab) clearTimeout(state.collab.timer);
+  state.collab = c;
+  persistCollab();
+}
+// kept on this computer too, so a shared project opens again after a restart (and nothing is lost while offline)
+function persistCollab() {
+  const c = state.collab;
+  store(STORE_COLLAB, c && {
+    dir: c.dir, owner: c.owner, me: c.me, mine: c.mine, stamps: c.stamps,
+    dirty: c.dirty, settingsDirty: c.settingsDirty, settingsAt: c.settingsAt, settingsText: c.settingsText,
+  });
+}
+function restoreCollab() {
+  const s = load(STORE_COLLAB, null);
+  if (!s?.dir || !s.mine) return null;
+  return newCollab({ ...s, mine: normalizePart(s.mine), stamps: s.stamps || {}, base: sharedView(state.project) });
+}
+
+// after every change: what this person changed goes into their part, which is saved a moment later
+function recordMine() {
+  const c = state.collab;
+  const now = sharedView(state.project);
+  const ops = diffShared(c.base, now);
+  recordOps(c.mine, ops, c.stamps);
+  c.base = now;
+  // setting a cell again (having seen the other value) settles a clash
+  if (ops.length && c.conflicts.length) c.conflicts = combineParts([c.mine, ...otherParts()]).conflicts;
+  const inputs = { reports: state.project.inputs.reports, blanccoFiles: state.project.inputs.blanccoFiles };
+  const inputsChanged = inputs.reports !== c.mine.inputs.reports || JSON.stringify(inputs.blanccoFiles) !== JSON.stringify(c.mine.inputs.blanccoFiles);
+  c.mine.inputs = { reports: inputs.reports, blanccoFiles: structuredClone(inputs.blanccoFiles) };
+  const settings = JSON.stringify(state.project.settings);
+  if (settings !== c.settingsText && canEditSettings()) { c.settingsText = settings; c.settingsAt = Date.now(); c.settingsDirty = true; }
+  if (ops.length || inputsChanged) c.dirty = true;
+  persistCollab();
+  if (c.dirty || c.settingsDirty) {
+    clearTimeout(c.timer);
+    c.timer = setTimeout(() => saveMine(), SAVE_DELAY);
+  }
+}
+
+async function collabDir(root) {
+  const dir = await projectDir(root, state.collab.dir);
+  if (!dir) throw Object.assign(new Error(`the folder Projects\\${state.collab.dir} isn't in the shared folder any more`), { name: 'NotFoundError' });
+  return dir;
+}
+
+// writes this person's part (and the settings, for the person who shared the project)
+async function saveMine({ announce = false } = {}) {
+  const c = state.collab;
+  if (!c) return;
+  clearTimeout(c.timer);
+  const root = collabRoot();
+  if (!root) {
+    renderChrome();
+    if (announce) toast('Not saved yet: the Audit Builder folder isn\'t connected. Click the status at the top to connect it.', 'bad');
+    return;
+  }
+  if (c.writing) { c.timer = setTimeout(() => saveMine({ announce }), 300); return; } // one write at a time
+  const part = c.dirty, settings = c.settingsDirty;
+  c.writing = true; c.dirty = false; c.settingsDirty = false;
+  renderChrome();
+  try {
+    const dir = await collabDir(root);
+    if (part) { c.mine.updatedAt = Date.now(); await writeJson(dir, partFileName(c.me), c.mine); }
+    if (settings) await writeJson(dir, PROJECT_JSON, { version: 1, owner: c.owner, settings: state.project.settings, settingsAt: c.settingsAt });
+    c.error = ''; c.savedAt = Date.now();
+    if (announce) toast('Saved to the shared project');
+  } catch (err) {
+    if (part) c.dirty = true;
+    if (settings) c.settingsDirty = true;
+    c.error = err.message;
+    if (announce) toast(`Not saved: ${err.message}`, 'bad');
+  } finally {
+    c.writing = false;
+    if (state.collab === c) { persistCollab(); renderChrome(); }
+  }
+}
+
+// typing in a box: the page isn't redrawn under the person's hands (it waits until they pause)
+let lastTyped = 0;
+document.addEventListener('input', () => { lastTyped = Date.now(); }, true);
+function isEditing() {
+  const a = document.activeElement;
+  if (!a || a === document.body) return false;
+  if (a.isContentEditable) return true; // a table cell being typed in
+  return a.matches('textarea, input') && !a.matches('.grid-sink, [type=checkbox], [type=file], [readonly]') && Date.now() - lastTyped < 4000;
+}
+
+// reads the others' parts (and the settings) and brings their changes in
+async function refreshCollab() {
+  const c = state.collab;
+  const root = collabRoot();
+  if (!c || !root || c.reading) return;
+  c.reading = true;
+  try {
+    const dir = await collabDir(root);
+    let info = null;
+    try { info = (await readJson(dir, PROJECT_JSON))?.data; } catch { /* still syncing: next time */ }
+    const others = await readParts(dir, c.others, partFileName(c.me));
+    c.readAt = Date.now();
+    if (c.error.includes('Projects\\')) c.error = '';
+    const partsChanged = Object.keys(others).length !== Object.keys(c.others).length || Object.entries(others).some(([k, o]) => c.others[k] !== o);
+    const settingsChanged = !!info && !canEditSettings() && (info.settingsAt || 0) !== c.settingsAt;
+    if (!partsChanged && !settingsChanged) return;
+    if (isEditing()) { setTimeout(() => refreshCollab(), 2500); return; } // read again once they pause
+    c.others = others;
+    if (settingsChanged) {
+      Object.assign(state.project.settings, info.settings);
+      c.owner = info.owner || c.owner;
+      c.settingsAt = info.settingsAt || 0;
+      c.settingsText = JSON.stringify(state.project.settings);
+    }
+    applyCombined();
+  } catch (err) {
+    c.error = err.message;
+  } finally {
+    c.reading = false;
+    if (state.collab === c) renderChrome();
+  }
+  if (c.dirty && !c.writing && state.collab === c) saveMine(); // changes made while it couldn't save
+}
+const collabConnected = () => refreshCollab();
+
+// everyone's parts together → state.project, keeping the objects the open tables use
+function applyCombined() {
+  const c = state.collab;
+  const { view, stamps, conflicts } = combineParts([c.mine, ...otherParts()]);
+  const ops = diffShared(c.base, view);
+  patchShared(state.project, ops);
+  // undo / redo keep working: the others' changes go into the remembered steps too, so undo only undoes your own
+  const rebase = list => list.map(s => JSON.stringify(patchShared(JSON.parse(s), ops)));
+  history.undo = rebase(history.undo); history.redo = rebase(history.redo);
+  c.base = sharedView(state.project); c.stamps = stamps; c.conflicts = conflicts;
+  persistCollab();
+  store(STORE_PROJECT, state.project);
+  recompute();
+  // redraw, keeping the cursor in the box the person was in
+  const active = document.activeElement, id = active?.id;
+  const sel = id && typeof active.selectionStart === 'number' ? [active.selectionStart, active.selectionEnd] : null;
+  render();
+  const again = id && document.getElementById(id);
+  if (again && again !== active) { again.focus(); if (sel) try { again.setSelectionRange(...sel); } catch { /* not a text box */ } }
+}
+
+// cells two people changed at the same moment: a note on Review (the newest value is used)
+function conflictWarnings() {
+  const label = (c, f) => {
+    const cols = c === 'manual' ? MANUAL_FIELDS : c === 'simsOverrides' ? SIMS_COLUMNS : reportColumns(state.config);
+    const col = cols.find(([k]) => k === f);
+    return col ? col[2] ?? col[1] : f;
+  };
+  return state.collab.conflicts.map(x => ({
+    level: 'info', item: x.code,
+    text: `${x.code} ${label(x.c, x.f)}: ${x.kept.person} and ${x.lost.person} changed it at the same time. ${x.kept.person}'s "${x.kept.v || '(empty)'}" is used (the newest); ${x.lost.person} had "${x.lost.v || '(empty)'}".`,
+  }));
+}
+
+// the save status at the top, like Google Sheets: Saving… / Saved to Drive / Not saved / Not connected
+const SYNC_ICONS = {
+  sync: '<svg class="spin" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>',
+  done: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18h10.5a4.5 4.5 0 0 0 .5-9 6 6 0 0 0-11.6 1.5A4 4 0 0 0 7 18z"/><path d="M9.5 13.5l2 2 3.5-3.5"/></svg>',
+  error: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18h10.5a4.5 4.5 0 0 0 .5-9 6 6 0 0 0-11.6 1.5A4 4 0 0 0 7 18z"/><path d="M12 10v3M12 15.5v.01"/></svg>',
+  off: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18h10.5a4.5 4.5 0 0 0 .5-9 6 6 0 0 0-11.6 1.5A4 4 0 0 0 7 18z"/><path d="M4 4l16 16"/></svg>',
+  people: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14a6.5 6.5 0 0 1 3.5 6"/></svg>',
+};
+function renderCollabState(el) {
+  const c = state.collab;
+  const [kind, icon, text, title] =
+    !collabRoot() ? ['off', SYNC_ICONS.off, collabUnsaved() ? 'Not connected · changes kept here' : 'Not connected',
+      'The Audit Builder folder isn\'t connected, so changes can\'t be shared. Click to connect it.']
+    : c.error ? ['bad', SYNC_ICONS.error, 'Not saved', `Couldn't save to the shared project: ${c.error}. Click to try again.`]
+    : collabUnsaved() ? ['busy', SYNC_ICONS.sync, 'Saving…', 'Saving your changes to the shared project']
+    : ['good', SYNC_ICONS.done, 'Saved to Drive', `All your changes are saved in the shared project${c.savedAt ? ` (at ${new Date(c.savedAt).toLocaleTimeString()})` : ''}. Google Drive sends them on to the others.`];
+  el.className = `save-state sync ${kind}`;
+  el.innerHTML = `${icon}<span>${text}</span>`;
+  el.title = title;
+}
+function renderPeopleChip() {
+  const b = $('#peopleChip');
+  b.hidden = !state.collab;
+  $('#btnLeaveShared').hidden = !state.collab;
+  if (!state.collab) return;
+  b.innerHTML = `${SYNC_ICONS.people}<span>Shared · ${people(1 + Object.keys(state.collab.others).length)}</span>`;
+  b.title = `Shared project (Projects\\${state.collab.dir}). Click to see who is working on it.`;
+}
+function clickSaveState() {
+  if (!state.collab) return;
+  if (!collabRoot()) { collabRootAsk(); return; }
+  if (state.collab.error) { saveMine({ announce: true }); refreshCollab(); return; }
+  openPeople();
+}
+
+const ago = t => {
+  if (!t) return 'not yet';
+  const s = Math.max(0, Math.round((Date.now() - t) / 1000));
+  if (s < 60) return 'just now';
+  if (s < 3600) return `${Math.round(s / 60)} min ago`;
+  if (s < 86400) return `${Math.round(s / 3600)} h ago`;
+  return new Date(t).toLocaleDateString();
+};
+
+// connects the shared folder if needed (only from a click: the browser may ask); the folder, or null
+async function collabRootAsk() {
+  if (!canUseFolder) { toast('Shared projects need Chrome or Edge', 'bad'); return null; }
+  if (folder.handle && folder.pending) { try { await useFolder(folder.handle, true); } catch { /* asked below */ } }
+  if (!folder.handle) await connectFolder();
+  if (!collabRoot()) return null;
+  return collabRoot();
+}
+
+// asks this person's name once (it names their file in every shared project)
+function askName({ again = false } = {}) {
+  const known = load(STORE_PERSON, '');
+  if (known && !again) return Promise.resolve(known);
+  return new Promise(resolve => {
+    const d = $('#nameDialog'), f = $('#nameForm');
+    f.person.value = again ? '' : known;
+    $('#nameAgain').hidden = !again;
+    f.onsubmit = e => {
+      e.preventDefault();
+      const name = f.person.value.trim().replace(/[\\/:*?"<>|]+/g, '-').replace(/[. ]+$/, '');
+      if (!name) return;
+      store(STORE_PERSON, name);
+      resolve(name);
+      d.close();
+    };
+    $('#nameCancel').onclick = () => d.close();
+    d.onclose = () => resolve(null);
+    d.showModal();
+    f.person.focus();
+  });
+}
+
+// File › Share project: the open project becomes a shared one, with this person as its owner
+async function shareProject() {
+  if (state.collab) { openPeople(); return; }
+  if (!settingsComplete(state.project.settings)) { openSetup(); toast('Set up the project first', 'bad'); return; }
+  const root = await collabRootAsk();
+  if (!root) return;
+  const me = await askName();
+  if (!me) return;
+  const name = projectDirName(state.project.settings);
+  try {
+    const existing = await projectDir(root, name);
+    if (existing && await readJson(existing, PROJECT_JSON).catch(() => true)) {
+      toast(`${name} is already a shared project. Open it with File › Open.`, 'bad');
+      return;
+    }
+    const dir = await projectDir(root, name, true);
+    if (!dir) throw new Error('couldn\'t make the project folder');
+    const c = newCollab({ dir: name, owner: me, me, mine: emptyPart(me, thisDevice), base: sharedView(emptyProject()) });
+    setCollab(c);
+    recordMine(); // everything in the project so far is this person's
+    c.dirty = true; // their file is written even while the project is still empty
+    clearHistory();
+    state.fileName = ''; rememberFile(null);
+    await saveMine();
+    recompute(); render();
+    if (c.error) toast(`Shared, but not saved yet: ${c.error}`, 'bad');
+    else toast('Project shared. Coworkers open it with File › Open.');
+  } catch (err) { toast(`Couldn't share the project: ${err.message}`, 'bad'); }
+}
+
+// File › Open…: the shared projects and the project files in the connected Audit Builder folder (Projects), picked
+// in the app. Browse… opens the browser's file picker, for a file somewhere else or an old Audit.xlsm.
+async function openProjectList() {
+  if (!canSaveInPlace) { $('#openFile').click(); return; }
+  // after a browser restart the folder waits for one OK; this click lets the browser ask
+  if (folder.handle && folder.pending) { try { await useFolder(folder.handle, true); } catch { /* not connected: shown below */ } }
+  const root = collabRoot();
+  let sharedList = [], files = [];
+  if (root) {
+    try { [sharedList, files] = await Promise.all([listSharedProjects(root), listProjectFiles(root)]); }
+    catch (err) { toast(`Couldn't read the Projects folder: ${err.message}`, 'bad'); }
+  }
+  const openNow = !state.collab && state.fileName;
+  $('#collabTitle').textContent = 'Open project';
+  $('#collabBody').innerHTML = !root ? `
+    <div class="shared-box"><span>Connect the Audit Builder folder to pick projects here, or use Browse… to open a file.</span>
+      ${canUseFolder ? '<button class="btn small primary" id="openConnect">Connect Audit Builder folder…</button>' : ''}</div>` : `
+    <input type="search" id="openSearch" class="open-search" placeholder="Search projects…" aria-label="Search projects">
+    <h3>Shared projects <span class="muted">worked on together, saved as you work</span></h3>
+    ${sharedList.length ? `<ul class="project-list">${sharedList.map((p, i) => `
+      <li><div><b>${esc(p.info.settings?.endClient || p.name)}</b> · ${esc(p.info.settings?.projectNumber || '')}
+        <span class="muted">${esc(p.info.settings?.prefix || '')}</span><br>
+        <span class="muted">Shared by ${esc(p.info.owner || '?')} · ${esc(p.people.map(x => x.person).join(', ') || 'nobody yet')} · last change ${ago(p.modified)}</span></div>
+        ${state.collab?.dir === p.name ? '<span class="muted">Open now</span>' : `<button class="btn primary" data-join="${i}">Open</button>`}</li>`).join('')}
+    </ul>` : '<p class="empty">No shared projects yet. Open a project, then choose File › Share project.</p>'}
+    <h3>Project files <span class="muted">one person at a time, saved with Save</span></h3>
+    ${files.length ? `<ul class="project-list">${files.map((f, i) => `
+      <li><div><b>${esc(f.name.replace(/\.audit\.json$/i, ''))}</b><br><span class="muted">saved ${ago(f.modified)}</span></div>
+        ${openNow === f.name ? '<span class="muted">Open now</span>' : `<button class="btn primary" data-file="${i}">Open</button>`}</li>`).join('')}
+    </ul>` : '<p class="empty">No project files in the Projects folder yet. Save a project and it goes there.</p>'}
+    <p class="empty" id="openNoMatch" hidden>No project matches the search.</p>`;
+  const body = $('#collabBody');
+  body.querySelectorAll('[data-join]').forEach(b => b.onclick = () => joinShared(sharedList[+b.dataset.join]));
+  body.querySelectorAll('[data-file]').forEach(b => b.onclick = () => openListedFile(files[+b.dataset.file]));
+  const connect = $('#openConnect');
+  if (connect) connect.onclick = async () => { await connectFolder(); if (collabRoot()) openProjectList(); };
+  const search = $('#openSearch');
+  if (search) search.oninput = () => {
+    const q = search.value.trim().toLowerCase();
+    let shown = 0;
+    for (const li of body.querySelectorAll('.project-list li')) { li.hidden = !!q && !li.textContent.toLowerCase().includes(q); shown += !li.hidden; }
+    $('#openNoMatch').hidden = !q || shown > 0;
+  };
+  $('#collabActions').innerHTML = '<button class="btn" id="openBrowse" title="Open a project file from somewhere else, or import an old Audit.xlsm">Browse…</button>';
+  $('#openBrowse').onclick = browseProject;
+  if (!$('#collabDialog').open) $('#collabDialog').showModal();
+  search?.focus();
+}
+
+// opening another project: changes to a normal project that aren't saved yet would be lost
+const okToReplace = () => state.collab || state.project.savedToFile || !settingsComplete(state.project.settings)
+  || confirm('Open another project? Changes to the open project since you last saved it will be lost.');
+
+async function openListedFile(entry) {
+  if (!okToReplace()) return;
+  try {
+    if (await openProjectFile(await entry.handle.getFile())) {
+      await rememberFile(entry.handle); // Save writes back to it
+      state.fileName = entry.name;
+      $('#collabDialog').close();
+      renderChrome();
+    }
+  } catch (err) { toast(`Couldn't open ${entry.name}: ${err.message}`, 'bad'); }
+}
+
+// the Projects folder, for the file pickers to start in (null when the Audit Builder folder isn't connected)
+async function projectsStart() {
+  const root = collabRoot();
+  try { return root ? await projectsDir(root, true) : null; } catch { return null; }
+}
+
+// a new project's first Save: straight into the Projects folder, without the file picker (null = ask with the picker)
+async function projectFileInFolder(name) {
+  if (folder.handle && folder.pending) { try { await useFolder(folder.handle, true); } catch { return null; } }
+  const dir = await projectsStart();
+  if (!dir) return null;
+  try {
+    const existing = await dir.getFileHandle(name);
+    return confirm(`There is already a project file ${name} in the Projects folder. Replace it with this project?\n\nCancel to choose another name.`) ? existing : null;
+  } catch (err) {
+    if (err.name !== 'NotFoundError') return null;
+  }
+  return dir.getFileHandle(name, { create: true });
+}
+
+async function joinShared(entry, { again = false } = {}) {
+  if (!okToReplace()) return;
+  const me = await askName({ again });
+  if (!me) return;
+  try {
+    const dir = entry.dir, mineFile = partFileName(me);
+    const own = await readJson(dir, mineFile);
+    if (own?.data.device && own.data.device !== thisDevice && !confirm(`There is already a "${me}" in this project, saved from another computer.\n\n`
+      + 'OK: that\'s me on another computer. My work from there continues here (don\'t keep the project open on both).\n'
+      + 'Cancel: that\'s someone else. I\'ll choose a different name.')) {
+      return joinShared(entry, { again: true });
+    }
+    const mine = own ? normalizePart(own.data) : emptyPart(me, thisDevice);
+    mine.person = me; mine.device = thisDevice;
+    const others = await readParts(dir, {}, mineFile);
+    const { view, stamps, conflicts } = combineParts([mine, ...Object.values(others).map(o => o.part)]);
+    const info = (await readJson(dir, PROJECT_JSON))?.data || entry.info;
+    setCollab(null);
+    state.project = Object.assign(migrate({
+      settings: info.settings || {},
+      inputs: { reports: mine.inputs.reports, blanccoFiles: mine.inputs.blanccoFiles, sheet: view.sheet },
+      manual: view.manual, overrides: view.overrides, simsOverrides: view.simsOverrides,
+    }), { savedToFile: true });
+    setCollab(newCollab({
+      dir: entry.name, owner: info.owner, me, mine, others, stamps, conflicts,
+      base: sharedView(state.project), settingsAt: info.settingsAt || 0, settingsText: JSON.stringify(state.project.settings),
+      dirty: !own, // someone new: their (empty) file is written straight away, so the others see them
+    }));
+    state.manualSelected.clear();
+    clearHistory();
+    state.fileName = ''; rememberFile(null);
+    store(STORE_PROJECT, state.project);
+    $('#collabDialog').close();
+    recompute(); render();
+    if (state.collab.dirty) saveMine();
+    const names = Object.values(others).map(o => o.part.person);
+    toast(`Opened ${entry.name}${names.length ? `, shared with ${names.join(', ')}` : ''}`);
+  } catch (err) { toast(`Couldn't open the shared project: ${err.message}`, 'bad'); }
+}
+
+// who works on the shared project, and what each has added
+function openPeople() {
+  const c = state.collab;
+  if (!c) return;
+  const count = p => {
+    const sorted = sortReportLines(p.inputs.reports || '');
+    const devices = parseMacLines(sorted.mac).length + parseWindowsLines(sorted.windows).length;
+    const manual = Object.values(p.items || {}).filter(x => !x.deleted).length;
+    const edits = ['overrides', 'simsOverrides'].reduce((n, k) => n + Object.values(p.cells[k] || {}).reduce((m, r) => m + Object.keys(r).length, 0), 0);
+    return [devices && plural(devices, 'device') + ' in reports', p.inputs.blanccoFiles.length && plural(p.inputs.blanccoFiles.length, 'Blancco file'),
+      manual && plural(manual, 'manual entry').replace('entrys', 'entries'), edits && plural(edits, 'Review edit')].filter(Boolean).join(' · ') || 'nothing yet';
+  };
+  const rows = [[c.mine, true], ...otherParts().map(p => [p, false])];
+  $('#collabTitle').textContent = 'Shared project';
+  $('#collabBody').innerHTML = `
+    <p class="hint">Saved in <code>G:\\My Drive\\Audit Builder\\Projects\\${esc(c.dir)}</code>. Everyone's changes come in every few seconds
+      (once Google Drive has synced them). Only ${esc(c.owner)} can change the project settings.</p>
+    <ul class="project-list">${rows.map(([p, you]) => `
+      <li><div><b>${esc(p.person)}</b>${you ? ' <span class="muted">(you)</span>' : ''}${p.person === c.owner ? ' <span class="pill info">shared it</span>' : ''}<br>
+        <span class="muted">${count(p)}</span></div>
+        <span class="muted">${you ? (collabUnsaved() ? 'saving…' : `saved ${ago(c.savedAt || p.updatedAt)}`) : `saved ${ago(p.updatedAt)}`}</span></li>`).join('')}
+    </ul>
+    <p class="hint">${c.readAt ? `Checked for changes ${ago(c.readAt)}.` : ''}</p>`;
+  $('#collabActions').innerHTML = '<button class="btn" id="collabRefresh">Refresh now</button><button class="btn ghost" id="collabLeave">Leave shared project…</button>';
+  $('#collabRefresh').onclick = async () => { await refreshCollab(); openPeople(); toast('Up to date'); };
+  $('#collabLeave').onclick = () => { $('#collabDialog').close(); leaveCollab(); };
+  if (!$('#collabDialog').open) $('#collabDialog').showModal();
+}
+
+// File › Leave shared project: this computer goes back to a normal project (a copy of everyone's work together)
+async function leaveCollab() {
+  const c = state.collab;
+  if (!c) return;
+  if (!confirm('Leave the shared project on this computer?\n\nYour work stays in the shared project for the others, and you can open it again with File › Open. '
+    + 'This computer keeps a copy of everyone\'s work together as a normal project (Save to keep it as a file).')) return;
+  if (collabUnsaved()) await saveMine();
+  const copy = reportProject();
+  copy.inputs = { ...copy.inputs, blanccoFiles: copy.inputs.blanccoFiles.map(({ by, ...f }) => f) };
+  setCollab(null);
+  state.project = { ...copy, savedToFile: false };
+  clearHistory();
+  store(STORE_PROJECT, state.project);
+  recompute(); render();
+  toast('Left the shared project. This is now a normal project on this computer.');
 }
 
 // ---------- light / dark mode ----------
@@ -1560,6 +2079,7 @@ function applyTheme(theme) {
 }
 
 function init() {
+  state.collab = restoreCollab();
   recompute();
   applyTheme(load(STORE_THEME, null));
   $('#btnTheme').onclick = () => {
@@ -1575,14 +2095,24 @@ function init() {
   $('#btnSave').onclick = () => saveProject();
   $('#btnSaveAs').hidden = !canSaveInPlace;
   $('#btnSaveAs').onclick = () => saveProject({ saveAs: true });
-  $('#btnOpen').onclick = openProject;
+  $('#btnOpen').onclick = openProjectList;
+  $('#btnShare').onclick = shareProject;
+  $('#btnLeaveShared').onclick = leaveCollab;
+  $('#btnLeaveShared').hidden = !state.collab;
+  $('#btnShare').hidden = !canUseFolder;
+  $('#saveState').onclick = clickSaveState;
+  $('#peopleChip').onclick = openPeople;
+  $('#collabClose').onclick = () => $('#collabDialog').close();
   $('#openFile').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) openProjectFile(f); };
   document.addEventListener('keydown', e => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); document.activeElement?.blur?.(); saveProject({ saveAs: e.shiftKey }); }
   });
   rememberedFile().then(h => { state.fileName = h?.name || ''; renderChrome(); });
   $('#btnNew').onclick = () => {
-    if (!state.project.savedToFile && !confirm('Start a new project? Changes since you last saved the project file will be lost.')) return;
+    if (state.collab) {
+      if (!confirm('Start a new project? The shared project stays in the shared folder; open it again with File › Open.')) return;
+      setCollab(null);
+    } else if (!state.project.savedToFile && !confirm('Start a new project? Changes since you last saved the project file will be lost.')) return;
     state.project = emptyProject();
     clearHistory();
     state.fileName = ''; rememberFile(null);
@@ -1654,12 +2184,18 @@ function init() {
     })();
     window.addEventListener('focus', () => {
       if (shared.status === 'ok' && !$('#modelsDialog').open) loadSharedModels({ announce: true });
+      refreshCollab();
     });
+    // a shared project: read the others' changes every few seconds while the app is in view
+    setInterval(() => { if (document.visibilityState === 'visible') refreshCollab(); }, COLLAB_POLL);
   } else { renderShared(); reconnectConfigFile(); }
 
   window.addEventListener('resize', fitTallTable);
   document.addEventListener('toggle', e => { if (e.target.closest?.('.warnings')) fitTallTable(); }, true); // Checks opened / closed
-  window.addEventListener('beforeunload', e => { if (!state.project.savedToFile && settingsComplete(state.project.settings)) e.preventDefault(); });
+  window.addEventListener('beforeunload', e => {
+    const unsaved = state.collab ? collabUnsaved() : !state.project.savedToFile;
+    if (unsaved && settingsComplete(state.project.settings)) e.preventDefault();
+  });
 
   render();
   if (!settingsComplete(state.project.settings)) openSetup({ force: true });

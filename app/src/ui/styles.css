@@ -45,6 +45,32 @@ code { font-family: var(--mono); background: var(--surface-2); padding: 0 4px; b
 .project-chip:hover { border-color: var(--accent); }
 .save-state { color: var(--muted); font-size: 13px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .save-state.dirty { color: var(--warn); }
+/* shared project: the save status (like Google Sheets) and who's working on it */
+.save-state.sync { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; padding: 3px 8px; border-radius: 6px; max-width: 320px; }
+.save-state.sync:hover { background: var(--surface-2); }
+.save-state.sync svg { flex: none; }
+.save-state.sync.good { color: var(--good); }
+.save-state.sync.busy { color: var(--muted); }
+.save-state.sync.bad { color: var(--bad); }
+.save-state.sync.off { color: var(--warn); }
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.people-chip { display: inline-flex; gap: 6px; align-items: center; border: 1px solid var(--border); background: var(--accent-soft); color: var(--accent);
+  border-radius: 999px; padding: 3px 12px; cursor: pointer; font: inherit; font-size: 13px; }
+.people-chip:hover { border-color: var(--accent); }
+.people-chip[hidden] { display: none; }
+.project-list { list-style: none; margin: 8px 0; padding: 0; border: 1px solid var(--border); border-radius: 8px; }
+.project-list li { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+.project-list li:last-child { border-bottom: 0; }
+.file-list .by { font-size: 12px; color: var(--accent); background: var(--accent-soft); border-radius: 999px; padding: 1px 8px; }
+.others-input { margin-top: 8px; }
+.others-input textarea { margin-top: 6px; opacity: .85; }
+dialog.collab { width: min(720px, calc(100vw - 32px)); }
+dialog.collab h3 { font-size: 14px; margin: 16px 0 4px; }
+dialog.collab h3 .muted { font-size: 12px; margin-left: 6px; }
+dialog.collab .project-list { max-height: 40vh; overflow: auto; }
+.project-list li[hidden] { display: none; }
+.open-search { width: 100%; }
 .spacer { flex: 1; }
 
 /* buttons */

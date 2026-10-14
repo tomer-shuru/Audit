@@ -39,9 +39,10 @@ const CONFIG_TYPE = { description: 'Audit Builder rules', accept: { 'application
 const cancelled = err => { if (err.name === 'AbortError') return null; throw err; };
 
 // asks where to save; returns null if the person cancels
-export async function chooseSaveFile(suggestedName) {
+// startIn: a folder to start in (the shared Projects folder), when there is one
+export async function chooseSaveFile(suggestedName, startIn = null) {
   try {
-    return await window.showSaveFilePicker({ suggestedName, types: [PROJECT_TYPE], id: 'audit-projects' });
+    return await window.showSaveFilePicker({ suggestedName, types: [PROJECT_TYPE], id: 'audit-projects', ...(startIn && { startIn }) });
   } catch (err) { return cancelled(err); }
 }
 
@@ -101,10 +102,10 @@ export async function readFileText(handle) {
 }
 
 // asks which file to open; returns { file, handle } or null if cancelled
-export async function chooseOpenFile() {
+export async function chooseOpenFile(startIn = null) {
   try {
     const [handle] = await window.showOpenFilePicker({
-      id: 'audit-projects',
+      id: 'audit-projects', ...(startIn && { startIn }),
       types: [
         PROJECT_TYPE,
         { description: 'Old Audit workbook', accept: { 'application/vnd.ms-excel.sheet.macroEnabled.12': ['.xlsm'], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] } },

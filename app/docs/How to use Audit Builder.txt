@@ -64,7 +64,8 @@ THE MENUS
 ---------
 
 The menu bar at the very top works like in a Windows program:
-- File: New project, Open..., Save project (Ctrl+S), Save as... (Ctrl+Shift+S)
+- File: New project, Open..., Save project (Ctrl+S), Save as... (Ctrl+Shift+S),
+  Share project... (see "Working on a project together")
 - Settings: Dictionary..., DevMode...
 - Tools: Microsoft BIOS passwords... (see below)
 The sun / moon button next to Tools switches between light and dark.
@@ -202,24 +203,67 @@ SAVING AND SHARING PROJECTS
 - The app keeps your current work automatically, so closing the window by
   accident doesn't lose anything. That copy only exists on your computer
   and in that browser, though.
-- File > Save project (or Ctrl+S): the first time, it asks where to save the
-  project file (named after the end client and project number, e.g.
-  Acme_SHR11734.audit.json).
+- File > Save project (or Ctrl+S): the first time, it saves the project file
+  straight into G:\My Drive\Audit Builder\Projects, named after the end
+  client and project number (e.g. Acme_SHR11734.audit.json). If a file with
+  that name is already there, it asks whether to replace it. (If the Audit
+  Builder folder isn't connected, it asks where to save instead.)
   After that it saves over the same file without asking. The top bar shows
   which file you're saving to.
 - After reopening the browser, the first save may show a small "allow this
   site to edit the file?" message. Click Allow (or "Edit file").
-- File > Save as... (Ctrl+Shift+S) saves to a different file, which becomes the
-  one used from then on.
-- Opening a project file with File > Open... also makes it the file that Save
-  updates. Starting a "New" project asks again on the first save.
-- Save project files in G:\My Drive\Audit Builder\Projects. Google Drive
-  syncs them, so everyone can open them with "Open...", and continue each
-  other's projects. (This needs edit access to the shared folder; if saving
-  there fails, ask Tomer to give you Editor access.)
-- If two people work on the same project at the same time, their changes
-  don't merge. Agree who has it.
-- An old Audit.xlsm can be opened with "Open..." too.
+- File > Save as... (Ctrl+Shift+S) asks for a file name and place (it starts
+  in the Projects folder). That file is used from then on.
+- File > Open... lists the projects in the Projects folder, so you pick one
+  in the app: shared projects first, then project files (newest first).
+  Type in the search box to find one. "Browse..." opens a file from
+  somewhere else. Opening a project file makes it the file Save updates.
+- Google Drive syncs the Projects folder, so everyone can open and continue
+  each other's projects. (This needs edit access to the shared folder; if
+  saving there fails, ask Tomer to give you Editor access.)
+- A project file is for one person at a time: if two people open the same
+  file and save, their changes don't merge. To work on a project together
+  at the same time, share it instead (see below).
+- An old Audit.xlsm can be opened with Open... > Browse... too.
+
+
+WORKING ON A PROJECT TOGETHER
+-----------------------------
+
+Two or more people can work on the same project at the same time, each on
+their own computer. Everyone needs the Audit Builder folder connected (the
+same one as for the shared Dictionary).
+
+- To start: open or set up the project, then choose File > Share project...
+  The app asks your name once (use the same name on every computer, and a
+  different name from your coworkers). You are the one who shared it.
+- To join: File > Open... and click Open next to the project under
+  "Shared projects".
+- Each person adds their own Blancco files and report lines on the Data tab.
+  Everyone's are added together; what the others added is listed under
+  yours with their name, and only they can remove it.
+- Manual entries, Review edits and the Google Sheet rows are shared: anyone
+  can change them, and everyone sees the change.
+- There is no need to press Save. The top bar shows the status, like Google
+  Sheets: "Saving..." while your changes are being saved, then "Saved to
+  Drive". "Not saved" (red) or "Not connected": click it to try again or
+  to connect the folder. Your changes are kept on your computer until then.
+- Your coworkers' changes come in every few seconds, once Google Drive has
+  synced them (usually within seconds, at most about a minute).
+- "Shared - 3 people" in the top bar shows who is working on the project
+  and what each has added.
+- If two people change the same cell at the same moment, the newest change
+  is used and a gray note on Review says what the other person typed.
+  Typing the right value in that cell again removes the note.
+- Ctrl+Z only undoes your own changes.
+- Only the person who shared the project can change its settings (project
+  number, client, prefix, first item number, output).
+- File > Save as... saves a copy of everyone's work together as a normal
+  project file, e.g. to keep at the end.
+- File > Leave shared project... stops working on it on this computer. Your
+  work stays in the shared project, and you can open it again later.
+- Shared projects are kept in G:\My Drive\Audit Builder\Projects, one folder
+  per project with one file per person. Don't edit or move these files.
 
 
 SHARED DICTIONARY AND RULES

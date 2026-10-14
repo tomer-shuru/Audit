@@ -13,10 +13,13 @@
     <button class="menu-btn" aria-haspopup="menu" aria-expanded="false">File</button>
     <div class="menu-list" role="menu">
       <button role="menuitem" id="btnNew">New project</button>
-      <button role="menuitem" id="btnOpen" title="Open a saved project (.audit.json) or import an old Audit.xlsm">Open…</button>
+      <button role="menuitem" id="btnOpen" title="Pick a project or shared project from the Audit Builder folder, or browse for a file (also an old Audit.xlsm)">Open…</button>
       <hr>
       <button role="menuitem" id="btnSave">Save project<kbd>Ctrl+S</kbd></button>
       <button role="menuitem" id="btnSaveAs" title="Save to a different file">Save as…<kbd>Ctrl+Shift+S</kbd></button>
+      <hr>
+      <button role="menuitem" id="btnShare" title="Work on this project together with coworkers, through the shared Audit Builder folder">Share project…</button>
+      <button role="menuitem" id="btnLeaveShared" title="Stop working on the shared project on this computer" hidden>Leave shared project…</button>
     </div>
   </div>
   <div class="menu">
@@ -40,6 +43,7 @@
   <label class="output-pick" title="Which sheet layout Review and Export use: ours (Shuru) or a contractor's (SIMS). Saved with the project; the data stays the same.">Output
     <select data-output><option value="shuru">Shuru</option><option value="sims">SIMS</option></select></label>
   <span id="saveState" class="save-state"></span>
+  <button id="peopleChip" class="people-chip" hidden></button>
   <input type="file" id="openFile" accept=".json,.xlsm,.xlsx" hidden>
 </header>
 
@@ -64,11 +68,33 @@
     <label>First item number<input name="startNumber" type="number" min="0" step="1" required value="1"></label>
     <p class="hint">Usually 1. Some clients number their items from somewhere else, e.g. 4000.</p>
     <p id="setupPreview" class="preview"></p>
+    <p id="setupLocked" class="warn-text" hidden></p>
     <div class="dialog-actions">
       <button type="button" class="btn ghost" id="setupCancel">Cancel</button>
       <button type="submit" class="btn primary">Save</button>
     </div>
   </form>
+</dialog>
+
+<dialog id="nameDialog">
+  <form id="nameForm">
+    <h2>Your name</h2>
+    <p class="hint" id="nameAgain" hidden>Choose a name nobody else in this project uses.</p>
+    <p class="hint">Your work on shared projects is saved in a file with your name. Use the same name on every computer, and a different one from your coworkers.</p>
+    <label>Name<input name="person" required maxlength="40" placeholder="Tomer" autocomplete="off"></label>
+    <div class="dialog-actions">
+      <button type="button" class="btn ghost" id="nameCancel">Cancel</button>
+      <button type="submit" class="btn primary">OK</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="collabDialog" class="wide collab">
+  <div class="dialog-head">
+    <h2 id="collabTitle">Shared project</h2>
+    <div class="actions"><span id="collabActions" class="actions"></span><button class="btn primary" id="collabClose">Done</button></div>
+  </div>
+  <div id="collabBody"></div>
 </dialog>
 
 <dialog id="modelsDialog" class="wide">
