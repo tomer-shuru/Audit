@@ -4,7 +4,14 @@ import { DEFAULT_CONFIG } from './config.js';
 
 export const str = v => (v == null ? '' : String(v));
 export const isBlank = v => v == null || String(v).trim() === '';
-export const eqi = (a, b) => str(a).trim().toLowerCase() === str(b).trim().toLowerCase();
+// trimmed and lower case: compares names and words without caring about capitals or outer spaces
+export const low = v => str(v).trim().toLowerCase();
+export const eqi = (a, b) => low(a) === low(b);
+// does text contain word (any capitals)? An empty word never matches.
+export const hasText = (text, word) => low(word) !== '' && str(text).toLowerCase().includes(low(word));
+// adds value to the list kept under key in a Map
+export const pushTo = (map, key, value) => { if (!map.has(key)) map.set(key, []); map.get(key).push(value); };
+export const escapeRegExp = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // Excel TEXTJOIN(sep, TRUE, ...) - skips empty values
 export const joinNonEmpty = (sep, ...vals) => vals.flat().map(str).filter(v => v !== '').join(sep);
@@ -16,10 +23,9 @@ export const excelTrim = s => str(s).replace(/ +/g, ' ').trim();
 export function toNumber(v) {
   if (typeof v === 'number') return v;
   const s = str(v).trim();
-  if (s === '') return NaN;
-  if (/^-?\d+(\.\d+)?%$/.test(s)) return parseFloat(s) / 100;
-  if (/^-?\d+(\.\d+)?$/.test(s)) return parseFloat(s);
-  return NaN;
+  const m = s.match(/^-?\d+(?:\.\d+)?(%?)$/);
+  if (!m) return NaN;
+  return m[1] ? parseFloat(s) / 100 : parseFloat(s);
 }
 
 // Battery grade (Output_Mac N / Output_Win N / CSV U,V); grades from the config, checked top to bottom
@@ -83,8 +89,7 @@ export function formatDiskCapacity(cap) {
 
 // disk interface -> name in the Disk column (config "Disk types", top to bottom), or the interface as it is
 export function diskKind(iface, kinds = DEFAULT_CONFIG.diskKinds) {
-  const s = str(iface).toLowerCase();
-  const k = kinds.find(x => str(x.match).trim() && s.includes(str(x.match).trim().toLowerCase()));
+  const k = kinds.find(x => hasText(iface, x.match));
   return k ? str(k.name) : str(iface);
 }
 
@@ -94,14 +99,11 @@ export function shortCpu(raw) {
   if (b === '') return '';
   const after = (text, delim) => { const i = text.indexOf(delim); return i < 0 ? null : text.slice(i + delim.length); };
 
-  const ultraIdx = b.toLowerCase().indexOf('ultra');
-  const ultraCase = b.indexOf('Ultra');
-  if (ultraIdx >= 0) {
-    // E: "Ultra" & TEXTAFTER(B,"Ultra") - TEXTAFTER is case-sensitive, so lower-case "ultra" yields an error -> ""
-    if (ultraCase >= 0) return 'Ultra' + b.slice(ultraCase + 5);
-  }
+  // E: "Ultra" & TEXTAFTER(B,"Ultra") - TEXTAFTER is case-sensitive, so a lower-case "ultra" falls through
+  const ultra = b.indexOf('Ultra');
+  if (ultra >= 0) return 'Ultra' + b.slice(ultra + 5);
 
-  let ryzenPart = after(b, 'Ryzen ');
+  const ryzenPart = after(b, 'Ryzen ');
   if (ryzenPart !== null && ryzenPart !== '') {
     const t = ryzenPart.split(' ');
     const model = t.findIndex(x => x.length >= 4 && /^\d{4}/.test(x)) + 1;
@@ -139,7 +141,7 @@ export function expandDiagCodes(txt, diagCodes) {
     if (!code) continue;
     // one pass that also catches back-to-back codes sharing a space; a second pass would expand
     // a description that starts with its own code again ("LED" -> "LED marks" -> "LED marks marks")
-    const re = new RegExp('(?<= )' + code.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?= )', 'g');
+    const re = new RegExp('(?<= )' + escapeRegExp(code) + '(?= )', 'g');
     padded = padded.replace(re, () => description);
   }
   return excelTrim(padded).split(' , ').join(', ');
@@ -148,11 +150,9 @@ export function expandDiagCodes(txt, diagCodes) {
 // "display b, screen scratches b" -> "Display B, Screen scratches B":
 // each comma-separated part starts with a capital, and a trailing grade letter is upper-cased
 export function formatDiagnostics(txt) {
-  return str(txt).split(',').map(p => p.trim()).filter(p => p !== '').map(p => {
-    let s = p.charAt(0).toUpperCase() + p.slice(1);
-    s = s.replace(/(\s)([a-z])$/i, (m, sp, letter) => sp + letter.toUpperCase());
-    return s;
-  }).join(', ');
+  return str(txt).split(',').map(p => p.trim()).filter(p => p !== '')
+    .map(p => (p.charAt(0).toUpperCase() + p.slice(1)).replace(/(\s)([a-z])$/i, (m, sp, letter) => sp + letter.toUpperCase()))
+    .join(', ');
 }
 
 // Excel PROPER

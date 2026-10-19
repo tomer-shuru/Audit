@@ -71,7 +71,6 @@ dialog.collab h3 .muted { font-size: 12px; margin-left: 6px; }
 dialog.collab .project-list { max-height: 40vh; overflow: auto; }
 .project-list li[hidden] { display: none; }
 .open-search { width: 100%; }
-.spacer { flex: 1; }
 
 /* buttons */
 .btn { font: inherit; border: 1px solid var(--border); background: var(--surface); color: var(--text); padding: 6px 12px; border-radius: 6px; cursor: pointer; white-space: nowrap; display: inline-block; }
@@ -200,7 +199,6 @@ dialog::backdrop { background: rgb(10 14 22 / .45); }
 dialog form { display: flex; flex-direction: column; gap: 12px; }
 dialog form label { display: flex; flex-direction: column; gap: 4px; font-weight: 600; font-size: 13px; }
 dialog form label input { font-weight: 400; }
-.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .preview { color: var(--accent); font-family: var(--mono); font-size: 13px; margin: 0; min-height: 1.4em; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .dialog-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }

@@ -23,9 +23,8 @@ export const emptyPart = (person, device = '') => ({
 
 // fills in what an older or damaged part file leaves out
 export function normalizePart(p) {
-  const part = Object.assign(emptyPart(''), p);
-  part.inputs = Object.assign(emptyPart('').inputs, p?.inputs);
-  part.cells = Object.assign(emptyPart('').cells, p?.cells);
+  const blank = emptyPart('');
+  const part = { ...blank, ...p, inputs: { ...blank.inputs, ...p?.inputs }, cells: { ...blank.cells, ...p?.cells } };
   part.items = part.items || {};
   return part;
 }
@@ -128,21 +127,18 @@ export function combineParts(parts) {
 
   // manual entries: when each was last deleted, and when it last got something (added or a cell typed)
   const deletedAt = {}, liveAt = {};
+  const keepNewest = (map, code, at, person) => { if (!map[code] || newer({ at, person }, map[code])) map[code] = { at, person }; };
   for (const p of parts) {
-    for (const [code, it] of Object.entries(p.items || {})) {
-      const map = it.deleted ? deletedAt : liveAt;
-      if (!map[code] || newer({ ...it, person: p.person }, map[code])) map[code] = { at: it.at, person: p.person };
-    }
+    for (const [code, it] of Object.entries(p.items || {})) keepNewest(it.deleted ? deletedAt : liveAt, code, it.at, p.person);
     for (const [code, rec] of Object.entries(p.cells?.manual || {})) {
-      for (const cell of Object.values(rec)) {
-        if (!liveAt[code] || newer({ ...cell, person: p.person }, liveAt[code])) liveAt[code] = { at: cell.at, person: p.person };
-      }
+      for (const cell of Object.values(rec)) keepNewest(liveAt, code, cell.at, p.person);
     }
   }
   for (const code of new Set([...Object.keys(deletedAt), ...Object.keys(liveAt)])) {
     const d = deletedAt[code], l = liveAt[code];
-    stamps[itemStamp(code)] = !d ? l : !l ? d : newer(l, d) ? l : d;
-    if (l && (!d || newer(l, d))) view.manual[code] = {};
+    const live = l && (!d || newer(l, d));
+    stamps[itemStamp(code)] = live ? l : d;
+    if (live) view.manual[code] = {};
   }
 
   for (const c of COLLECTIONS) {

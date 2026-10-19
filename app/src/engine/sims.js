@@ -2,9 +2,9 @@
 // (columns D to T of their template), with our diagnostics turned into SIMS diagnostic codes.
 // The Dictionary holds the SIMS lists: simsCodes (category, code, description), simsAliases (our diagnostics
 // per SIMS issue number), simsIgnore (diagnostics left out) and simsCategories (our type -> SIMS category).
-import { str, isBlank, joinNonEmpty } from './rules.js';
-import { DEFAULT_CONFIG, withDefaults } from './config.js';
-import { itemKey } from './sources.js';
+import { str, isBlank, joinNonEmpty, escapeRegExp } from './rules.js';
+import { DEFAULT_CONFIG, withDefaults, warnAdder } from './config.js';
+import { itemKey, resultPassed, resultFailed } from './sources.js';
 
 // Columns D to T of the SIMS sheet, in order. label = the header in their template (some are empty),
 // name = what the app calls the column. The empty columns are kept so a paste at column D lines up.
@@ -56,14 +56,19 @@ export function makeSimsLookups(models) {
   const addAlias = (text, no) => {
     const k = normDiag(text);
     if (!k) return;
+    let nos;
     if (k.includes('*')) {
-      const re = new RegExp(`^${k.split('*').map(p => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.+')}$`);
-      const p = patterns.find(x => x.text === k) || patterns[patterns.push({ text: k, re, nos: [] }) - 1];
-      if (!p.nos.includes(no)) p.nos.push(no);
-      return;
+      let p = patterns.find(x => x.text === k);
+      if (!p) {
+        p = { text: k, re: new RegExp(`^${k.split('*').map(escapeRegExp).join('.+')}$`), nos: [] };
+        patterns.push(p);
+      }
+      nos = p.nos;
+    } else {
+      if (!aliases.has(k)) aliases.set(k, []);
+      nos = aliases.get(k);
     }
-    if (!aliases.has(k)) aliases.set(k, []);
-    if (!aliases.get(k).includes(no)) aliases.get(k).push(no);
+    if (!nos.includes(no)) nos.push(no);
   };
   // exact spellings first, then the ones with "*"
   const numbersOf = diag => {
@@ -117,13 +122,14 @@ export function translateDiagnostics(diagnostics, codes, lk) {
 
 // Blancco result "Pass x2, Fail" -> "Erased Erased Not Erased" (texts from the config)
 export function simsErasure(blancco, cfg = DEFAULT_CONFIG) {
-  const { passText, failText } = cfg.erasure;
+  const text = (word, part) => {
+    if (resultPassed(word, cfg.erasure)) return cfg.texts.simsErased;
+    if (resultFailed(word, cfg.erasure)) return cfg.texts.simsNotErased;
+    return part;
+  };
   return splitList(blancco).flatMap(part => {
-    const m = part.match(/^(.*?)(?:\s+x(\d+))?$/i);
-    const word = m[1].trim().toLowerCase(), n = Number(m[2] || 1);
-    const text = word.startsWith(str(passText).trim().toLowerCase()) ? cfg.texts.simsErased
-      : word.includes(str(failText).trim().toLowerCase()) ? cfg.texts.simsNotErased : part;
-    return Array(n).fill(text);
+    const [, word, n] = part.match(/^(.*?)(?:\s+x(\d+))?$/i);
+    return Array(Number(n || 1)).fill(text(word, part));
   }).join(' ');
 }
 
@@ -145,7 +151,7 @@ export function buildSims(report, project, models, config, sheet = null) {
   const lk = makeSimsLookups(models);
   const edits = project.simsOverrides || {};
   const warnings = [];
-  const add = (check, w) => { const level = cfg.checks[check]; if (level && level !== 'off') warnings.push({ ...w, level }); };
+  const add = warnAdder(cfg, warnings);
   const noCategory = new Map(), noCodes = new Map(), unknown = new Map(), missing = new Map();
   const note = (map, key, item, extra) => { if (!map.has(key)) map.set(key, { items: [], ...extra }); map.get(key).items.push(item); };
   const sheetBy = new Map(Object.entries(sheet || {}).map(([c, rec]) => [itemKey(c), rec]));

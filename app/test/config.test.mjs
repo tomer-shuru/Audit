@@ -108,6 +108,10 @@ test('validation finds rules that would not work', () => {
   assert.deepEqual(validateConfig(withDefaults(DEFAULT_CONFIG)), []);
   const bad = cfg(c => { c.battery[0].value = 'abc'; c.erasure.passText = ' '; c.blanccoColumns.serial = ''; c.reportColumns[2].label = ''; });
   assert.equal(validateConfig(bad).length, 4);
+  // a missing value counts as empty, the same for every field
+  const missing = { ...withDefaults(DEFAULT_CONFIG) };
+  missing.erasure = { ...missing.erasure, passText: null, failText: undefined, passWords: [null] };
+  assert.equal(validateConfig(missing).length, 3);
 });
 
 test('a built-in DevMode password is set (only its hash is in the code)', () => {

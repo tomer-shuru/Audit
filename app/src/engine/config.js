@@ -13,28 +13,36 @@ const REPORT = [
 ];
 const LOCKED = [['sn', 'S.N'], ['type', 'Type'], ['make', 'Make'], ['model', 'Model'], ['issue', 'Issue type'], ['wiped', 'Wiped']];
 
-// Every check the Review tab can show, with what it means (shown in DevMode)
-export const CHECKS = {
-  reportLineUnknown: 'A report line is neither a Mac nor a Windows line',
-  blanccoMissingColumns: 'The Blancco export is missing columns',
-  noItemCode: 'A device has no item code',
-  duplicateItem: 'The same item code appears twice in one source',
-  outsideNumbering: "An item code doesn't follow the project's numbering",
-  numberingStart: "The items start far from the project's first item number",
-  belowStart: 'An item is below the first item number',
-  numberingGaps: 'Item numbers with no data yet',
-  unknownMacModel: "A Mac model isn't in the Dictionary",
-  cpuNotShortened: "A Blancco CPU name couldn't be shortened",
-  erasureFailed: 'An erasure failed',
-  noErasureMac: 'No Blancco erasure for a Mac (or a device from Blancco only)',
-  noErasureWindows: 'No Blancco erasure for a Windows report device',
-  diagnosticsEmpty: 'Diagnostics is empty',
-  duplicateAsset: 'The same asset tag is on more than one device',
-  simsNoCode: 'SIMS output: a diagnostic has no SIMS code (it goes to Item Remark)',
-  simsNoCategory: 'SIMS output: a device type has no SIMS category or codes',
-};
+// Every check the Review tab can show: [key, default level, what it means (shown in DevMode)]
+const CHECK_LIST = [
+  ['reportLineUnknown', 'error', 'A report line is neither a Mac nor a Windows line'],
+  ['blanccoMissingColumns', 'error', 'The Blancco export is missing columns'],
+  ['noItemCode', 'warn', 'A device has no item code'],
+  ['duplicateItem', 'warn', 'The same item code appears twice in one source'],
+  ['outsideNumbering', 'warn', "An item code doesn't follow the project's numbering"],
+  ['numberingStart', 'warn', "The items start far from the project's first item number"],
+  ['belowStart', 'warn', 'An item is below the first item number'],
+  ['numberingGaps', 'warn', 'Item numbers with no data yet'],
+  ['unknownMacModel', 'warn', "A Mac model isn't in the Dictionary"],
+  ['cpuNotShortened', 'warn', "A Blancco CPU name couldn't be shortened"],
+  ['erasureFailed', 'error', 'An erasure failed'],
+  ['noErasureMac', 'warn', 'No Blancco erasure for a Mac (or a device from Blancco only)'],
+  ['noErasureWindows', 'info', 'No Blancco erasure for a Windows report device'],
+  ['diagnosticsEmpty', 'warn', 'Diagnostics is empty'],
+  ['duplicateAsset', 'warn', 'The same asset tag is on more than one device'],
+  ['simsNoCode', 'sims', 'SIMS output: a diagnostic has no SIMS code (it goes to Item Remark)'],
+  ['simsNoCategory', 'sims', 'SIMS output: a device type has no SIMS category or codes'],
+];
+export const CHECKS = Object.fromEntries(CHECK_LIST.map(([key, , meaning]) => [key, meaning]));
 // sims (blue): SIMS output notes, kept apart from the warnings
 export const CHECK_LEVELS = ['error', 'warn', 'info', 'sims', 'off'];
+
+// A function that adds a warning for a check to list, at the check's level in the config (nothing when it is off).
+// extra: fields added to every warning.
+export const warnAdder = (cfg, list, extra = {}) => (check, w) => {
+  const level = cfg.checks[check];
+  if (level && level !== 'off') list.push({ ...w, level, ...extra });
+};
 
 export const DEFAULT_CONFIG = {
   version: 1,
@@ -77,13 +85,7 @@ export const DEFAULT_CONFIG = {
   noAssetTag: ['-', 'N/A', 'none'],
   // makes whose model comes from Blancco's "System version" instead of "System model"
   modelFromVersion: ['LENOVO'],
-  checks: {
-    reportLineUnknown: 'error', blanccoMissingColumns: 'error', noItemCode: 'warn', duplicateItem: 'warn',
-    outsideNumbering: 'warn', numberingStart: 'warn', belowStart: 'warn', numberingGaps: 'warn',
-    unknownMacModel: 'warn', cpuNotShortened: 'warn', erasureFailed: 'error', noErasureMac: 'warn',
-    noErasureWindows: 'info', diagnosticsEmpty: 'warn', duplicateAsset: 'warn',
-    simsNoCode: 'sims', simsNoCategory: 'sims',
-  },
+  checks: Object.fromEntries(CHECK_LIST.map(([key, level]) => [key, level])),
   reportColumns: REPORT.map(([key, label]) => ({ key, label })),
   lockedColumns: LOCKED.map(([key, label]) => ({ key, label })),
   // DevMode password (SHA-256 of "audit-builder:" + password)
@@ -136,17 +138,18 @@ export const rulesOf = cfg => { const { passwordHash, history, ...rules } = cfg;
 // Problems that would make the rules not work; DevMode won't save while there are any
 export function validateConfig(cfg) {
   const out = [];
+  const empty = v => !String(v ?? '').trim();
   cfg.battery.forEach((b, i) => {
     if (b.value === '' || !Number.isFinite(Number(b.value))) out.push(`Battery row ${i + 1}: the % must be a number`);
   });
-  cfg.blanccoMessages.forEach((m, i) => { if (!String(m.match ?? '').trim()) out.push(`Blancco messages row ${i + 1}: the text to look for is empty`); });
-  for (const [k, v] of Object.entries(cfg.blanccoColumns)) if (!String(v ?? '').trim()) out.push(`Blancco columns: the name for "${k}" is empty`);
-  if (!cfg.erasure.passWords.some(w => String(w).trim())) out.push('Erasure: at least one word for a passed erasure is needed');
-  if (!String(cfg.erasure.passText).trim()) out.push('Erasure: the text for a passed erasure is empty');
-  if (!String(cfg.erasure.failText).trim()) out.push('Erasure: the text for a failed erasure is empty');
-  cfg.diskKinds.forEach((x, i) => { if (!String(x.match ?? '').trim()) out.push(`Disk types row ${i + 1}: the text to look for is empty`); });
+  cfg.blanccoMessages.forEach((m, i) => { if (empty(m.match)) out.push(`Blancco messages row ${i + 1}: the text to look for is empty`); });
+  for (const [k, v] of Object.entries(cfg.blanccoColumns)) if (empty(v)) out.push(`Blancco columns: the name for "${k}" is empty`);
+  if (!cfg.erasure.passWords.some(w => !empty(w))) out.push('Erasure: at least one word for a passed erasure is needed');
+  if (empty(cfg.erasure.passText)) out.push('Erasure: the text for a passed erasure is empty');
+  if (empty(cfg.erasure.failText)) out.push('Erasure: the text for a failed erasure is empty');
+  cfg.diskKinds.forEach((x, i) => { if (empty(x.match)) out.push(`Disk types row ${i + 1}: the text to look for is empty`); });
   for (const k of ['reportColumns', 'lockedColumns']) {
-    cfg[k].forEach(x => { if (!String(x.label).trim()) out.push(`${k === 'reportColumns' ? 'Report' : 'Locked and Faulty'} columns: the header for "${x.key}" is empty`); });
+    cfg[k].forEach(x => { if (empty(x.label)) out.push(`${k === 'reportColumns' ? 'Report' : 'Locked and Faulty'} columns: the header for "${x.key}" is empty`); });
   }
   return out;
 }

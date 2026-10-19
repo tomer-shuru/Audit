@@ -1,169 +1,31 @@
 // DevMode: the rules in config.json (battery grades, Blancco messages, texts, checks, columns…), changed without code.
-// The DevMode window is behind a password. The rules file is shared like the Dictionary: everyone's app reads it
-// (and picks up changes when the window gets focus again); DevMode writes it, keeping the last 20 versions inside it.
-// Changes are made to a draft first: the window shows what they would change in the open project, and they only
-// apply when saved.
+// The DevMode window is behind a password. Changes are made to a draft first: the window shows what they would change
+// in the open project, and they only apply when saved (to the shared rules file, see config-file.js).
 import { DEFAULT_CONFIG, CHECKS, CHECK_LEVELS, withDefaults, validateConfig, rulesOf } from '../engine/config.js';
 import { buildReport, exportColumns, lockedColumns } from '../engine/report.js';
+import { writeFile, readFileText } from './filesave.js';
+import { downloadJson, readJsonFile } from './io.js';
+import { state } from './state.js';
+import { $, esc, toast } from './util.js';
 import {
-  canSaveInPlace, rememberedFile, rememberFile, writeFile, hasPermission, readFileText,
-  CONFIG_FILE, chooseConfigFile, chooseNewConfigFile,
-} from './filesave.js';
+  file, editor, applyConfig, configText, rulesText, isConfigData, fileFailed, loadConfigFile, renderConfigBar, initConfigFile,
+} from './config-file.js';
 
-export const STORE_CONFIG = 'auditApp.config';
 const UNLOCKED = 'auditApp.devUnlocked'; // sessionStorage: unlocked until the tab is closed
 const HISTORY_MAX = 20;
-const SHARED_PATH = 'G:\\My Drive\\Audit Builder\\Config\\config.json';
-const FOLDER_PATH = 'G:\\My Drive\\Audit Builder';
 
-const $ = (sel, root = document) => root.querySelector(sel);
-let ctx; // { state, applyConfig(cfg), toast, esc, downloadJson, readJsonFile, folder() -> { connected, pending }, connectFolder() }
-const esc = v => ctx.esc(v);
-
-// the shared rules file. status: off | ok | needs-permission | missing | error | unsupported
-const file = { handle: null, status: canSaveInPlace ? 'off' : 'unsupported', text: '', error: '' };
 const dev = { draft: null, section: 'battery', timer: 0 };
-
-const configText = c => JSON.stringify(c, null, 1);
-// what counts as a change: the rules and the password (not the backups)
-const rulesText = c => JSON.stringify({ ...rulesOf(withDefaults(c)), passwordHash: c.passwordHash });
-const isConfigData = c => c && typeof c === 'object' && !Array.isArray(c) && ['battery', 'checks', 'reportColumns', 'texts'].some(k => k in c);
-const dirty = () => dev.draft && rulesText(dev.draft) !== rulesText(ctx.state.config);
+const dirty = () => dev.draft && rulesText(dev.draft) !== rulesText(state.config);
+Object.assign(editor, { dirty, reset: () => { if (dev.draft) dev.draft = structuredClone(state.config); } });
 
 async function hashPassword(pw) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('audit-builder:' + pw));
   return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-// ---------- the shared rules file ----------
-function fileFailed(err) {
-  file.status = err.name === 'NotFoundError' ? 'missing' : err.name === 'NotAllowedError' ? 'needs-permission' : 'error';
-  file.error = err.message;
-  renderConfigBar();
-}
-
-// reads the shared file; ask=true only when called from a click (may show the browser's permission prompt)
-async function loadConfigFile({ ask = false, announce = false } = {}) {
-  if (!file.handle) return;
-  try {
-    if (!(await hasPermission(file.handle, ask, 'read'))) { file.status = 'needs-permission'; renderConfigBar(); return; }
-    const text = await readFileText(file.handle);
-    file.status = 'ok';
-    if (text !== file.text) {
-      const c = JSON.parse(text);
-      if (!isConfigData(c)) throw new Error('it isn\'t an Audit Builder rules file');
-      file.text = text;
-      const cfg = withDefaults(c);
-      if (configText(cfg) !== configText(ctx.state.config)) {
-        const keepDraft = dirty();
-        ctx.applyConfig(cfg);
-        if (dev.draft && !keepDraft) dev.draft = structuredClone(cfg);
-        if (announce) ctx.toast('Loaded the latest shared rules');
-      }
-    }
-    renderConfigBar();
-  } catch (err) { fileFailed(err); }
-}
-
-async function connectConfigFile() {
-  const h = await chooseConfigFile();
-  if (!h) return;
-  try {
-    if (!(await hasPermission(h, true, 'read'))) throw Object.assign(new Error('the browser wasn\'t allowed to use it'), { name: 'NotAllowedError' });
-    const text = await readFileText(h);
-    const c = JSON.parse(text);
-    if (!isConfigData(c)) throw new Error('it isn\'t an Audit Builder rules file');
-    Object.assign(file, { handle: h, text, status: 'ok', error: '' });
-    await rememberFile(h, CONFIG_FILE);
-    ctx.applyConfig(withDefaults(c));
-    if (dev.draft) dev.draft = structuredClone(ctx.state.config);
-    renderConfigBar();
-    ctx.toast(`Connected to the shared rules file ${h.name}`);
-  } catch (err) { ctx.toast(`Couldn't use ${h.name}: ${err.message}`, 'bad'); }
-}
-
-async function createConfigFile() {
-  const h = await chooseNewConfigFile();
-  if (!h) return;
-  const text = configText(ctx.state.config);
-  try {
-    await writeFile(h, text);
-    Object.assign(file, { handle: h, text, status: 'ok', error: '' });
-    await rememberFile(h, CONFIG_FILE);
-    renderConfigBar();
-    ctx.toast(`Created ${h.name} from the current rules. Coworkers can now connect to it.`);
-  } catch (err) { ctx.toast(`Couldn't create the file: ${err.message}`, 'bad'); }
-}
-
-// the config.json found in the shared Audit Builder folder (connected from main.js)
-export async function attachConfigFile(h, { announce = false } = {}) {
-  Object.assign(file, { handle: h, text: '', status: 'ok', error: '' });
-  await rememberFile(h, CONFIG_FILE);
-  await loadConfigFile({ announce });
-}
-
-// without a shared folder: the config.json connected on its own earlier, if any
-export async function reconnectConfigFile() {
-  if (!canSaveInPlace) { renderConfigBar(); return; }
-  const h = await rememberedFile(CONFIG_FILE);
-  if (h) { file.handle = h; await loadConfigFile(); } else renderConfigBar();
-}
-
-function disconnectConfigFile() {
-  if (!confirm('Stop using the shared rules file on this computer? The current rules stay, but DevMode changes will only be saved here.')) return;
-  Object.assign(file, { handle: null, text: '', status: 'off', error: '' });
-  rememberFile(null, CONFIG_FILE);
-  ctx.forgetFolder(); // or it would connect again on the next start
-  renderConfigBar();
-}
-
-// the bar under the tabs (everyone) and the box at the top of the DevMode window
-function renderConfigBar() {
-  const name = esc(file.handle?.name || 'config.json');
-  const bar = $('#configBar');
-  const folder = ctx.folder();
-  // while the shared folder waits for the browser's OK, its own bar (main.js) covers the rules too
-  const msg = folder.pending ? '' : {
-    // the shared folder holds the Dictionary and the rules: connecting it once is enough
-    off: folder.connected
-      ? '<span>There\'s no Config\\config.json in the shared folder yet, so the built-in rules are used.</span>'
-      : `<span>Connect the shared Audit Builder folder once, so the app loads the shared Dictionary and rules by itself.</span>
-      <button class="btn small primary" data-cfg="folder">Connect folder…</button>
-      <span class="hint">Choose <code>${esc(FOLDER_PATH)}</code></span>`,
-    'needs-permission': `<span>The shared rules (${name}) need your OK to load.</span><button class="btn small primary" data-cfg="allow">Load shared rules</button>`,
-    missing: `<span>Can't find the shared rules file (${name}), so this computer's last copy of the rules is used.</span><button class="btn small" data-cfg="connect">Connect again…</button>`,
-    error: `<span>Problem with the shared rules file (${name}): ${esc(file.error)}. This computer's last copy of the rules is used.</span>
-      <button class="btn small" data-cfg="allow">Try again</button><button class="btn small" data-cfg="connect">Connect again…</button>`,
-  }[file.status];
-  bar.hidden = !msg;
-  if (msg) bar.innerHTML = msg;
-
-  const box = $('#devFile');
-  if (box) {
-    box.innerHTML = {
-      unsupported: '<span class="muted">This browser can\'t use a shared rules file, so changes are only saved on this computer. Use Chrome or Edge.</span>',
-      off: `<span><b>Not shared:</b> the rules are only saved on this computer.</span>
-        <span class="actions"><button class="btn small primary" data-cfg="folder">Connect Audit Builder folder…</button><button class="btn small" data-cfg="connect">Connect shared file…</button><button class="btn small ghost" data-cfg="create">Create shared file…</button></span>
-        <span class="hint">The shared file is <code>${esc(SHARED_PATH)}</code>. If it doesn't exist yet, create it there (make the Config folder first).</span>`,
-      ok: `<span class="good-text"><b>✓ Shared:</b> using ${name}. Saved changes apply to everyone.</span>
-        <span class="actions"><button class="btn small ghost" data-cfg="disconnect">Disconnect</button></span>`,
-      'needs-permission': `<span class="warn-text"><b>${name}</b> needs your OK before the app can use it.</span>
-        <span class="actions"><button class="btn small primary" data-cfg="allow">Load shared rules</button></span>`,
-      missing: `<span class="bad-text">Can't find ${name}. It may have been moved or deleted.</span>
-        <span class="actions"><button class="btn small" data-cfg="connect">Connect again…</button><button class="btn small ghost" data-cfg="disconnect">Disconnect</button></span>`,
-      error: `<span class="bad-text">Problem with ${name}: ${esc(file.error)}</span>
-        <span class="actions"><button class="btn small" data-cfg="allow">Try again</button><button class="btn small" data-cfg="connect">Connect again…</button></span>`,
-    }[file.status];
-  }
-  document.querySelectorAll('[data-cfg]').forEach(b => b.onclick = () => ({
-    connect: connectConfigFile, create: createConfigFile, disconnect: disconnectConfigFile, folder: ctx.connectFolder,
-    allow: () => loadConfigFile({ ask: true, announce: true }),
-  })[b.dataset.cfg]());
-}
-
 // ---------- password ----------
 function openLogin() {
-  if (sessionStorage.getItem(UNLOCKED) === ctx.state.config.passwordHash) { openDev(); return; }
+  if (sessionStorage.getItem(UNLOCKED) === state.config.passwordHash) { openDev(); return; }
   const d = $('#devLogin');
   $('#devLoginForm').reset();
   $('#devLoginError').textContent = '';
@@ -176,7 +38,7 @@ async function tryLogin(e) {
   const pw = $('#devLoginForm').pw.value;
   let hash;
   try { hash = await hashPassword(pw); } catch { $('#devLoginError').textContent = 'This browser can\'t check the password. Open the app in Chrome or Edge.'; return; }
-  if (hash !== ctx.state.config.passwordHash) {
+  if (hash !== state.config.passwordHash) {
     $('#devLoginError').textContent = 'Wrong password';
     $('#devLoginForm').pw.select();
     return;
@@ -191,15 +53,15 @@ function lock() {
   try { sessionStorage.removeItem(UNLOCKED); } catch { /* nothing to remove */ }
   dev.draft = null;
   $('#devDialog').close();
-  ctx.toast('DevMode locked');
+  toast('DevMode locked');
 }
 
 // ---------- the DevMode window ----------
 function openDev() {
-  dev.draft = structuredClone(ctx.state.config);
+  dev.draft = structuredClone(state.config);
   renderDev();
   $('#devDialog').showModal();
-  if (file.status === 'ok') loadConfigFile().then(() => { if (!dirty()) { dev.draft = structuredClone(ctx.state.config); renderDev(); } });
+  if (file.status === 'ok') loadConfigFile().then(() => { if (!dirty()) { dev.draft = structuredClone(state.config); renderDev(); } });
 }
 
 function closeDev() {
@@ -354,7 +216,7 @@ function renderDev() {
   wireDev();
 }
 
-const changedSection = id => SECTIONS[id].keys.some(k => JSON.stringify(dev.draft[k]) !== JSON.stringify(ctx.state.config[k]));
+const changedSection = id => SECTIONS[id].keys.some(k => JSON.stringify(dev.draft[k]) !== JSON.stringify(state.config[k]));
 
 function wireDev() {
   const body = $('#devBody');
@@ -381,21 +243,21 @@ function wireDev() {
   const pw = $('#devPassword');
   if (pw) pw.onsubmit = async e => {
     e.preventDefault();
-    if (pw.pw1.value !== pw.pw2.value) { ctx.toast('The two passwords are different', 'bad'); return; }
+    if (pw.pw1.value !== pw.pw2.value) { toast('The two passwords are different', 'bad'); return; }
     dev.draft.passwordHash = await hashPassword(pw.pw1.value);
     pw.reset();
     renderFooter();
-    ctx.toast('New password set. Save for everyone to keep it.');
+    toast('New password set. Save for everyone to keep it.');
   };
   const imp = $('#devImportFile');
   if (imp) imp.onchange = async e => {
     const f = e.target.files[0]; e.target.value = ''; if (!f) return;
     try {
-      const c = await ctx.readJsonFile(f);
+      const c = await readJsonFile(f);
       if (!isConfigData(c)) throw new Error('not an Audit Builder rules file');
       fillDraft(c);
-      ctx.toast(`Loaded ${f.name} into the editor. Save to use it.`);
-    } catch (err) { ctx.toast(`Couldn't load it: ${err.message}`, 'bad'); }
+      toast(`Loaded ${f.name} into the editor. Save to use it.`);
+    } catch (err) { toast(`Couldn't load it: ${err.message}`, 'bad'); }
   };
 }
 
@@ -416,17 +278,17 @@ function act(b) {
     [list[i], list[j]] = [list[j], list[i]]; renderDev(); return;
   }
   if (a === 'resetSection') { for (const k of SECTIONS[dev.section].keys) dev.draft[k] = structuredClone(DEFAULT_CONFIG[k]); renderDev(); return; }
-  if (a === 'resetAll') { fillDraft(DEFAULT_CONFIG); ctx.toast('The built-in rules are in the editor. Save to use them.'); return; }
-  if (a === 'restore') { fillDraft(dev.draft.history[i].config); ctx.toast('That version is in the editor. Save to use it again.'); return; }
-  if (a === 'export') { ctx.downloadJson(ctx.state.config, 'config.json'); return; }
+  if (a === 'resetAll') { fillDraft(DEFAULT_CONFIG); toast('The built-in rules are in the editor. Save to use them.'); return; }
+  if (a === 'restore') { fillDraft(dev.draft.history[i].config); toast('That version is in the editor. Save to use it again.'); return; }
+  if (a === 'export') { downloadJson(state.config, 'config.json'); return; }
   if (a === 'import') { $('#devImportFile').click(); return; }
-  if (a === 'discard') { dev.draft = structuredClone(ctx.state.config); renderDev(); return; }
+  if (a === 'discard') { dev.draft = structuredClone(state.config); renderDev(); return; }
   if (a === 'save') save();
 }
 
 // what the draft would change in the open project
 function preview() {
-  const { project, models, config } = ctx.state;
+  const { project, models, config } = state;
   const draft = withDefaults(dev.draft);
   const a = buildReport(project, models, config), b = buildReport(project, models, draft);
   const cols = exportColumns(draft);
@@ -473,7 +335,7 @@ function renderFooter() {
 }
 
 async function save() {
-  const prev = ctx.state.config;
+  const prev = state.config;
   const draft = withDefaults(dev.draft);
   if (validateConfig(draft).length) return;
   const next = { ...draft, history: [{ savedAt: new Date().toISOString(), config: rulesOf(prev) }, ...prev.history].slice(0, HISTORY_MAX) };
@@ -484,40 +346,34 @@ async function save() {
       if (current !== file.text) {
         file.text = '';
         await loadConfigFile();
-        dev.draft = structuredClone(ctx.state.config);
+        dev.draft = structuredClone(state.config);
         renderDev();
-        ctx.toast('The shared rules file was changed somewhere else just now. That version is loaded; please make your changes again.', 'bad');
+        toast('The shared rules file was changed somewhere else just now. That version is loaded; please make your changes again.', 'bad');
         return;
       }
       const text = configText(next);
       await writeFile(file.handle, text);
       file.text = text;
-    } catch (err) { fileFailed(err); ctx.toast(`Not saved: ${err.message}`, 'bad'); return; }
-    ctx.toast('Saved. Coworkers get the new rules next time their app loads them.');
+    } catch (err) { fileFailed(err); toast(`Not saved: ${err.message}`, 'bad'); return; }
+    toast('Saved. Coworkers get the new rules next time their app loads them.');
   } else {
     if (!confirm('The shared rules file isn\'t connected, so these rules will only be saved on this computer. Save anyway?')) return;
-    ctx.toast('Saved on this computer only');
+    toast('Saved on this computer only');
   }
-  ctx.applyConfig(next);
+  applyConfig(next);
   if (next.passwordHash !== prev.passwordHash) try { sessionStorage.setItem(UNLOCKED, next.passwordHash); } catch { /* fine */ }
   dev.draft = structuredClone(next);
   renderDev();
 }
 
 // ---------- start ----------
-export function initDevMode(context) {
-  ctx = context;
+export function initDevMode() {
   $('#btnDev').onclick = openLogin;
   $('#devLoginForm').onsubmit = tryLogin;
   $('#devLoginCancel').onclick = () => $('#devLogin').close();
   $('#devClose').onclick = closeDev;
   $('#devLock').onclick = lock;
   $('#devDialog').oncancel = e => { e.preventDefault(); closeDev(); }; // Esc
-  // connecting on start is done by main.js (through the shared folder, or reconnectConfigFile)
-  if (canSaveInPlace) {
-    window.addEventListener('focus', () => {
-      if (file.status === 'ok' && !$('#devDialog').open) loadConfigFile({ announce: true });
-    });
-  }
+  // connecting on start is done by folder.js (through the shared folder, or reconnectConfigFile)
+  initConfigFile();
 }
-export { renderConfigBar };

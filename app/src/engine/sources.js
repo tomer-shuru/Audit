@@ -1,7 +1,7 @@
 ﻿// Turns raw inputs (Mac lines, Windows lines, Blancco rows) into per-device records.
 // Replaces sheets: MacReports, Output_Mac, WindowsReports, Output_Win, CSV, CPU_Formula, Disk_Pivot.
 import {
-  str, isBlank, eqi, joinNonEmpty, toNumber, batteryGrade, windowsBatteryPct,
+  str, isBlank, low, eqi, hasText, joinNonEmpty, toNumber, batteryGrade, windowsBatteryPct,
   formatRamMac, formatRamWindows, formatRamBlancco, formatDiskCapacity, diskKind,
   shortCpu, cleanModelName,
 } from './rules.js';
@@ -45,20 +45,18 @@ export function sortReportLines(text) {
 // --- lookups into the Models data ---
 // cfg: the DevMode rules (config.json), carried along with the lookups to every record builder
 export function makeLookups(models, cfg = DEFAULT_CONFIG) {
-  const byId = new Map();
-  for (const m of models.models) { const k = str(m.id).trim().toLowerCase(); if (!byId.has(k)) byId.set(k, m); }
-  const typeMap = new Map();
-  for (const t of models.typeMap) { const k = str(t.blanccoType).trim().toLowerCase(); if (!typeMap.has(k)) typeMap.set(k, t.type); }
-  const weights = new Map();
-  for (const t of models.typeWeights) { const k = str(t.type).trim().toLowerCase(); if (!weights.has(k)) weights.set(k, t.weight); }
-  const makes = new Map();
-  for (const t of models.makeMap || []) { const k = str(t.from).trim().toLowerCase(); if (k && !makes.has(k)) makes.set(k, str(t.to).trim()); }
+  // key (any capitals) -> value of the first row with that key, like MATCH(); returns a lookup function
+  const lookup = (list, key, value) => {
+    const map = new Map();
+    for (const x of list) { const k = low(key(x)); if (!map.has(k)) map.set(k, value(x)); }
+    return v => map.get(low(v));
+  };
   return {
-    model: id => byId.get(str(id).trim().toLowerCase()),
-    mapType: raw => typeMap.get(str(raw).trim().toLowerCase()),
-    weight: type => weights.get(str(type).trim().toLowerCase()),
+    model: lookup(models.models, m => m.id, m => m),
+    mapType: lookup(models.typeMap, t => t.blanccoType, t => t.type),
+    weight: lookup(models.typeWeights, t => t.type, t => t.weight),
     // make name as the report should show it ("Dell Inc." -> "Dell"), or undefined if it isn't in the list
-    make: raw => makes.get(str(raw).trim().toLowerCase()),
+    make: lookup((models.makeMap || []).filter(t => low(t.from)), t => t.from, t => str(t.to).trim()),
     cleanupRules: models.cleanupRules,
     diagCodes: models.diagCodes,
     cfg,
@@ -70,18 +68,19 @@ export function makeLookups(models, cfg = DEFAULT_CONFIG) {
 // The names are in the config ("Blancco columns" in DevMode); these are the defaults.
 export const BLANCCO_COLUMNS = DEFAULT_CONFIG.blanccoColumns;
 // Optional columns: no warning when an export doesn't have them
-const OPTIONAL = new Set(['itemAlt', 'comment1', 'comment2', 'comment3', 'comment4', 'comment5', 'comment6', 'comment7', 'comment8']);
+const COMMENTS = ['comment1', 'comment2', 'comment3', 'comment4', 'comment5', 'comment6', 'comment7', 'comment8'];
+const OPTIONAL = new Set(['itemAlt', ...COMMENTS]);
 
 // Diagnostics text from a Blancco row: comments 1-6 as typed (like the workbook; the number is in the config),
 // automatic messages (config "Blancco messages") from any comment column, each finding listed once.
 // A message whose report text is empty is dropped.
 export function blanccoComments(r, cfg = DEFAULT_CONFIG) {
-  const all = [r.comment1, r.comment2, r.comment3, r.comment4, r.comment5, r.comment6, r.comment7, r.comment8];
+  const all = COMMENTS.map(k => r[k]);
   const typed = all.slice(0, cfg.typedCommentColumns);
   const extra = all.slice(cfg.typedCommentColumns);
   const out = [];
   const add = text => { if (text && !out.some(x => x.toLowerCase() === text.toLowerCase())) out.push(text); };
-  const message = c => cfg.blanccoMessages.find(m => str(m.match).trim() && c.toLowerCase().includes(str(m.match).trim().toLowerCase()));
+  const message = c => cfg.blanccoMessages.find(m => hasText(c, m.match));
   for (const c of typed) {
     const s = c === 0 ? '' : str(c).trim();
     if (s === '' || s === '0') continue;
@@ -90,7 +89,7 @@ export function blanccoComments(r, cfg = DEFAULT_CONFIG) {
     // a typed comment may already say it (e.g. "CD C, WiFi defect, DI C") - keep it, but don't repeat later
     for (const part of s.split(',').map(p => p.trim()).filter(Boolean)) add(part);
   }
-  for (const c of extra) { const m = message(str(c)); if (m) add(str(m.text).trim()); }
+  for (const c of extra) { const m = message(c); if (m) add(str(m.text).trim()); }
   return out;
 }
 
@@ -165,10 +164,11 @@ export function normalizeBlancco(table, columns = BLANCCO_COLUMNS) {
 }
 
 // does an erasure state contain one of these words (config "Erasure")?
-export const erasureHas = (state, words) => {
-  const s = str(state).toLowerCase();
-  return words.some(w => str(w).trim() && s.includes(str(w).trim().toLowerCase()));
-};
+export const erasureHas = (state, words) => words.some(w => hasText(state, w));
+
+// the Blancco result column says "Pass…" / "…Fail" (texts from the config "Erasure")
+export const resultPassed = (result, erasure) => low(result).startsWith(low(erasure.passText));
+export const resultFailed = (result, erasure) => low(result).includes(low(erasure.failText));
 
 // Disk_Pivot: per serial, count successful / failed erasures -> "Pass", "Pass x2, Fail"
 export function erasureSummary(blanccoRows, erasure = DEFAULT_CONFIG.erasure) {
@@ -232,8 +232,9 @@ export function windowsRecord(w, lk, blanccoResult) {
 // --- CSV sheet: one record per Blancco serial that isn't a Mac ---
 export function blanccoRecords(blanccoRows, macSerials, lk, blanccoResult) {
   const { cfg } = lk;
-  const fromVersion = new Set(cfg.modelFromVersion.map(m => str(m).trim().toLowerCase()).filter(Boolean));
-  const macSet = new Set(macSerials.map(s => str(s).trim().toLowerCase()));
+  const fromVersion = new Set(cfg.modelFromVersion.map(low).filter(Boolean));
+  const macSet = new Set(macSerials.map(low));
+  const grade = v => (isBlank(v) ? '' : batteryGrade(toNumber(v), cfg.battery));
   const seen = new Set(); const out = [];
   for (const r of blanccoRows) {
     const k = r.serial.toLowerCase();
@@ -246,12 +247,11 @@ export function blanccoRecords(blanccoRows, macSerials, lk, blanccoResult) {
       .map(x => formatDiskCapacity(x.diskCapacity) + ' ' + diskKind(x.diskInterface, cfg.diskKinds));
     const batteryRaw = str(r.battery);
     const [b1 = '', b2 = ''] = batteryRaw === '' ? [] : batteryRaw.split(' / ');
-    const grade = v => (isBlank(v) ? '' : batteryGrade(toNumber(v), cfg.battery));
     const comments = blanccoComments(r, cfg);
     out.push({
       source: 'blancco', item: str(r.item), sn: r.serial, asset: str(r.asset), type, rawType: str(r.chassis),
       make: str(r.make),
-      model: str(fromVersion.has(str(r.make).trim().toLowerCase()) ? r.version : r.model),
+      model: str(fromVersion.has(low(r.make)) ? r.version : r.model),
       screen: '', year: '',
       cpu: shortCpu(r.cpu), rawCpu: str(r.cpu),
       ram: formatRamBlancco(r.memory, r.memoryType),

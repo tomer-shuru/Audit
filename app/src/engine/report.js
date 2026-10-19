@@ -1,11 +1,11 @@
 // Merges every source into the final Audit Report and Locked and Faulty lists.
 // Replaces sheets: Audit Report, Locked and Faulty, My_Audit (manual entries).
-import { str, isBlank, joinNonEmpty, expandDiagCodes, formatDiagnostics, proper } from './rules.js';
+import { str, isBlank, pushTo, joinNonEmpty, expandDiagCodes, formatDiagnostics, proper } from './rules.js';
 import {
   itemKey, makeLookups, mergeTables, parseMacLines, parseWindowsLines, sortReportLines, normalizeBlancco, erasureSummary,
-  macRecord, windowsRecord, blanccoRecords,
+  resultPassed, resultFailed, macRecord, windowsRecord, blanccoRecords,
 } from './sources.js';
-import { DEFAULT_CONFIG, withDefaults } from './config.js';
+import { DEFAULT_CONFIG, withDefaults, warnAdder } from './config.js';
 
 // Columns of the Audit Report sheet, in order (the order and headers are in the config: "Report columns" in DevMode)
 export const reportColumns = (cfg = DEFAULT_CONFIG) => [['itemLookup', 'Item Lookup'], ...cfg.reportColumns.map(c => [c.key, c.label])];
@@ -40,7 +40,7 @@ export const MANUAL_FIELDS = [
 // Report columns that can be edited in the Review table
 export const EDITABLE = new Set(REPORT_COLUMNS.map(([k]) => k).filter(k => k !== 'itemLookup' && k !== 'item'));
 
-export const itemCode =(settings, n) => str(settings.prefix) + String(n).padStart(2, '0');
+export const itemCode = (settings, n) => str(settings.prefix) + String(n).padStart(2, '0');
 // the ITEM column: "ITD-SHR11734-GG01" ("ITD" is in the config: Texts)
 export const itemName = (settings, code, cfg = DEFAULT_CONFIG) => joinNonEmpty('-', cfg.texts.itemPrefix, settings.projectNumber, code);
 
@@ -65,7 +65,7 @@ export function buildReport(project, models, config, sheet = null) {
   const { settings, inputs = {}, manual = {}, overrides = {} } = project;
   const warnings = [];
   // a check's level (red / yellow / gray, or off) comes from the config
-  const add = (check, w) => { const level = cfg.checks[check]; if (level && level !== 'off') warnings.push({ ...w, level }); };
+  const add = warnAdder(cfg, warnings);
 
   const reports = sortReportLines(inputs.reports);
   for (const u of reports.unknown) {
@@ -78,9 +78,7 @@ export function buildReport(project, models, config, sheet = null) {
   if (blanccoTable.missing.length && blanccoInput.length > 1) {
     add('blanccoMissingColumns', { text: `Blancco export is missing columns: ${blanccoTable.missing.join(', ')}` });
   }
-  // the Blancco result column says "Pass…" / "…Fail" (texts from the config)
-  const passed = v => str(v).trim().toLowerCase().startsWith(str(cfg.erasure.passText).trim().toLowerCase());
-  const failed = v => str(v).toLowerCase().includes(str(cfg.erasure.failText).trim().toLowerCase());
+  const passed = v => resultPassed(v, cfg.erasure);
   const blanccoResult = erasureSummary(blanccoTable.rows, cfg.erasure);
 
   const mac = macLines.map(m => macRecord(m, lk, blanccoResult));
@@ -136,6 +134,8 @@ export function buildReport(project, models, config, sheet = null) {
       return str(sh[f]).trim();
     };
     const pick = f => orSheet(f, first(man[f], m?.[f], w?.[f], c?.[f]));
+    // columns only a person types (no tool has them)
+    const typed = f => orSheet(f, str(man[f]));
 
     const row = {
       itemLookup: code,
@@ -149,9 +149,9 @@ export function buildReport(project, models, config, sheet = null) {
       year: pick('year'), cpu: pick('cpu'), ram: pick('ram'), disk: pick('disk'),
       diagnostics: orSheet('diagnostics', formatDiagnostics(expandDiagCodes(joinNonEmpty(', ', man.locked, man.diagnostics, m?.diagnostics, w?.diagnostics, c?.diagnostics), lk.diagCodes))),
       blancco: pick('blancco'),
-      snDataCarrier: orSheet('snDataCarrier', str(man.snDataCarrier)), noDataCarrier: orSheet('noDataCarrier', str(man.noDataCarrier)),
-      comments: orSheet('comments', str(man.comments)), powerSupply: orSheet('powerSupply', str(man.powerSupply)),
-      itemStatus: orSheet('itemStatus', str(man.itemStatus)), estValue: orSheet('estValue', str(man.estValue)),
+      snDataCarrier: typed('snDataCarrier'), noDataCarrier: typed('noDataCarrier'),
+      comments: typed('comments'), powerSupply: typed('powerSupply'),
+      itemStatus: typed('itemStatus'), estValue: typed('estValue'),
       locked: orSheet('locked', expandDiagCodes(joinNonEmpty(', ', man.locked, m?.locked, w?.locked), lk.diagCodes)),
     };
     row.destruction = orSheet('destruction', first(man.destruction, passed(row.blancco) ? cfg.erasure.destruction : ''));
@@ -162,8 +162,11 @@ export function buildReport(project, models, config, sheet = null) {
     row._manual = Object.keys(man).filter(f => f !== 'item' && !isBlank(man[f]));
     // edits made in the Review table replace the final value; diagnostic codes work there too
     const edits = overrides[code] || overrides[k] || {};
-    const reviewValue = (f, v) => (f === 'diagnostics' ? formatDiagnostics(expandDiagCodes(v, lk.diagCodes))
-      : f === 'locked' ? expandDiagCodes(v, lk.diagCodes) : v);
+    const reviewValue = (f, v) => {
+      if (f === 'diagnostics') return formatDiagnostics(expandDiagCodes(v, lk.diagCodes));
+      if (f === 'locked') return expandDiagCodes(v, lk.diagCodes);
+      return v;
+    };
     row._edited = []; row._base = {};
     for (const [f, v] of Object.entries(edits)) {
       if (EDITABLE.has(f) && !isBlank(v)) {
@@ -174,7 +177,7 @@ export function buildReport(project, models, config, sheet = null) {
 
     if (m?.unknownModel) add('unknownMacModel', { item: code, text: `${code}: Mac model "${m.unknownModel}" isn't in the Models list` });
     if (c && isBlank(row.cpu) && !isBlank(c.rawCpu)) add('cpuNotShortened', { item: code, text: `${code}: couldn't shorten CPU "${c.rawCpu}"` });
-    if (failed(row.blancco)) add('erasureFailed', { item: code, text: `${code}: erasure failed (${row.blancco})` });
+    if (resultFailed(row.blancco, cfg.erasure)) add('erasureFailed', { item: code, text: `${code}: erasure failed (${row.blancco})` });
     if ((m || w) && isBlank(row.blancco)) {
       // Windows reports are used for devices without a disk (no erasure possible), so that's only a note
       if (w && !m) add('noErasureWindows', { item: code, text: `${code}: no Blancco erasure (Windows report, S.N. ${row.sn})` });
@@ -189,10 +192,7 @@ export function buildReport(project, models, config, sheet = null) {
   const byAsset = new Map();
   for (const r of rows) {
     const a = str(r.asset).trim();
-    if (isNoAssetTag(a, cfg.noAssetTag)) continue;
-    const k = a.toLowerCase();
-    if (!byAsset.has(k)) byAsset.set(k, []);
-    byAsset.get(k).push(r);
+    if (!isNoAssetTag(a, cfg.noAssetTag)) pushTo(byAsset, a.toLowerCase(), r);
   }
   for (const group of byAsset.values()) {
     if (group.length < 2) continue;
@@ -232,7 +232,7 @@ export function numberingStart(settings, keys) {
 export function numberingChecks(settings, keys, config) {
   const cfg = withDefaults(config);
   const out = [];
-  const push = (check, w) => { const level = cfg.checks[check]; if (level && level !== 'off') out.push({ ...w, level, kind: 'numbering' }); };
+  const push = warnAdder(cfg, out, { kind: 'numbering' });
   const nums = keys.map(k => codeNumber(settings, k)).filter(n => n !== null);
   if (!nums.length) return out;
   const { start, set } = numberingStart(settings, keys);
