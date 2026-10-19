@@ -1,300 +1,108 @@
 {
  "models": [
   {
-   "id": "MacBookPro16,4",
-   "name": "Pro A2141",
+   "id": "Mac16,12",
+   "name": "Air A3240",
    "type": "Laptop",
-   "year": 2019,
-   "screen": 16,
-   "weight": 2
+   "year": 2025,
+   "screen": 13,
+   "weight": 1.24
   },
   {
-   "id": "MacBookPro16,3",
-   "name": "Pro A2289",
+   "id": "MacBook Air (13-inch M4, 2025)",
+   "name": "Air A3240",
    "type": "Laptop",
-   "year": 2020,
+   "year": 2025,
+   "screen": 13,
+   "weight": 1.24
+  },
+  {
+   "id": "Mac16,13",
+   "name": "Air A3241",
+   "type": "Laptop",
+   "year": 2025,
+   "screen": 15,
+   "weight": 1.51
+  },
+  {
+   "id": "Mac17,1",
+   "name": "Pro A3434",
+   "type": "Laptop",
+   "year": 2025,
+   "screen": 14,
+   "weight": 1.55
+  },
+  {
+   "id": "Mac15,12",
+   "name": "Air A3113",
+   "type": "Laptop",
+   "year": 2024,
    "screen": 13,
    "weight": 1.4
   },
   {
-   "id": "MacBookPro16,2",
-   "name": "Pro A2251",
+   "id": "MacBook Air (13-inch, M3, 2024)",
+   "name": "Air A3113",
    "type": "Laptop",
-   "year": 2020,
+   "year": 2024,
    "screen": 13,
    "weight": 1.4
   },
   {
-   "id": "MacBookPro16,1",
-   "name": "Pro A2141",
+   "id": "Mac15,13",
+   "name": "Air A3114",
    "type": "Laptop",
-   "year": 2019,
-   "screen": 16,
-   "weight": 2
-  },
-  {
-   "id": "MacBookPro15,4",
-   "name": "Pro A2159",
-   "type": "Laptop",
-   "year": 2019,
-   "screen": 13,
-   "weight": 1.4
-  },
-  {
-   "id": "MacBookPro15,3",
-   "name": "Pro A1990",
-   "type": "Laptop",
-   "year": 2019,
+   "year": 2024,
    "screen": 15,
    "weight": 1.8
   },
   {
-   "id": "MacBookPro15,2",
-   "name": "Pro A1989",
+   "id": "Mac16,1",
+   "name": "Pro A3112",
    "type": "Laptop",
-   "year": 2018,
-   "screen": 13,
-   "weight": 1.4
+   "year": 2024,
+   "screen": 14,
+   "weight": 1.55
   },
   {
-   "id": "MacBookPro15,2",
-   "name": "Pro A1989",
+   "id": "Mac16,8",
+   "name": "Pro A3401",
    "type": "Laptop",
-   "year": 2018,
-   "screen": 13,
-   "weight": 1.4
-  },
-  {
-   "id": "MacBookPro15,2",
-   "name": "Pro A1989",
-   "type": "Laptop",
-   "year": 2019,
-   "screen": 13,
-   "weight": 1.4
-  },
-  {
-   "id": "MacBookPro15,2",
-   "name": "Pro A1989",
-   "type": "Laptop",
-   "year": 2019,
-   "screen": 13,
-   "weight": 1.4
-  },
-  {
-   "id": "MacBookPro15,1",
-   "name": "Pro A1990",
-   "type": "Laptop",
-   "year": 2018,
-   "screen": 15,
-   "weight": 1.8
-  },
-  {
-   "id": "MacBookPro15,1",
-   "name": "Pro A1990",
-   "type": "Laptop",
-   "year": 2018,
-   "screen": 15,
-   "weight": 1.8
-  },
-  {
-   "id": "MacBookPro15,1",
-   "name": "Pro A1990",
-   "type": "Laptop",
-   "year": 2018,
-   "screen": 15,
-   "weight": 1.8
-  },
-  {
-   "id": "MacBookPro15,1",
-   "name": "Pro A1990",
-   "type": "Laptop",
-   "year": 2019,
-   "screen": 15,
-   "weight": 1.8
-  },
-  {
-   "id": "MacBookPro15,1",
-   "name": "Pro A1990",
-   "type": "Laptop",
-   "year": 2019,
-   "screen": 15,
-   "weight": 1.8
-  },
-  {
-   "id": "MacBookPro15,1",
-   "name": "Pro A1990",
-   "type": "Laptop",
-   "year": 2019,
-   "screen": 15,
-   "weight": 1.8
-  },
-  {
-   "id": "MacBookPro14,3",
-   "name": "Pro A1707",
-   "type": "Laptop",
-   "year": 2017,
-   "screen": 15,
-   "weight": 1.8
-  },
-  {
-   "id": "MacBookPro14,2",
-   "name": "Pro A1706",
-   "type": "Laptop",
-   "year": 2017,
-   "screen": 13,
-   "weight": 1.4
-  },
-  {
-   "id": "MacBookPro14,1",
-   "name": "Pro A1708",
-   "type": "Laptop",
-   "year": 2017,
-   "screen": 13,
-   "weight": 1.4
-  },
-  {
-   "id": "MacBookPro13,3",
-   "name": "Pro A1707",
-   "type": "Laptop",
-   "year": 2016,
-   "screen": 15,
-   "weight": 1.8
-  },
-  {
-   "id": "MacBookPro13,2",
-   "name": "Pro A1706",
-   "type": "Laptop",
-   "year": 2016,
-   "screen": 13,
-   "weight": 1.4
-  },
-  {
-   "id": "MacBookPro13,1",
-   "name": "Pro A1708",
-   "type": "Laptop",
-   "year": 2016,
-   "screen": 13,
-   "weight": 1.4
-  },
-  {
-   "id": "MacBookPro12,1",
-   "name": "Pro A1502",
-   "type": "Laptop",
-   "year": 2015,
-   "screen": 13,
-   "weight": 1.4
-  },
-  {
-   "id": "MacBookPro11,5",
-   "name": "Pro A1398",
-   "type": "Laptop",
-   "year": 2015,
-   "screen": 15,
-   "weight": 1.8
-  },
-  {
-   "id": "MacBookPro11,4",
-   "name": "Pro A1398",
-   "type": "Laptop",
-   "year": 2015,
-   "screen": 15,
-   "weight": 1.8
-  },
-  {
-   "id": "MacBookPro11,3",
-   "name": "Pro A1398",
-   "type": "Laptop",
-   "year": 2014,
-   "screen": 15,
-   "weight": 1.8
-  },
-  {
-   "id": "MacBookPro11,3",
-   "name": "Pro A1398",
-   "type": "Laptop",
-   "year": 2014,
-   "screen": 15,
-   "weight": 1.8
-  },
-  {
-   "id": "MacBookPro11,3",
-   "name": "Pro A1398",
-   "type": "Laptop",
-   "year": 2013,
-   "screen": 15,
-   "weight": 1.8
-  },
-  {
-   "id": "MacBookPro11,2",
-   "name": "Pro A1398",
-   "type": "Laptop",
-   "year": 2014,
-   "screen": 15,
-   "weight": 2
-  },
-  {
-   "id": "MacBookPro11,3",
-   "name": "Pro A1398",
-   "type": "Laptop",
-   "year": 2013,
-   "screen": 15,
-   "weight": 1.8
-  },
-  {
-   "id": "MacBookPro17,1",
-   "name": "Pro A2338",
-   "type": "Laptop",
-   "year": 2020,
-   "screen": 13,
-   "weight": 1.4
-  },
-  {
-   "id": "MacBookPro18,2",
-   "name": "Pro A2485",
-   "type": "Laptop",
-   "year": 2021,
-   "screen": 16,
-   "weight": 1.6
-  },
-  {
-   "id": "MacBookPro18,3",
-   "name": "Pro A2442",
-   "type": "Laptop",
-   "year": 2021,
+   "year": 2024,
    "screen": 14,
    "weight": 1.6
   },
   {
-   "id": "MacBookPro18,4",
-   "name": "Pro A2442",
+   "id": "MacBook Pro (14-inch, M4 Pro, Nov 2024)",
+   "name": "Pro A3401",
    "type": "Laptop",
-   "year": 2021,
+   "year": 2024,
    "screen": 14,
    "weight": 1.6
   },
   {
-   "id": "MacBookPro18,1",
-   "name": "Pro A2485",
+   "id": "MacBook Pro (16-inch, M4 Pro, Nov 2024)",
+   "name": "Pro A3403",
    "type": "Laptop",
-   "year": 2021,
+   "year": 2024,
    "screen": 16,
    "weight": 2
   },
   {
-   "id": "MacBookPro18,1",
-   "name": "Pro A2485",
+   "id": "Mac14,15",
+   "name": "Air A2941",
    "type": "Laptop",
-   "year": 2021,
-   "screen": 16,
-   "weight": 2
+   "year": 2023,
+   "screen": 15,
+   "weight": 1.8
   },
   {
-   "id": "Mac14,7",
-   "name": "Pro A2338",
+   "id": "Mac14,5",
+   "name": "Pro A2779",
    "type": "Laptop",
-   "year": 2022,
-   "screen": 13,
-   "weight": 1.4
+   "year": 2023,
+   "screen": 14,
+   "weight": 1.6
   },
   {
    "id": "Mac14,9",
@@ -305,7 +113,7 @@
    "weight": 1.6
   },
   {
-   "id": "Mac14,5",
+   "id": "MacBook Pro (14-inch, M2 Pro, 2023)",
    "name": "Pro A2779",
    "type": "Laptop",
    "year": 2023,
@@ -329,12 +137,20 @@
    "weight": 2
   },
   {
-   "id": "Mac16,12",
-   "name": "Pro A3240",
+   "id": "MacBook Pro (16-inch, M2 Max, 2023)",
+   "name": "Pro A2780",
    "type": "Laptop",
-   "year": 2025,
-   "screen": 13,
-   "weight": 1.24
+   "year": 2023,
+   "screen": 16,
+   "weight": 2
+  },
+  {
+   "id": "MacBook Pro (16-inch, M2 Pro, 2023)",
+   "name": "Pro A2780",
+   "type": "Laptop",
+   "year": 2023,
+   "screen": 16,
+   "weight": 2
   },
   {
    "id": "Mac15,3",
@@ -345,31 +161,7 @@
    "weight": 1.6
   },
   {
-   "id": "Mac15,6",
-   "name": "Pro A2992",
-   "type": "Laptop",
-   "year": 2023,
-   "screen": 14,
-   "weight": 1.6
-  },
-  {
-   "id": "Mac15,10",
-   "name": "Pro A2992",
-   "type": "Laptop",
-   "year": 2023,
-   "screen": 14,
-   "weight": 1.6
-  },
-  {
-   "id": "Mac15,8",
-   "name": "Pro A2992",
-   "type": "Laptop",
-   "year": 2023,
-   "screen": 14,
-   "weight": 1.6
-  },
-  {
-   "id": "Mac15,7",
+   "id": "Mac15,11",
    "name": "Pro A2991",
    "type": "Laptop",
    "year": 2023,
@@ -377,7 +169,7 @@
    "weight": 2
   },
   {
-   "id": "Mac15,11",
+   "id": "Mac15,7",
    "name": "Pro A2991",
    "type": "Laptop",
    "year": 2023,
@@ -393,84 +185,132 @@
    "weight": 2
   },
   {
-   "id": "Mac17,1",
-   "name": "Pro A3434",
+   "id": "Mac15,10",
+   "name": "Pro A2992",
    "type": "Laptop",
-   "year": 2025,
+   "year": 2023,
    "screen": 14,
-   "weight": 1.55
+   "weight": 1.6
   },
   {
-   "id": "Mac16,13",
-   "name": "Air A3241",
+   "id": "Mac15,6",
+   "name": "Pro A2992",
    "type": "Laptop",
-   "year": 2025,
-   "screen": 15,
-   "weight": 1.51
+   "year": 2023,
+   "screen": 14,
+   "weight": 1.6
   },
   {
-   "id": "MacBookAir7,1",
-   "name": "Air A1465",
+   "id": "Mac15,8",
+   "name": "Pro A2992",
    "type": "Laptop",
-   "year": 2015,
-   "screen": 11,
-   "weight": 11
+   "year": 2023,
+   "screen": 14,
+   "weight": 1.6
   },
   {
-   "id": "MacBookAir7,1",
-   "name": "Air A1465",
+   "id": "MacBook Pro (14-inch, M3 Pro, Late 2023)",
+   "name": "Pro A2992",
    "type": "Laptop",
-   "year": 2015,
-   "screen": 11,
-   "weight": 11
+   "year": 2023,
+   "screen": 14,
+   "weight": 1.6
   },
   {
-   "id": "MacBookAir7,2",
-   "name": "Air A1466",
+   "id": "Mac14,2",
+   "name": "Air A2681",
    "type": "Laptop",
-   "year": 2015,
+   "year": 2022,
    "screen": 13,
    "weight": 1.4
   },
   {
-   "id": "MacBookAir7,2",
-   "name": "Air A1466",
+   "id": "MacBook Air (M2, 2022)",
+   "name": "Air A2681",
    "type": "Laptop",
-   "year": 2015,
+   "year": 2022,
    "screen": 13,
    "weight": 1.4
   },
   {
-   "id": "MacBookAir7,2",
-   "name": "Air A1466",
+   "id": "Mac14,7",
+   "name": "Pro A2338",
    "type": "Laptop",
-   "year": 2017,
+   "year": 2022,
    "screen": 13,
    "weight": 1.4
   },
   {
-   "id": "MacBookAir7,2",
-   "name": "Air A1466",
+   "id": "MacBook Pro (M2, 13-inch, 2022)",
+   "name": "Pro A2338",
    "type": "Laptop",
-   "year": 2017,
+   "year": 2022,
    "screen": 13,
    "weight": 1.4
   },
   {
-   "id": "MacBookAir8,1",
-   "name": "Air A1932",
+   "id": "MacBook Pro (M1 Mac, 14-inch, 2021)",
+   "name": "Pro A2442",
    "type": "Laptop",
-   "year": 2018,
-   "screen": 13,
-   "weight": 1.4
+   "year": 2021,
+   "screen": 14,
+   "weight": 1.6
   },
   {
-   "id": "MacBookAir8,2",
-   "name": "Air A1932",
+   "id": "MacBook Pro (M1 Pro, 14-inch, 2021)",
+   "name": "Pro A2442",
    "type": "Laptop",
-   "year": 2019,
-   "screen": 13,
-   "weight": 1.4
+   "year": 2021,
+   "screen": 14,
+   "weight": 1.6
+  },
+  {
+   "id": "MacBookPro18,3",
+   "name": "Pro A2442",
+   "type": "Laptop",
+   "year": 2021,
+   "screen": 14,
+   "weight": 1.6
+  },
+  {
+   "id": "MacBookPro18,4",
+   "name": "Pro A2442",
+   "type": "Laptop",
+   "year": 2021,
+   "screen": 14,
+   "weight": 1.6
+  },
+  {
+   "id": "MacBook Pro (M1 Max, 16-inch, 2021)",
+   "name": "Pro A2485",
+   "type": "Laptop",
+   "year": 2021,
+   "screen": 16,
+   "weight": 2
+  },
+  {
+   "id": "MacBook Pro (M1 Pro, 16-inch, 2021)",
+   "name": "Pro A2485",
+   "type": "Laptop",
+   "year": 2021,
+   "screen": 16,
+   "weight": 2
+  },
+  {
+   "id": "MacBookPro18,1",
+   "name": "Pro A2485",
+   "type": "Laptop",
+   "year": 2021,
+   "screen": 16,
+   "weight": 2
+  },
+  {
+   "id": "MacBookPro18,2",
+   "name": "Pro A2485",
+   "type": "Laptop",
+   "year": 2021,
+   "screen": 16,
+   "weight": 2
   },
   {
    "id": "MacBookAir9,1",
@@ -481,16 +321,8 @@
    "weight": 1.4
   },
   {
-   "id": "MacBookAir9,1",
-   "name": "Air A2179",
-   "type": "Laptop",
-   "year": 2020,
-   "screen": 13,
-   "weight": 1.4
-  },
-  {
-   "id": "MacBookAir9,1",
-   "name": "Air A2179",
+   "id": "MacBook Air (M1, 2020)",
+   "name": "Air A2337",
    "type": "Laptop",
    "year": 2020,
    "screen": 13,
@@ -505,51 +337,139 @@
    "weight": 1.4
   },
   {
-   "id": "Mac14,2",
-   "name": "Air A2681",
+   "id": "Apple T2 MacBookPro16,2",
+   "name": "Pro A2251",
    "type": "Laptop",
-   "year": 2022,
+   "year": 2020,
    "screen": 13,
    "weight": 1.4
   },
   {
-   "id": "Mac14,15",
-   "name": "Air A2941",
+   "id": "MacBookPro16,2",
+   "name": "Pro A2251",
    "type": "Laptop",
-   "year": 2023,
-   "screen": 15,
-   "weight": 1.8
-  },
-  {
-   "id": "Mac15,12",
-   "name": "Air A3113",
-   "type": "Laptop",
-   "year": 2024,
+   "year": 2020,
    "screen": 13,
    "weight": 1.4
   },
   {
-   "id": "Mac15,13",
-   "name": "Air A3114",
+   "id": "MacBookPro16,3",
+   "name": "Pro A2289",
    "type": "Laptop",
-   "year": 2024,
+   "year": 2020,
+   "screen": 13,
+   "weight": 1.4
+  },
+  {
+   "id": "MacBook Pro (M1, 2020)",
+   "name": "Pro A2338",
+   "type": "Laptop",
+   "year": 2020,
+   "screen": 13,
+   "weight": 1.4
+  },
+  {
+   "id": "MacBookPro17,1",
+   "name": "Pro A2338",
+   "type": "Laptop",
+   "year": 2020,
+   "screen": 13,
+   "weight": 1.4
+  },
+  {
+   "id": "MacBookAir8,2",
+   "name": "Air A1932",
+   "type": "Laptop",
+   "year": 2019,
+   "screen": 13,
+   "weight": 1.4
+  },
+  {
+   "id": "MacBookPro15,3",
+   "name": "Pro A1990",
+   "type": "Laptop",
+   "year": 2019,
    "screen": 15,
    "weight": 1.8
   },
   {
-   "id": "MacPro6,1",
-   "name": "A1481",
-   "type": "Desktop",
-   "year": 2013,
-   "screen": "",
-   "weight": 5
+   "id": "Apple T2 MacBookPro16,1",
+   "name": "Pro A2141",
+   "type": "Laptop",
+   "year": 2019,
+   "screen": 16,
+   "weight": 2
   },
   {
-   "id": "imac17,1",
-   "name": "A1419",
+   "id": "MacBookPro16,1",
+   "name": "Pro A2141",
+   "type": "Laptop",
+   "year": 2019,
+   "screen": 16,
+   "weight": 2
+  },
+  {
+   "id": "MacBookPro16,4",
+   "name": "Pro A2141",
+   "type": "Laptop",
+   "year": 2019,
+   "screen": 16,
+   "weight": 2
+  },
+  {
+   "id": "MacBookPro15,4",
+   "name": "Pro A2159",
+   "type": "Laptop",
+   "year": 2019,
+   "screen": 13,
+   "weight": 1.4
+  },
+  {
+   "id": "MacBookAir8,1",
+   "name": "Air A1932",
+   "type": "Laptop",
+   "year": 2018,
+   "screen": 13,
+   "weight": 1.4
+  },
+  {
+   "id": "Apple T2 MacBookPro15,2",
+   "name": "Pro A1989",
+   "type": "Laptop",
+   "year": 2018,
+   "screen": 13,
+   "weight": 1.4
+  },
+  {
+   "id": "MacBookPro15,2",
+   "name": "Pro A1989",
+   "type": "Laptop",
+   "year": 2018,
+   "screen": 13,
+   "weight": 1.4
+  },
+  {
+   "id": "Apple T2 MacBookPro15,1",
+   "name": "Pro A1990",
+   "type": "Laptop",
+   "year": 2018,
+   "screen": 15,
+   "weight": 1.8
+  },
+  {
+   "id": "MacBookPro15,1",
+   "name": "Pro A1990",
+   "type": "Laptop",
+   "year": 2018,
+   "screen": 15,
+   "weight": 1.8
+  },
+  {
+   "id": "imac18,1",
+   "name": "A1418",
    "type": "All in One",
-   "year": 2015,
-   "screen": 27,
+   "year": 2017,
+   "screen": 21.5,
    "weight": 9.54
   },
   {
@@ -561,12 +481,140 @@
    "weight": 9.54
   },
   {
-   "id": "imac18,1",
-   "name": "A1418",
-   "type": "All in One",
+   "id": "MacBookPro14,2",
+   "name": "Pro A1706",
+   "type": "Laptop",
    "year": 2017,
-   "screen": 21.5,
+   "screen": 13,
+   "weight": 1.4
+  },
+  {
+   "id": "MacBookPro14,3",
+   "name": "Pro A1707",
+   "type": "Laptop",
+   "year": 2017,
+   "screen": 15,
+   "weight": 1.8
+  },
+  {
+   "id": "MacBookPro14,1",
+   "name": "Pro A1708",
+   "type": "Laptop",
+   "year": 2017,
+   "screen": 13,
+   "weight": 1.4
+  },
+  {
+   "id": "MacBookPro13,2",
+   "name": "Pro A1706",
+   "type": "Laptop",
+   "year": 2016,
+   "screen": 13,
+   "weight": 1.4
+  },
+  {
+   "id": "MacBookPro13,3",
+   "name": "Pro A1707",
+   "type": "Laptop",
+   "year": 2016,
+   "screen": 15,
+   "weight": 1.8
+  },
+  {
+   "id": "MacBookPro13,1",
+   "name": "Pro A1708",
+   "type": "Laptop",
+   "year": 2016,
+   "screen": 13,
+   "weight": 1.4
+  },
+  {
+   "id": "imac17,1",
+   "name": "A1419",
+   "type": "All in One",
+   "year": 2015,
+   "screen": 27,
    "weight": 9.54
+  },
+  {
+   "id": "MacBookAir7,1",
+   "name": "Air A1465",
+   "type": "Laptop",
+   "year": 2015,
+   "screen": 11,
+   "weight": 1.1
+  },
+  {
+   "id": "MacBookAir7,2",
+   "name": "Air A1466",
+   "type": "Laptop",
+   "year": 2015,
+   "screen": 13,
+   "weight": 1.4
+  },
+  {
+   "id": "MacBookPro11,4",
+   "name": "Pro A1398",
+   "type": "Laptop",
+   "year": 2015,
+   "screen": 15,
+   "weight": 1.8
+  },
+  {
+   "id": "MacBookPro11,5",
+   "name": "Pro A1398",
+   "type": "Laptop",
+   "year": 2015,
+   "screen": 15,
+   "weight": 1.8
+  },
+  {
+   "id": "MacBookPro12,1",
+   "name": "Pro A1502",
+   "type": "Laptop",
+   "year": 2015,
+   "screen": 13,
+   "weight": 1.4
+  },
+  {
+   "id": "MacBookPro11,2",
+   "name": "Pro A1398",
+   "type": "Laptop",
+   "year": 2014,
+   "screen": 15,
+   "weight": 2
+  },
+  {
+   "id": "MacBookPro11,3",
+   "name": "Pro A1398",
+   "type": "Laptop",
+   "year": 2014,
+   "screen": 15,
+   "weight": 1.8
+  },
+  {
+   "id": "MacBookPro11,1",
+   "name": "Pro A1502",
+   "type": "Laptop",
+   "year": 2014,
+   "screen": 13,
+   "weight": 1.4
+  },
+  {
+   "id": "MacPro6,1",
+   "name": "A1481",
+   "type": "Desktop",
+   "year": 2013,
+   "screen": "",
+   "weight": 5
+  },
+  {
+   "id": "MacBookAir6,2",
+   "name": "Air A1466",
+   "type": "Laptop",
+   "year": 2013,
+   "screen": 13,
+   "weight": 1.4
   }
  ],
  "typeMap": [
@@ -798,6 +846,14 @@
   {
    "from": "Dell Inc.",
    "to": "Dell"
+  },
+  {
+   "from": "Apple, Inc.",
+   "to": "Apple"
+  },
+  {
+   "from": "Apple Inc.",
+   "to": "Apple"
   }
  ],
  "simsCodes": [

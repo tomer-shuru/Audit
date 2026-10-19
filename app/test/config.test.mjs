@@ -62,6 +62,14 @@ test('battery grades, Blancco messages and typed comment columns', () => {
   assert.equal(buildReport(withBlancco([blanccoRow('GG01', 'S1', { Capacity: '90', Comment: 'DI B' })]), models, cfg(c => { c.typedCommentColumns = 0; })).rows[0].diagnostics, '');
 });
 
+test('a Blancco model in the Models list gets its name, screen and year; others stay as Blancco has them', () => {
+  const rows = buildReport(withBlancco([
+    blanccoRow('GG01', 'S1', { 'System manufacturer': 'Apple Inc.', 'System model': 'macbookpro16,4' }),
+    blanccoRow('GG02', 'S2', { 'System model': 'Latitude 5420' }),
+  ]), models).rows;
+  assert.deepEqual(rows.map(r => [r.model, r.screen, r.year]), [['Pro A2141', 16, 2019], ['Latitude 5420', '', '']]);
+});
+
 test('erasure words and texts, destruction method, disk types, model from System version', () => {
   const p = withBlancco([blanccoRow('GG01', 'S1', { 'Erasure state': 'Completed', 'System manufacturer': 'HP', 'System version': 'EliteBook X' })]);
   assert.equal(buildReport(p, models).rows[0].blancco, '');

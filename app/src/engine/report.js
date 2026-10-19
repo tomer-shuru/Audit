@@ -144,8 +144,8 @@ export function buildReport(project, models, config, sheet = null) {
       // make names from the Dictionary's Make names list; Blancco's otherwise in PROPER case
       make: orSheet('make', first(...[man.make, m?.make, w?.make].map(v => lk.make(v) ?? v), c ? lk.make(c.make) ?? proper(c.make) : '')),
       model: pick('model'),
-      // Screen: Mac, then Windows, then typed (blank Blancco screens are never used)
-      screen: orSheet('screen', first(man.screen, m ? m.screen : (w ? w.screen : ''))),
+      // Screen: typed, then Mac, then Windows, then Blancco (which only has one for a model in the Models list)
+      screen: orSheet('screen', first(man.screen, m ? m.screen : w ? w.screen : c ? c.screen : '')),
       year: pick('year'), cpu: pick('cpu'), ram: pick('ram'), disk: pick('disk'),
       diagnostics: orSheet('diagnostics', formatDiagnostics(expandDiagCodes(joinNonEmpty(', ', man.locked, man.diagnostics, m?.diagnostics, w?.diagnostics, c?.diagnostics), lk.diagCodes))),
       blancco: pick('blancco'),

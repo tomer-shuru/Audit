@@ -37,8 +37,10 @@ export function renderManual(main) {
       Diagnostics and Locked/Faulty are added to what the tools found.</p></div>
       <div class="actions">
         ${sel.size ? `<button class="btn danger" id="delSelected">Delete ${plural(sel.size, 'selected item')}</button>` : ''}
-        <input id="newCode" class="code-input" value="${esc(itemCode(state.project.settings, nextFreeNumber()))}" aria-label="Item code">
-        <button class="btn primary" id="addManual">Add item</button>
+        <span class="range-add" title="Add a manual entry for this item number">
+          <span class="prefix">${prefix}</span><input id="newCode" type="number" min="0" value="${nextFreeNumber()}" aria-label="Item number">
+          <button class="btn primary" id="addManual">Add item</button>
+        </span>
         <span class="range-add" title="Add a manual entry for every item number in the range">
           <span class="muted">or items</span>
           <span class="prefix">${prefix}</span><input id="rangeFrom" type="number" min="0" value="${nextFreeNumber()}" aria-label="First item number">
@@ -92,8 +94,9 @@ export function renderManual(main) {
   const selectNew = code => grid('manual').select(sortedCodes(man).indexOf(code), 1, { focus: true });
 
   $('#addManual').onclick = () => {
-    const code = $('#newCode').value.trim();
-    if (!code) return;
+    const n = Number($('#newCode').value);
+    if ($('#newCode').value === '' || !Number.isInteger(n) || n < 0) { toast('Enter the item number, e.g. 12', 'bad'); return; }
+    const code = itemCode(state.project.settings, n);
     if (Object.keys(man).some(c => itemKey(c) === itemKey(code))) { toast(`${code} already has a manual entry`, 'bad'); return; }
     recordEdit();
     man[code] = {};

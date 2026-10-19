@@ -101,12 +101,11 @@ main { padding: 20px; max-width: 1600px; margin: 0 auto; display: flex; flex-dir
 .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 @media (max-width: 520px) { main { padding: 12px; } }
 
-textarea, input[type=search], input:not([type]), input[type=number], input[type=password], .code-input {
+textarea, input[type=search], input:not([type]), input[type=number], input[type=password] {
   font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; width: 100%; }
 textarea { resize: vertical; }
 textarea.mono { font: 12px/1.5 var(--mono); white-space: pre; overflow-x: auto; }
 textarea:focus, input:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
-input.code-input { width: 90px; }
 input[type=search] { width: 220px; }
 .check { display: flex; gap: 6px; align-items: center; color: var(--muted); }
 details summary { cursor: pointer; color: var(--muted); }

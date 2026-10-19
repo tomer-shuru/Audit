@@ -248,11 +248,14 @@ export function blanccoRecords(blanccoRows, macSerials, lk, blanccoResult) {
     const batteryRaw = str(r.battery);
     const [b1 = '', b2 = ''] = batteryRaw === '' ? [] : batteryRaw.split(' / ');
     const comments = blanccoComments(r, cfg);
+    // a model in the Dictionary's Models list (e.g. a Mac's MacBookPro15,1) gets its name, screen and year, like the reports
+    const rawModel = str(fromVersion.has(low(r.make)) ? r.version : r.model);
+    const known = lk.model(rawModel);
     out.push({
       source: 'blancco', item: str(r.item), sn: r.serial, asset: str(r.asset), type, rawType: str(r.chassis),
       make: str(r.make),
-      model: str(fromVersion.has(low(r.make)) ? r.version : r.model),
-      screen: '', year: '',
+      model: known ? str(known.name) : rawModel,
+      screen: known ? known.screen : '', year: known ? known.year : '',
       cpu: shortCpu(r.cpu), rawCpu: str(r.cpu),
       ram: formatRamBlancco(r.memory, r.memoryType),
       disk: disks.join(', '),

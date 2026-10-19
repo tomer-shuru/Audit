@@ -87,7 +87,8 @@ DOING A PROJECT
    at once or drag them onto the box. Paste the Mac and Windows report
    lines together in "Mac and Windows reports", in any order.
 3. Manual entries tab (devices the tools couldn't read: dead, BIOS locked,
-   no report...): click "Add item" and type the details. To add many at
+   no report...): type the item number (the prefix is filled in for you),
+   click "Add item" and type the details. To add many at
    once, fill in "or items ... to ..." (e.g. 10 to 20) and click "Add range";
    items that already have a manual entry are skipped.
 4. Review tab (check everything is right, make small corrections): every
@@ -280,7 +281,9 @@ Everyone shares two files in the Audit Builder folder on the Drive:
 - Models\models.json: the Dictionary (Settings > Dictionary...): models, make names,
   type mapping, weights, model cleanup, diagnostic codes and the SIMS lists. "Make names"
   turns the make the tools report into the one in the report, e.g.
-  "Dell Inc." into "Dell".
+  "Dell Inc." into "Dell". "Models" turns a model ID from the Mac or Windows
+  reports or the Blancco export (e.g. MacBookPro15,1) into its name (Pro A1990)
+  and fills in Screen and Year.
 - Config\config.json: the rules the report is built with (battery grades,
   how Blancco comments are read, which checks show on Review, column
   headers...), so everyone's report comes out the same.
