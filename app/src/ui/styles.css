@@ -238,7 +238,7 @@ dialog form label input { font-weight: 400; }
 
 /* Manual entries: add a range of item numbers */
 .range-add { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; }
-.range-add input[type=number] { width: 70px; }
+.range-add input.item-no { width: 70px; }
 .range-add .prefix { font-weight: 600; margin-right: -2px; }
 .range-add .prefix:empty { display: none; }
 

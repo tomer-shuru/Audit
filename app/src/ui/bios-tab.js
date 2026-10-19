@@ -2,7 +2,7 @@
 // The loaded file is kept in the project (inputs.bios), so it's saved in the project file. In a shared project
 // the newest file anyone loaded is used.
 import qrcode from 'qrcode-generator';
-import { codeNumber } from '../engine/report.js';
+import { codeGroup } from '../engine/report.js';
 import { itemKey } from '../engine/sources.js';
 import { parseBiosPasswords, matchBiosPasswords } from '../engine/biospw.js';
 import { downloadXlsx, toTsv } from './io.js';
@@ -22,9 +22,11 @@ export function biosFile() {
 }
 
 function biosMatch() {
-  const settings = state.project.settings;
-  const order = r => { const k = itemKey(r.itemLookup); return k ? codeNumber(settings, k) : null; };
-  return matchBiosPasswords(biosFile().parsed, outputRows(), order);
+  // items in the project's numbering keep the report's order (by item group, then number)
+  const settings = state.project.settings, rows = outputRows();
+  const pos = new Map(rows.map((r, i) => [r, i]));
+  const order = r => { const k = itemKey(r.itemLookup); return k && codeGroup(settings, k) ? pos.get(r) : null; };
+  return matchBiosPasswords(biosFile().parsed, rows, order);
 }
 // the list as a sheet: one column per password (most devices have one or two)
 function biosSheet(rows) {

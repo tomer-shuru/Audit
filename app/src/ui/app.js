@@ -1,5 +1,5 @@
 // The core loop: recompute the report from the project, redraw the screen, and what happens after every change
-import { buildReport, itemCode, itemName, numberingStart, codeNumber } from '../engine/report.js';
+import { buildReport, itemCode, itemName, numberingStart, codeGroup, compareGroups } from '../engine/report.js';
 import { itemKey } from '../engine/sources.js';
 import { buildSims } from '../engine/sims.js';
 import { readSheetRows } from './merge.js';
@@ -40,25 +40,33 @@ export const outputRows = () => state.sims?.rows ?? state.report.rows;
 // (project setup) up to the highest one that has no data, so the list lines up with the sheet
 export const reportRows = () => withEmptyRows(outputRows());
 
+// (each item group on its own: MS, then MS-M, MS-P…)
 function withEmptyRows(rows) {
   const settings = state.project.settings;
-  const byNumber = new Map(), rest = [];
+  const groups = new Map(), rest = []; // group -> Map(number -> rows)
   for (const row of rows) {
     const key = itemKey(row.itemLookup);
-    const n = key ? codeNumber(settings, key) : null;
-    if (n === null) rest.push(row);
-    else { if (!byNumber.has(n)) byNumber.set(n, []); byNumber.get(n).push(row); }
+    const c = key ? codeGroup(settings, key) : null;
+    if (!c) { rest.push(row); continue; }
+    if (!groups.has(c.group)) groups.set(c.group, new Map());
+    const byNumber = groups.get(c.group);
+    if (!byNumber.has(c.n)) byNumber.set(c.n, []);
+    byNumber.get(c.n).push(row);
   }
-  if (!byNumber.size) return rows;
-  const numbers = [...byNumber.keys()].sort((a, b) => a - b);
-  const { start } = numberingStart(settings, numbers.map(n => itemKey(itemCode(settings, n))));
-  const out = numbers.filter(n => n < start).flatMap(n => byNumber.get(n)); // below the first item number: as they are
-  for (let n = start, max = numbers[numbers.length - 1]; n <= max; n++) out.push(...(byNumber.get(n) || [emptyRow(n)]));
+  if (!groups.size) return rows;
+  const main = itemKey(settings.prefix), out = [];
+  for (const group of [...groups.keys()].sort(compareGroups(settings))) {
+    const byNumber = groups.get(group);
+    const name = n => itemCode(settings, n, group === main ? undefined : group);
+    const numbers = [...byNumber.keys()].sort((a, b) => a - b);
+    const { start } = numberingStart(settings, numbers.map(n => itemKey(name(n))), group);
+    out.push(...numbers.filter(n => n < start).flatMap(n => byNumber.get(n))); // below the first item number: as they are
+    for (let n = start, max = numbers[numbers.length - 1]; n <= max; n++) out.push(...(byNumber.get(n) || [emptyRow(name(n))]));
+  }
   return [...out, ...rest];
 }
 
-function emptyRow(n) {
-  const code = itemCode(state.project.settings, n);
+function emptyRow(code) {
   return {
     itemLookup: code, item: itemName(state.project.settings, code, state.config),
     _empty: true, _edited: [], _base: {}, _sources: {},

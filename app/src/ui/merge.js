@@ -33,14 +33,18 @@ const escRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 export function readSheetRows({ sheetText, cols, prefix, itemPrefix = 'ITD' }) {
   const table = parseTsv(sheetText);
   const itemCol = cols.findIndex(([k]) => k === 'item');
-  // "ITD-SHR11734-BM20" or just "BM20". Without a prefix a bare number is only taken from the ITEM column,
+  // "ITD-SHR11734-BM20" or just "BM20"; extra item groups too (MS-M20, MSM20 with prefix MS) in the ITEM column
+  // or as a whole ITEM value. Without a prefix a bare number is only taken from the ITEM column,
   // so serials, years and weights in other columns aren't mistaken for item codes.
-  const code = `(${escRe(String(prefix ?? '').trim().toUpperCase())}\\d+)$`;
-  const loose = new RegExp(`(?:^|-)${code}`), strict = prefix ? loose : new RegExp(`^${escRe(String(itemPrefix).trim().toUpperCase())}-.+-${code}`);
+  const p = escRe(String(prefix ?? '').trim().toUpperCase());
+  const any = p ? `${p}[A-Z-]*\\d+` : '\\d+';
+  const item = new RegExp(`(?:^|-)(${any})$`);
+  const whole = new RegExp(`^${escRe(String(itemPrefix).trim().toUpperCase())}-.+-(${any})$`), plain = p && new RegExp(`(?:^|-)(${p}\\d+)$`);
   const codeOf = cells => {
     const order = itemCol >= 0 && itemCol < cells.length ? [itemCol, ...cells.keys()] : [...cells.keys()];
     for (const j of order) {
-      const m = String(cells[j] ?? '').trim().toUpperCase().match(j === itemCol ? loose : strict);
+      const v = String(cells[j] ?? '').trim().toUpperCase();
+      const m = j === itemCol ? v.match(item) : v.match(whole) || (plain && v.match(plain));
       if (m) return itemKey(m[1]);
     }
     return null;

@@ -1,5 +1,5 @@
 // Manual entries tab: devices the tools can't read, typed in by hand
-import { MANUAL_FIELDS, itemCode } from '../engine/report.js';
+import { MANUAL_FIELDS, itemCode, codeGroup } from '../engine/report.js';
 import { itemKey } from '../engine/sources.js';
 import { state, recordEdit } from './state.js';
 import { $, esc, plural, toast } from './util.js';
@@ -14,12 +14,22 @@ function nextFreeNumber() {
   const prefix = itemKey(p.prefix);
   let max = 0;
   for (const code of [...Object.keys(state.project.manual), ...state.report.rows.map(r => r.itemLookup)]) {
-    const k = itemKey(code);
-    if (k.startsWith(prefix) && /^\d+$/.test(k.slice(prefix.length))) max = Math.max(max, Number(k.slice(prefix.length)));
+    const c = codeGroup(p, itemKey(code));
+    if (c?.group === prefix) max = Math.max(max, c.n);
   }
   const start = Number(p.startNumber);
   return Math.max(max + 1, Number.isInteger(start) && start >= 0 ? start : 1);
 }
+
+// what is typed after the prefix: 12 -> GG12; for an extra item group the letters too (prefix MS: -M5 -> MS-M05,
+// M5 -> MSM05); the whole code works as well (MS-M5). Returns { group, n } or null.
+function typedCode(text) {
+  const s = state.project.settings, t = String(text).trim().toUpperCase(), prefix = itemKey(s.prefix);
+  const tries = prefix && t.startsWith(prefix) ? [t, prefix + t] : [prefix + t];
+  for (const k of tries) { const c = codeGroup(s, itemKey(k)); if (c) return c; }
+  return null;
+}
+const codeOf = c => itemCode(state.project.settings, c.n, c.group === itemKey(state.project.settings.prefix) ? undefined : c.group);
 
 export function renderManual(main) {
   const man = state.project.manual;
@@ -28,6 +38,7 @@ export function renderManual(main) {
   for (const c of [...sel]) if (!(c in man)) sel.delete(c);
   const allSelected = codes.length > 0 && codes.every(c => sel.has(c));
   const prefix = esc(state.project.settings.prefix);
+  const groupTip = prefix ? `. For another item group type its letters too, e.g. -M5 for ${prefix}-M05` : '';
 
   main.innerHTML = `
   <section class="card">
@@ -37,15 +48,15 @@ export function renderManual(main) {
       Diagnostics and Locked/Faulty are added to what the tools found.</p></div>
       <div class="actions">
         ${sel.size ? `<button class="btn danger" id="delSelected">Delete ${plural(sel.size, 'selected item')}</button>` : ''}
-        <span class="range-add" title="Add a manual entry for this item number">
-          <span class="prefix">${prefix}</span><input id="newCode" type="number" min="0" value="${nextFreeNumber()}" aria-label="Item number">
+        <span class="range-add" title="Add a manual entry for this item number${groupTip}">
+          <span class="prefix">${prefix}</span><input id="newCode" class="item-no" value="${nextFreeNumber()}" autocomplete="off" aria-label="Item number">
           <button class="btn primary" id="addManual">Add item</button>
         </span>
-        <span class="range-add" title="Add a manual entry for every item number in the range">
+        <span class="range-add" title="Add a manual entry for every item number in the range${groupTip}">
           <span class="muted">or items</span>
-          <span class="prefix">${prefix}</span><input id="rangeFrom" type="number" min="0" value="${nextFreeNumber()}" aria-label="First item number">
+          <span class="prefix">${prefix}</span><input id="rangeFrom" class="item-no" value="${nextFreeNumber()}" autocomplete="off" aria-label="First item number">
           <span class="muted">to</span>
-          <span class="prefix">${prefix}</span><input id="rangeTo" type="number" min="0" aria-label="Last item number">
+          <span class="prefix">${prefix}</span><input id="rangeTo" class="item-no" autocomplete="off" aria-label="Last item number">
           <button class="btn" id="addRange">Add range</button>
         </span>
       </div>
@@ -93,10 +104,11 @@ export function renderManual(main) {
   // after adding: select the (first) new item's first cell, ready to type
   const selectNew = code => grid('manual').select(sortedCodes(man).indexOf(code), 1, { focus: true });
 
+  const example = state.project.settings.prefix ? `, or ${state.project.settings.prefix}-M12 for another item group` : '';
   $('#addManual').onclick = () => {
-    const n = Number($('#newCode').value);
-    if ($('#newCode').value === '' || !Number.isInteger(n) || n < 0) { toast('Enter the item number, e.g. 12', 'bad'); return; }
-    const code = itemCode(state.project.settings, n);
+    const c = typedCode($('#newCode').value);
+    if (!c) { toast(`Enter the item number, e.g. 12${example}`, 'bad'); return; }
+    const code = codeOf(c);
     if (Object.keys(man).some(c => itemKey(c) === itemKey(code))) { toast(`${code} already has a manual entry`, 'bad'); return; }
     recordEdit();
     man[code] = {};
@@ -107,12 +119,15 @@ export function renderManual(main) {
 
   // add every item number from .. to (items that already have a manual entry are skipped)
   $('#addRange').onclick = () => {
-    const from = Number($('#rangeFrom').value), to = Number($('#rangeTo').value || $('#rangeFrom').value);
-    if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < from) { toast('Enter the first and last item number, e.g. 10 to 20', 'bad'); return; }
+    // the last one is just a number, or a code of the same item group
+    const first = typedCode($('#rangeFrom').value), lastText = $('#rangeTo').value.trim() || $('#rangeFrom').value;
+    const last = first && (/^\d+$/.test(lastText) ? { group: first.group, n: Number(lastText) } : typedCode(lastText));
+    if (!first || !last || last.group !== first.group || last.n < first.n) { toast(`Enter the first and last item number, e.g. 10 to 20${example ? ` (${state.project.settings.prefix}-M10 to 20 for another item group)` : ''}`, 'bad'); return; }
+    const from = first.n, to = last.n;
     if (to - from >= 500) { toast('That\'s more than 500 items. Add a smaller range.', 'bad'); return; }
     const have = new Set(Object.keys(man).map(itemKey));
     const add = [];
-    for (let n = from; n <= to; n++) { const code = itemCode(state.project.settings, n); if (!have.has(itemKey(code))) add.push(code); }
+    for (let n = from; n <= to; n++) { const code = codeOf({ group: first.group, n }); if (!have.has(itemKey(code))) add.push(code); }
     const skipped = to - from + 1 - add.length;
     if (!add.length) { toast('All of these already have a manual entry', 'bad'); return; }
     recordEdit();

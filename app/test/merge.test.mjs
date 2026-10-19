@@ -84,3 +84,11 @@ test('SIMS: a SIMS column the app has nothing for comes from the SIMS sheet rows
   assert.equal(row.erased, 'Erased');
   assert.ok(row._fromSheet.includes('purchase') && row._fromSheet.includes('diagnostics') && !row._fromSheet.includes('modelLine'));
 });
+
+test('extra item groups are read from the sheet too (MS-M05, MSP05 with prefix MS)', () => {
+  const m = readSheetRows({ sheetText: 'ITD-SHR1-MS-M05\tA\nITD-SHR1-MSP05\tB\nMS07\tC\n', cols: [['item', 'ITEM'], ['sn', 'S.N.']], prefix: 'MS' });
+  assert.deepEqual(m.codes, ['MS-M05', 'MS07', 'MSP05']);
+  // in other columns only a whole ITEM value or the plain prefix + number counts (not serials like MSFT123)
+  const o = readSheetRows({ sheetText: 'MSFT123\tITD-SHR1-MS-M06\nMSFT124\tMS08\n', cols: [['sn', 'S.N.'], ['asset', 'Asset']], prefix: 'MS' });
+  assert.deepEqual(o.codes, ['MS-M06', 'MS08']);
+});

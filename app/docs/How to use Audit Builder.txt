@@ -82,13 +82,20 @@ DOING A PROJECT
    item code prefix (for example GG; leave it empty if the item codes are
    just numbers) and the first item number (usually 1; e.g. 4000 if the
    client numbers from there).
+   More than one kind of item code (e.g. MS for laptops, MS-M for monitors,
+   MS-P or MSP for PCs)? Just enter the common start (MS). Codes that start
+   with it and have more letters are found by themselves: each one is its
+   own item group, numbered from 1, listed after the main prefix. The
+   Review tab shows a gray note with the groups found, so a typo that
+   became a group (like MSS05) stands out.
 2. Data tab (everything the report is built from): click "Add files..." and
    choose the Blancco exports (.csv, .xlsx or .zip). You can choose several
    at once or drag them onto the box. Paste the Mac and Windows report
    lines together in "Mac and Windows reports", in any order.
 3. Manual entries tab (devices the tools couldn't read: dead, BIOS locked,
    no report...): type the item number (the prefix is filled in for you),
-   click "Add item" and type the details. To add many at
+   click "Add item" and type the details. For another item group, type its
+   letters too: -M5 gives MS-M05, P5 gives MSP05. To add many at
    once, fill in "or items ... to ..." (e.g. 10 to 20) and click "Add range";
    items that already have a manual entry are skipped.
 4. Review tab (check everything is right, make small corrections): every

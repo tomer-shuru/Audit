@@ -114,3 +114,21 @@ test('first item number from project setup, and a safety net when it is far belo
   assert.ok(texts(forgotten).includes('No data yet for: GG4001'));
   assert.ok(texts(forgotten).some(t => t.startsWith('The items start at GG4000 but the first item number in project setup is 1')));
 });
+
+test('extra item groups: codes that start with the prefix and more letters, each numbered from 1', () => {
+  const r = buildReport(project({
+    settings: { projectNumber: 'SHR1', prefix: 'MS', endClient: 'X', startNumber: 4000 },
+    manual: Object.fromEntries(['MS4001', 'MS-M01', 'MS-M03', 'MSP02', 'MS4000', 'XX01'].map(c => [c, { diagnostics: 'ok' }])),
+  }), models);
+  assert.deepEqual(r.rows.map(x => x.itemLookup), ['MS4000', 'MS4001', 'MS-M01', 'MS-M03', 'MSP02', 'XX01']);
+  assert.equal(r.rows[2].item, 'ITD-SHR1-MS-M01');
+  const t = texts(r);
+  assert.ok(t.includes('Item groups: MS (2), MS-M (2), MSP (1)'));
+  assert.equal(r.warnings.find(w => w.text.startsWith('Item groups')).level, 'info');
+  assert.ok(t.includes('No data yet for: MS-M02'));
+  assert.ok(t.includes('No data yet for: MSP01'));
+  assert.ok(t.some(x => x.startsWith("XX01: item code doesn't follow")));
+  assert.ok(!t.some(x => x.includes('MS-M01: ') || x.includes('below the first')));
+  // one group only: no note
+  assert.ok(!texts(buildReport(project({ manual: { GG01: { diagnostics: 'ok' } } }), models)).some(x => x.startsWith('Item groups')));
+});

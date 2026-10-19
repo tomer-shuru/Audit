@@ -40,7 +40,8 @@ export const MANUAL_FIELDS = [
 // Report columns that can be edited in the Review table
 export const EDITABLE = new Set(REPORT_COLUMNS.map(([k]) => k).filter(k => k !== 'itemLookup' && k !== 'item'));
 
-export const itemCode = (settings, n) => str(settings.prefix) + String(n).padStart(2, '0');
+// group: an extra item group (MS-M); left out = the project's prefix
+export const itemCode = (settings, n, group = str(settings.prefix)) => group + String(n).padStart(2, '0');
 // the ITEM column: "ITD-SHR11734-GG01" ("ITD" is in the config: Texts)
 export const itemName = (settings, code, cfg = DEFAULT_CONFIG) => joinNonEmpty('-', cfg.texts.itemPrefix, settings.projectNumber, code);
 
@@ -108,16 +109,9 @@ export function buildReport(project, models, config, sheet = null) {
 
   // order: codes in the project's numbering first, then anything else
   const keys = new Set([...manBy.keys(), ...macBy.keys(), ...winBy.keys(), ...csvBy.keys(), ...sheetBy.keys()]);
-  const numOf = k => codeNumber(settings, k);
-  const sorted = [...keys].sort((a, b) => {
-    const na = numOf(a), nb = numOf(b);
-    if (na !== null && nb !== null) return na - nb;
-    if (na !== null) return -1;
-    if (nb !== null) return 1;
-    return a.localeCompare(b);
-  });
+  const sorted = [...keys].sort(compareCodes(settings));
 
-  const outside = sorted.filter(k => numOf(k) === null);
+  const outside = sorted.filter(k => !codeGroup(settings, k));
   const firstNumber = numberingStart(settings, sorted).start;
   for (const k of outside) add('outsideNumbering', { item: k, text: `${k}: item code doesn't follow this project's numbering (${itemCode(settings, firstNumber)}, ${itemCode(settings, firstNumber + 1)}…)` });
   warnings.push(...numberingChecks(settings, sorted, cfg));
@@ -210,41 +204,72 @@ export function buildReport(project, models, config, sheet = null) {
   return { rows, lockedFaulty, warnings, counts: { mac: mac.length, win: win.length, blancco: csv.length, blanccoRows: blanccoTable.rows.length, manual: manBy.size, sheet: sheetBy.size } };
 }
 
-// the number in an item code of this project's numbering (GG07 -> 7), or null
-export function codeNumber(settings, key) {
+// The item group and number of an item code in this project's numbering (GG07 -> { group: 'GG', n: 7 }), or null.
+// Codes that start with the prefix and then more letters or a dash are an extra item group with its own
+// numbering from 1: with prefix MS, MS-M07 -> { group: 'MS-M', n: 7 } and MSM07 -> { group: 'MSM', n: 7 }.
+// Without a prefix only plain numbers count. key: an item key (itemKey).
+export function codeGroup(settings, key) {
   const prefix = itemKey(settings.prefix);
-  return key.startsWith(prefix) && /^\d+$/.test(key.slice(prefix.length)) ? Number(key.slice(prefix.length)) : null;
+  if (!key.startsWith(prefix)) return null;
+  const m = key.slice(prefix.length).match(prefix ? /^([A-Z-]*)(\d+)$/ : /^()(\d+)$/);
+  return m ? { group: prefix + m[1], n: Number(m[2]) } : null;
 }
 
-// The project's first item number (project setup, 1 if not set). If the items in use start far above it
-// (e.g. a project numbered from 4000 whose setup still says 1), they start at the lowest one in use instead,
-// so there aren't thousands of empty items. keys: item keys in use.
-export function numberingStart(settings, keys) {
-  const set = String(settings.startNumber ?? '').trim();
+// order of item groups: the project's prefix first, then the extra groups A→Z
+export const compareGroups = settings => {
+  const main = itemKey(settings.prefix);
+  return (a, b) => (a === b ? 0 : a === main ? -1 : b === main ? 1 : a.localeCompare(b));
+};
+// order of item keys: by group, then number; codes outside the numbering last, A→Z
+export function compareCodes(settings) {
+  const groups = compareGroups(settings);
+  return (a, b) => {
+    const ca = codeGroup(settings, a), cb = codeGroup(settings, b);
+    if (ca && cb) return groups(ca.group, cb.group) || ca.n - cb.n;
+    if (ca || cb) return ca ? -1 : 1;
+    return a.localeCompare(b);
+  };
+}
+
+// The first item number of an item group: for the project's prefix the one in project setup (1 if not set),
+// extra groups start at 1. If the items in use start far above it (e.g. a project numbered from 4000 whose
+// setup still says 1), they start at the lowest one in use instead, so there aren't thousands of empty items.
+// keys: item keys in use.
+export function numberingStart(settings, keys, group = itemKey(settings.prefix)) {
+  const set = group === itemKey(settings.prefix) ? String(settings.startNumber ?? '').trim() : '1';
   const start = set !== '' && Number.isInteger(Number(set)) && Number(set) >= 0 ? Number(set) : 1;
-  const nums = keys.map(k => codeNumber(settings, k)).filter(n => n !== null && n >= start);
+  const nums = keys.map(k => codeGroup(settings, k)).filter(c => c?.group === group && c.n >= start).map(c => c.n);
   const low = nums.length ? Math.min(...nums) : start;
   return { start: low - start > 100 ? low : start, set: start };
 }
 
-// checks on the item numbering: items with no data from the first item number up to the highest one,
-// items below the first item number, and a first item number that doesn't fit the items at all
+// checks on the item numbering, per item group: items with no data from the first item number up to the
+// highest one, items below the first item number, and a first item number that doesn't fit the items at all.
+// Extra item groups are listed in a note, so a typo that became a group (MSS05) stands out.
 export function numberingChecks(settings, keys, config) {
   const cfg = withDefaults(config);
   const out = [];
   const push = warnAdder(cfg, out, { kind: 'numbering' });
-  const nums = keys.map(k => codeNumber(settings, k)).filter(n => n !== null);
-  if (!nums.length) return out;
-  const { start, set } = numberingStart(settings, keys);
-  const name = n => itemCode(settings, n);
-  if (start !== set) push('numberingStart', { text: `The items start at ${name(start)} but the first item number in project setup is ${set}. Click the project name at the top to change it.` });
+  const byGroup = new Map();
   for (const k of keys) {
-    const n = codeNumber(settings, k);
-    if (n !== null && n < start) push('belowStart', { item: k, text: `${k}: below the first item number (${name(start)})` });
+    const c = codeGroup(settings, k);
+    if (c) pushTo(byGroup, c.group, { key: k, n: c.n });
   }
-  const have = new Set(nums); const gaps = [];
-  for (let n = start; n <= Math.max(...nums); n++) if (!have.has(n)) gaps.push(n);
-  if (gaps.length) push('numberingGaps', { item: name(gaps[0]), text: `No data yet for: ${compressRanges(gaps).map(([a, b]) => a === b ? name(a) : `${name(a)}–${name(b)}`).join(', ')}` });
+  const main = itemKey(settings.prefix);
+  const groups = [...byGroup.keys()].sort(compareGroups(settings));
+  if (groups.some(g => g !== main)) {
+    push('itemGroups', { text: `Item groups: ${groups.map(g => `${g} (${byGroup.get(g).length})`).join(', ')}` });
+  }
+  for (const group of groups) {
+    const items = byGroup.get(group), nums = items.map(x => x.n);
+    const { start, set } = numberingStart(settings, keys, group);
+    const name = n => itemCode(settings, n, group === main ? undefined : group);
+    if (start !== set && group === main) push('numberingStart', { text: `The items start at ${name(start)} but the first item number in project setup is ${set}. Click the project name at the top to change it.` });
+    for (const { key, n } of items) if (n < start) push('belowStart', { item: key, text: `${key}: below the first item number (${name(start)})` });
+    const have = new Set(nums); const gaps = [];
+    for (let n = start; n <= Math.max(...nums); n++) if (!have.has(n)) gaps.push(n);
+    if (gaps.length) push('numberingGaps', { item: name(gaps[0]), text: `No data yet for: ${compressRanges(gaps).map(([a, b]) => a === b ? name(a) : `${name(a)}–${name(b)}`).join(', ')}` });
+  }
   return out;
 }
 
