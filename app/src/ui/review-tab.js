@@ -6,7 +6,7 @@ import { state, isSims, recordEdit } from './state.js';
 import { $, esc, plural, redrawKeepingCaret, flash } from './util.js';
 import { grid } from './grid.js';
 import { changed, render, reportRows, undoEdit, redoEdit } from './app.js';
-import { openExport } from './export.js';
+import { openExport, copyMainSheet } from './export.js';
 
 // check levels, worst first: red = problems, yellow = warnings, blue = SIMS notes, gray = notes
 export const LEVEL_WORDS = { error: 'problem', warn: 'warning', sims: 'SIMS note', info: 'note' };
@@ -68,7 +68,8 @@ export function renderReview(main) {
         <input type="search" id="reviewSearch" placeholder="Search…" value="${esc(state.reviewFilter)}">
         <label class="check"><input type="checkbox" id="issuesOnly" ${state.reviewIssuesOnly ? 'checked' : ''}> Only items with issues</label>
         <label class="check"><input type="checkbox" id="hideEmptyReview" ${state.hideEmpty.review ? 'checked' : ''}> Hide empty rows</label>
-        <button class="btn primary" id="openExport" ${allRows.length ? '' : 'disabled'} title="Copy the report for the Google Sheet, or download it as Excel">Export…</button>
+        <button class="btn primary" id="copySheet" ${allRows.length ? '' : 'disabled'} title="Copy the report's rows to paste into the Google Sheet (the rows and columns ticked in Export…)">Copy for Google Sheet</button>
+        <button class="btn" id="openExport" ${allRows.length ? '' : 'disabled'} title="Choose rows and columns, copy the Locked and Faulty list, or download Excel">Export…</button>
       </div>
     </div>
     ${allRows.length ? `
@@ -89,6 +90,7 @@ export function renderReview(main) {
   $('#issuesOnly').onchange = e => { state.reviewIssuesOnly = e.target.checked; render(); };
   $('#hideEmptyReview').onchange = e => { state.hideEmpty.review = e.target.checked; render(); };
   $('#openExport').onclick = openExport;
+  $('#copySheet').onclick = copyMainSheet;
 
   const table = main.querySelector('table.review');
   if (table) grid('review').attach(table, {

@@ -16,9 +16,10 @@ function tableFromBytes(bytes, name) {
 }
 
 // Blancco exports from files (.csv / .xlsx / .xls, or .zip files containing them).
-// Returns [{ name, table }] where table is an array of arrays incl. the header row.
+// Returns { tables: [{ name, table }] (table: an array of arrays incl. the header row), skipped: names of the
+// other files (a PDF dropped along with the exports), which are left out }.
 export async function readTableFiles(files) {
-  const out = [];
+  const out = [], skipped = [];
   for (const file of files) {
     const bytes = new Uint8Array(await file.arrayBuffer());
     if (/\.zip$/i.test(file.name)) {
@@ -32,10 +33,10 @@ export async function readTableFiles(files) {
     } else if (TABLE_EXT.test(file.name)) {
       out.push({ name: file.name, table: tableFromBytes(bytes, file.name) });
     } else {
-      throw new Error(`${file.name} isn't a .csv, .xlsx or .zip file`);
+      skipped.push(file.name);
     }
   }
-  return out;
+  return { tables: out, skipped };
 }
 
 // Blancco data pasted from Excel / a CSV file (tab- or comma-separated, header row first)

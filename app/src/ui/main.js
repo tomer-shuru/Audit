@@ -16,7 +16,7 @@ import { initBios } from './bios-tab.js';
 import { initSetup, openSetup } from './setup.js';
 import { initDictionary } from './dictionary.js';
 import { initDevMode } from './devmode.js';
-import { initFileMenu, reconnectProjectFile } from './project.js';
+import { initFileMenu, reconnectProjectFile, createProjectFile } from './project.js';
 import { shared, loadSharedModels, reconnectShared } from './folder.js';
 import { restoreCollab, refreshCollab, collabUnsaved, COLLAB_POLL } from './collab.js';
 
@@ -55,7 +55,7 @@ function init() {
   });
 
   render();
-  if (!settingsComplete(state.project.settings)) openSetup({ force: true });
+  if (!settingsComplete(state.project.settings)) openSetup({ force: true, onSave: createProjectFile });
 }
 
 init();

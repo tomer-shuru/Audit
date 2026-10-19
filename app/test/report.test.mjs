@@ -132,3 +132,13 @@ test('extra item groups: codes that start with the prefix and more letters, each
   // one group only: no note
   assert.ok(!texts(buildReport(project({ manual: { GG01: { diagnostics: 'ok' } } }), models)).some(x => x.startsWith('Item groups')));
 });
+
+test('an item number far above the others (a typo?) is flagged and gets no empty rows up to it', () => {
+  const r = buildReport(project({ manual: Object.fromEntries(['GG01', 'GG03', 'GG9999', 'GG150'].map(c => [c, { diagnostics: 'ok' }])) }), models);
+  const t = texts(r);
+  assert.ok(t.includes('GG9999: far above the other items (the last one before it is GG150). Is the item number a typo?'));
+  assert.equal(r.warnings.find(w => w.text.startsWith('GG9999')).level, 'error');
+  assert.ok(t.includes('No data yet for: GG02, GG04–GG149'));
+  // a gap of up to 200 is still filled
+  assert.ok(!texts(buildReport(project({ manual: { GG01: { diagnostics: 'ok' }, GG201: { diagnostics: 'ok' } } }), models)).some(x => x.includes('far above')));
+});

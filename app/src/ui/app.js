@@ -6,7 +6,7 @@ import { readSheetRows } from './merge.js';
 import { state, store, history, snapshot, clearHistory, isSims, canEditSettings, settingsComplete, STORE_PROJECT, STORE_TAB } from './state.js';
 import { $, esc, plural, toast, tableScroll, restoreTableScroll } from './util.js';
 import { reportProject, recordMine, conflictWarnings, renderPeopleChip } from './collab.js';
-import { scheduleAutosave, renderSaveState } from './project.js';
+import { scheduleAutosave, renderSaveState, saveProject } from './project.js';
 import { renderData, sheetWarnings } from './data-tab.js';
 import { renderManual } from './manual-tab.js';
 import { renderReview, LEVEL_WORDS, levelCount } from './review-tab.js';
@@ -59,9 +59,10 @@ function withEmptyRows(rows) {
     const byNumber = groups.get(group);
     const name = n => itemCode(settings, n, group === main ? undefined : group);
     const numbers = [...byNumber.keys()].sort((a, b) => a - b);
-    const { start } = numberingStart(settings, numbers.map(n => itemKey(name(n))), group);
+    const { start, end } = numberingStart(settings, numbers.map(n => itemKey(name(n))), group);
     out.push(...numbers.filter(n => n < start).flatMap(n => byNumber.get(n))); // below the first item number: as they are
-    for (let n = start, max = numbers[numbers.length - 1]; n <= max; n++) out.push(...(byNumber.get(n) || [emptyRow(name(n))]));
+    for (let n = start; n <= end; n++) out.push(...(byNumber.get(n) || [emptyRow(name(n))]));
+    out.push(...numbers.filter(n => n > end).flatMap(n => byNumber.get(n))); // far above the others (a typo?): no empty rows up to them
   }
   return [...out, ...rest];
 }
@@ -78,7 +79,7 @@ export function changed({ rerender = true } = {}) {
   state.project.savedToFile = false;
   if (state.collab) recordMine();
   else scheduleAutosave();
-  store(STORE_PROJECT, state.project);
+  keepInBrowser();
   recompute();
   if (rerender) render(); else renderChrome();
 }
@@ -87,8 +88,19 @@ export function changed({ rerender = true } = {}) {
 export function replaceProject(project) {
   state.project = project;
   clearHistory();
-  store(STORE_PROJECT, state.project);
+  keepInBrowser();
   recompute();
+}
+
+// The browser keeps a copy of the open project (about 5 MB at most). If it can't, say so once,
+// because closing the window would then lose what isn't saved to the project file yet.
+let toldTooBig = false;
+function keepInBrowser() {
+  if (store(STORE_PROJECT, state.project)) { toldTooBig = false; return; }
+  if (toldTooBig) return;
+  toldTooBig = true;
+  // a moment later, so the message of what was just done doesn't replace it
+  setTimeout(() => toast('The browser can\'t keep a copy of this project (too big), so keep it saved to its file.', 'bad', { label: 'Save now', run: () => saveProject() }), 1500);
 }
 
 function restoreEdit(from, to, what) {

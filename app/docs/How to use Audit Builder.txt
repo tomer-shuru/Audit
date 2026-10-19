@@ -90,14 +90,17 @@ DOING A PROJECT
    became a group (like MSS05) stands out.
 2. Data tab (everything the report is built from): click "Add files..." and
    choose the Blancco exports (.csv, .xlsx or .zip). You can choose several
-   at once or drag them onto the box. Paste the Mac and Windows report
+   at once or drag them onto the box (other files dropped along with them,
+   like PDFs, are skipped). Removing a file (x or Remove all) can be undone
+   from the message that appears. Paste the Mac and Windows report
    lines together in "Mac and Windows reports", in any order.
 3. Manual entries tab (devices the tools couldn't read: dead, BIOS locked,
    no report...): type the item number (the prefix is filled in for you),
    click "Add item" and type the details. For another item group, type its
    letters too: -M5 gives MS-M05, P5 gives MSP05. To add many at
    once, fill in "or items ... to ..." (e.g. 10 to 20) and click "Add range";
-   items that already have a manual entry are skipped.
+   items that already have a manual entry are skipped. A new item shows on
+   Review once something is typed in it.
 4. Review tab (check everything is right, make small corrections): every
    check is listed at the top. The Review tab button shows how many there
    are: red = problems, yellow = warnings, gray = notes. Rows with a problem
@@ -122,8 +125,11 @@ The Review and Manual entries tables work like a spreadsheet:
    The item code columns can be selected and copied but not changed.
    Green cells are values from the Google Sheet rows (Data tab); they can
    be changed like any other cell.
-5. Export (the "Export..." button on the Review tab, only for getting the
-   finished report out): click "Copy rows" and paste into the Google Sheet.
+5. Getting the finished report out: on the Review tab, click "Copy for
+   Google Sheet" and paste at the first item row of the sheet. It copies the
+   same rows and columns as "Copy rows" in the Export window. Open
+   "Export..." to choose rows or columns, for the Locked and Faulty list, or
+   for an Excel file. In Export, click "Copy rows" and paste into the Google Sheet.
    If there are locked or faulty devices, copy that list too. Untick
    columns the Google Sheet doesn't have. If problems (red) are still open
    on Review, the app asks before opening Export.
@@ -132,6 +138,10 @@ Review and Export show a row for every item number from the first item
 number up to the highest one. Numbers with no data yet get an empty (yellow)
 row, so the rows line up with the Google Sheet; typing in one on Review adds
 a manual entry. The "No data yet for" warning jumps to the first one.
+An item number far above the others (more than 200, e.g. GG9999 among
+GG01-GG80) is most likely a typo: it gets a red check, and no empty rows are
+made up to it. Fix the item number where it came from (report line, Blancco
+or manual entry).
 "Hide empty rows" only hides them from view: Copy rows and the Excel file
 always include them.
 
@@ -212,7 +222,12 @@ SAVING AND SHARING PROJECTS
 
 - The app keeps your current work automatically, so closing the window by
   accident doesn't lose anything. That copy only exists on your computer
-  and in that browser, though.
+  and in that browser, though. (A very big project may not fit in the
+  browser's copy: then a red message says so, with a "Save now" button.
+  Keep that project saved to its file.)
+- A new project is saved by itself as soon as you click Save in Project
+  setup (when the Audit Builder folder is connected), the same way as below,
+  so auto-save keeps it from the first minute.
 - File > Save project (or Ctrl+S): the first time, it saves the project file
   straight into G:\My Drive\Audit Builder\Projects, named after the end
   client and project number (e.g. Acme_SHR11734.audit.json). If a file with

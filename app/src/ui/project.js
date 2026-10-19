@@ -6,7 +6,7 @@ import { state, store, emptyProject, migrate, settingsComplete, STORE_PROJECT } 
 import { $, esc, toast, ago, renderSyncState } from './util.js';
 import { ICONS } from './icons.js';
 import { render, renderChrome, replaceProject, setTab } from './app.js';
-import { allowFolder, connectFolder } from './folder.js';
+import { folder, allowFolder, connectFolder } from './folder.js';
 import { reportProject, setCollab, saveMine, collabRoot, renderCollabState, clickCollabState } from './collab.js';
 import { shareProject, joinShared, leaveCollab, openPeople } from './share.js';
 import { openSetup } from './setup.js';
@@ -31,7 +31,7 @@ function newProject() {
   forgetProjectFile();
   replaceProject(emptyProject());
   setTab('data');
-  openSetup({ force: true });
+  openSetup({ force: true, onSave: createProjectFile });
 }
 
 // a project file (.audit.json) or an old Audit.xlsm / .xlsx workbook; true when it opened
@@ -54,7 +54,8 @@ async function openProjectFile(file) {
 }
 
 // Save: the first time asks where, after that overwrites the same file. "Save as" always asks.
-export async function saveProject({ saveAs = false } = {}) {
+// folderOnly: only save straight into the Projects folder; without it (not connected, or Cancel) nothing happens
+export async function saveProject({ saveAs = false, folderOnly = false } = {}) {
   // a shared project saves itself; Save just does it now, Save as saves everyone's work together as a normal project file
   if (state.collab && !saveAs) { await saveMine({ announce: true }); return; }
   const s = state.project.settings;
@@ -82,7 +83,7 @@ export async function saveProject({ saveAs = false } = {}) {
     try {
       if (!handle) {
         // a new project goes straight into the Projects folder (when it's connected); Save as always asks
-        handle = (!saveAs && await projectFileInFolder(name)) || await chooseSaveFile(name, await projectsStart());
+        handle = (!saveAs && await projectFileInFolder(name)) || (folderOnly ? null : await chooseSaveFile(name, await projectsStart()));
         if (!handle) return; // cancelled
       }
       await writeFile(handle, text);
@@ -103,6 +104,13 @@ export async function saveProject({ saveAs = false } = {}) {
   store(STORE_PROJECT, state.project);
   renderChrome();
   toast(canSaveInPlace ? `Saved to ${state.fileName}` : `Downloaded ${name}`);
+}
+
+// A new project, just set up: its file goes straight into the Projects folder (when the Audit Builder folder
+// is connected), so auto-save keeps it from the start. Otherwise it waits for the first Save.
+export function createProjectFile() {
+  if (state.collab || state.fileName || !canSaveInPlace || !folder.handle) return;
+  saveProject({ folderOnly: true });
 }
 
 // ---------- auto-save ----------

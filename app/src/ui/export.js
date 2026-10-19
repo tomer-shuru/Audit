@@ -57,11 +57,25 @@ const EXPORT_EMPTY = {
 };
 
 // if red problems are still open on Review, ask first
-export function openExport() {
+const okToExport = () => {
   const errors = state.report.warnings.filter(w => w.level === 'error').length;
-  if (errors && !confirm(`${errors === 1 ? '1 problem is' : `${errors} problems are`} still open on Review. Export anyway?`)) return;
+  return !errors || confirm(`${errors === 1 ? '1 problem is' : `${errors} problems are`} still open on Review. Export anyway?`);
+};
+export function openExport() {
+  if (!okToExport()) return;
   renderExport($('#exportBody'));
   $('#exportDialog').showModal();
+}
+
+// "Copy for Google Sheet" on Review: the main sheet's rows, the same as Copy rows in the Export window
+// (with the rows and columns ticked there)
+export function copyMainSheet() {
+  if (!okToExport()) return;
+  const kind = exportKinds()[0];
+  const { cols, rows } = exportSelection(kind);
+  if (!rows.length || !cols.length) { toast('Nothing selected to copy. Choose rows and columns in Export…', 'bad'); return; }
+  const locked = state.report.lockedFaulty.length ? ` There ${state.report.lockedFaulty.length === 1 ? 'is 1 locked or faulty device' : `are ${state.report.lockedFaulty.length} locked or faulty devices`}: copy that list from Export….` : '';
+  copyAndTell(toTsv(cols, rows, false), `Copied ${plural(rows.length, 'row')} × ${plural(cols.length, 'column')}. Paste at the first item row of the sheet.${locked}`);
 }
 
 function sheetSection(kind) {

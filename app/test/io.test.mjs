@@ -27,11 +27,12 @@ test('reads several files, including .zip files with CSVs in sub-folders', async
   const files = [
     new File([zipBytes], 'export.zip'),
     new File(['System serial,Erasure state\nCCC,Successful\n'], 'c.csv'),
+    new File(['x'], 'notes.pdf'), // dropped along with them: skipped, the others still load
   ];
-  const out = await readTableFiles(files);
+  const { tables: out, skipped } = await readTableFiles(files);
   assert.deepEqual(out.map(f => f.name).sort(), ['c.csv', 'export.zip › a.csv', 'export.zip › sub/b.csv']);
   assert.deepEqual(out.find(f => f.name.endsWith('b.csv')).table, [['System serial', 'Erasure state'], ['BBB', 'Failed']]);
-  await assert.rejects(readTableFiles([new File(['x'], 'notes.pdf')]), /isn't a \.csv/);
+  assert.deepEqual(skipped, ['notes.pdf']);
 });
 
 test('copy only includes the chosen rows and columns, without Item Lookup', () => {

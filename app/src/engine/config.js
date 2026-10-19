@@ -23,6 +23,7 @@ const CHECK_LIST = [
   ['numberingStart', 'warn', "The items start far from the project's first item number"],
   ['belowStart', 'warn', 'An item is below the first item number'],
   ['numberingGaps', 'warn', 'Item numbers with no data yet'],
+  ['farNumber', 'error', 'An item number is far above the others (more than 200), probably a typo'],
   ['itemGroups', 'info', 'Extra item groups were found (codes that start with the prefix and more letters, e.g. MS-M01)'],
   ['unknownMacModel', 'warn', "A Mac model isn't in the Dictionary"],
   ['cpuNotShortened', 'warn', "A Blancco CPU name couldn't be shortened"],

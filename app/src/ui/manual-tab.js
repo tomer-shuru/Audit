@@ -1,5 +1,5 @@
 // Manual entries tab: devices the tools can't read, typed in by hand
-import { MANUAL_FIELDS, itemCode, codeGroup } from '../engine/report.js';
+import { MANUAL_FIELDS, itemCode, codeGroup, numberingStart } from '../engine/report.js';
 import { itemKey } from '../engine/sources.js';
 import { state, recordEdit } from './state.js';
 import { $, esc, plural, toast } from './util.js';
@@ -10,15 +10,9 @@ const sortedCodes = man => Object.keys(man).sort((a, b) => a.localeCompare(b, un
 
 // suggest the code after the highest one used so far (GG01 for an empty project)
 function nextFreeNumber() {
-  const p = state.project.settings;
-  const prefix = itemKey(p.prefix);
-  let max = 0;
-  for (const code of [...Object.keys(state.project.manual), ...state.report.rows.map(r => r.itemLookup)]) {
-    const c = codeGroup(p, itemKey(code));
-    if (c?.group === prefix) max = Math.max(max, c.n);
-  }
-  const start = Number(p.startNumber);
-  return Math.max(max + 1, Number.isInteger(start) && start >= 0 ? start : 1);
+  // (a number far above the others, probably a typo, doesn't count)
+  const keys = [...Object.keys(state.project.manual), ...state.report.rows.map(r => r.itemLookup)].map(itemKey);
+  return numberingStart(state.project.settings, keys).end + 1;
 }
 
 // what is typed after the prefix: 12 -> GG12; for an extra item group the letters too (prefix MS: -M5 -> MS-M05,
@@ -45,7 +39,7 @@ export function renderManual(main) {
     <div class="card-head">
       <div><h2>Manual entries</h2>
       <p class="hint">For devices the tools can't read (dead, locked, no report). Anything typed here takes priority over the tools' data;
-      Diagnostics and Locked/Faulty are added to what the tools found.</p></div>
+      Diagnostics and Locked/Faulty are added to what the tools found. An item shows on Review once something is typed in it.</p></div>
       <div class="actions">
         ${sel.size ? `<button class="btn danger" id="delSelected">Delete ${plural(sel.size, 'selected item')}</button>` : ''}
         <span class="range-add" title="Add a manual entry for this item number${groupTip}">

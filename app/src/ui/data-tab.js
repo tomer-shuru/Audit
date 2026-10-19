@@ -81,10 +81,11 @@ export function renderData(main) {
   const loadFiles = async list => {
     if (!list.length) return;
     try {
-      const loaded = await readTableFiles(list);
-      if (!loaded.length) { toast('No .csv or .xlsx files found', 'bad'); return; }
-      addFiles(loaded);
-      changed(); toast(`Added ${plural(loaded.length, 'file')}`);
+      const { tables, skipped } = await readTableFiles(list);
+      const left = skipped.length ? `${skipped.length === 1 ? `${skipped[0]} isn't` : `${skipped.length} files aren't`} a .csv, .xlsx or .zip file, so ${skipped.length === 1 ? 'it was' : 'they were'} skipped` : '';
+      if (!tables.length) { toast(left || 'No .csv or .xlsx files found', 'bad'); return; }
+      addFiles(tables);
+      changed(); toast(`Added ${plural(tables.length, 'file')}${left ? `. ${left}` : ''}`);
     } catch (err) { toast(`Couldn't read the files: ${err.message}`, 'bad'); }
   };
   $('#blanccoFile').onchange = e => { const list = [...e.target.files]; e.target.value = ''; loadFiles(list); };
@@ -97,9 +98,19 @@ export function renderData(main) {
     addFiles([{ name: `Pasted rows ${n}`, table }]);
     changed(); toast(`Pasted ${plural(table.length - 1, 'row')}`);
   });
-  main.querySelectorAll('[data-rmfile]').forEach(b => b.onclick = () => { files.splice(Number(b.dataset.rmfile), 1); changed(); });
+  // removing is instant; the toast offers Undo (puts the files back where they were)
+  const remove = list => {
+    const before = [...files];
+    for (const f of list) files.splice(files.indexOf(f), 1);
+    changed();
+    toast(list.length === 1 ? `Removed ${list[0].name}` : `Removed ${plural(list.length, 'Blancco file')}`, 'ok', {
+      label: 'Undo',
+      run: () => { files.splice(0, files.length, ...before, ...files.filter(f => !before.includes(f))); changed(); },
+    });
+  };
+  main.querySelectorAll('[data-rmfile]').forEach(b => b.onclick = () => remove([files[Number(b.dataset.rmfile)]]));
   const clear = $('#blanccoClear');
-  if (clear) clear.onclick = () => { if (confirm('Remove all Blancco files from this project?')) { files.length = 0; changed(); } };
+  if (clear) clear.onclick = () => remove([...files]);
 
   // typing in the big boxes: the report is rebuilt once the person pauses (without redrawing the box)
   const typedInto = (id, key, statusId, status) => {

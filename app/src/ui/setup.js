@@ -5,7 +5,10 @@ import { $ } from './util.js';
 import { changed } from './app.js';
 
 // force: a project that isn't set up yet (the window can't be closed without saving)
-export function openSetup({ force = false } = {}) {
+// onSave: runs once the settings are saved (a new project: create its file)
+let afterSave = null;
+export function openSetup({ force = false, onSave = null } = {}) {
+  afterSave = onSave;
   const d = $('#setupDialog');
   const s = state.project.settings;
   const f = $('#setupForm');
@@ -44,6 +47,8 @@ export function initSetup() {
     s.startNumber = Number(f.startNumber.value) || 0;
     $('#setupDialog').close();
     changed();
+    const run = afterSave; afterSave = null;
+    run?.();
   };
   $('#setupCancel').onclick = () => $('#setupDialog').close();
   $('#setupDialog').oncancel = e => { if ($('#setupDialog').dataset.force) e.preventDefault(); };

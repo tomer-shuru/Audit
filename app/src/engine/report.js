@@ -234,13 +234,18 @@ export function compareCodes(settings) {
 // The first item number of an item group: for the project's prefix the one in project setup (1 if not set),
 // extra groups start at 1. If the items in use start far above it (e.g. a project numbered from 4000 whose
 // setup still says 1), they start at the lowest one in use instead, so there aren't thousands of empty items.
+// end: the last item number of the numbering. A number far above the one before it (more than MAX_GAP) is most
+// likely a typo (GG9999 for GG99), so the numbering ends before it and there aren't thousands of empty items.
 // keys: item keys in use.
+export const MAX_GAP = 200;
 export function numberingStart(settings, keys, group = itemKey(settings.prefix)) {
   const set = group === itemKey(settings.prefix) ? String(settings.startNumber ?? '').trim() : '1';
-  const start = set !== '' && Number.isInteger(Number(set)) && Number(set) >= 0 ? Number(set) : 1;
-  const nums = keys.map(k => codeGroup(settings, k)).filter(c => c?.group === group && c.n >= start).map(c => c.n);
-  const low = nums.length ? Math.min(...nums) : start;
-  return { start: low - start > 100 ? low : start, set: start };
+  const first = set !== '' && Number.isInteger(Number(set)) && Number(set) >= 0 ? Number(set) : 1;
+  const nums = keys.map(k => codeGroup(settings, k)).filter(c => c?.group === group && c.n >= first).map(c => c.n).sort((a, b) => a - b);
+  const start = nums.length && nums[0] - first > 100 ? nums[0] : first;
+  let end = start - 1;
+  for (const n of nums) { if (n - Math.max(end, start) > MAX_GAP) break; end = n; }
+  return { start, set: first, end };
 }
 
 // checks on the item numbering, per item group: items with no data from the first item number up to the
@@ -262,12 +267,15 @@ export function numberingChecks(settings, keys, config) {
   }
   for (const group of groups) {
     const items = byGroup.get(group), nums = items.map(x => x.n);
-    const { start, set } = numberingStart(settings, keys, group);
+    const { start, set, end } = numberingStart(settings, keys, group);
     const name = n => itemCode(settings, n, group === main ? undefined : group);
     if (start !== set && group === main) push('numberingStart', { text: `The items start at ${name(start)} but the first item number in project setup is ${set}. Click the project name at the top to change it.` });
-    for (const { key, n } of items) if (n < start) push('belowStart', { item: key, text: `${key}: below the first item number (${name(start)})` });
+    for (const { key, n } of items) {
+      if (n < start) push('belowStart', { item: key, text: `${key}: below the first item number (${name(start)})` });
+      else if (n > end) push('farNumber', { item: key, text: `${key}: far above the other items${end >= start ? ` (the last one before it is ${name(end)})` : ''}. Is the item number a typo?` });
+    }
     const have = new Set(nums); const gaps = [];
-    for (let n = start; n <= Math.max(...nums); n++) if (!have.has(n)) gaps.push(n);
+    for (let n = start; n <= end; n++) if (!have.has(n)) gaps.push(n);
     if (gaps.length) push('numberingGaps', { item: name(gaps[0]), text: `No data yet for: ${compressRanges(gaps).map(([a, b]) => a === b ? name(a) : `${name(a)}–${name(b)}`).join(', ')}` });
   }
   return out;

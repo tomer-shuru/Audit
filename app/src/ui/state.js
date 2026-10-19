@@ -17,7 +17,8 @@ export const TABS = ['data', 'manual', 'review', 'bios']; // Alt+1 … Alt+4
 export const load = (key, fallback) => {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch { return fallback; }
 };
-export const store = (key, val) => { try { localStorage.setItem(key, JSON.stringify(val)); } catch { /* storage unavailable */ } };
+// false when the browser couldn't keep it (storage full or unavailable)
+export const store = (key, val) => { try { localStorage.setItem(key, JSON.stringify(val)); return true; } catch { return false; } };
 
 export const emptyProject = () => ({
   version: 2,
