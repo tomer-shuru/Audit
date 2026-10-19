@@ -3,7 +3,7 @@
   --accent: #2456d6; --accent-ink: #fff; --accent-soft: #e8eefc;
   --good: #1d7a46; --good-soft: #e6f4ec; --bad: #c0352b; --bad-soft: #fcebea; --warn: #a76200; --warn-soft: #fff4e0;
   --edited: #e3ecff; --edited-ink: #1d3f99; --row-warn: #fff6d6; --row-error: #fde6e4; --radius: 8px; --sel: rgba(40, 48, 64, 0.16);
-  --c-data: #2f6fdb; --c-manual: #7a52c7; --c-review: #138a7e; --c-export: #c0457d; /* one soft color per part of the app */
+  --c-data: #2f6fdb; --c-manual: #7a52c7; --c-review: #138a7e; --c-export: #c0457d; --c-bios: #b26a00; /* one soft color per part of the app */
   --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
   color-scheme: light;
@@ -14,7 +14,7 @@
   --accent: #5b8cff; --accent-ink: #0b1020; --accent-soft: #22304f;
   --good: #5cc98a; --good-soft: #17301f; --bad: #ff7a70; --bad-soft: #3a1c1a; --warn: #f0b04a; --warn-soft: #3a2c12;
   --edited: #1f2f55; --edited-ink: #a9c3ff; --row-warn: #332a12; --row-error: #3a1d1b; --sel: rgba(255, 255, 255, 0.14); color-scheme: dark;
-  --c-data: #6b9cff; --c-manual: #a98bf0; --c-review: #4cc7b8; --c-export: #f07aaf;
+  --c-data: #6b9cff; --c-manual: #a98bf0; --c-review: #4cc7b8; --c-export: #f07aaf; --c-bios: #f0b04f;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
@@ -22,7 +22,7 @@
     --accent: #5b8cff; --accent-ink: #0b1020; --accent-soft: #22304f;
     --good: #5cc98a; --good-soft: #17301f; --bad: #ff7a70; --bad-soft: #3a1c1a; --warn: #f0b04a; --warn-soft: #3a2c12;
     --edited: #1f2f55; --edited-ink: #a9c3ff; --row-warn: #332a12; --row-error: #3a1d1b; --sel: rgba(255, 255, 255, 0.14); color-scheme: dark;
-  --c-data: #6b9cff; --c-manual: #a98bf0; --c-review: #4cc7b8; --c-export: #f07aaf;
+  --c-data: #6b9cff; --c-manual: #a98bf0; --c-review: #4cc7b8; --c-export: #f07aaf; --c-bios: #f0b04f;
   }
 }
 .theme-btn { display: inline-grid; place-items: center; padding: 6px 9px; }
@@ -252,6 +252,7 @@ dialog form label input { font-weight: 400; }
 .tabs button[data-tab="data"], main[data-tab="data"] { --tab-accent: var(--c-data); }
 .tabs button[data-tab="manual"], main[data-tab="manual"] { --tab-accent: var(--c-manual); }
 .tabs button[data-tab="review"], main[data-tab="review"] { --tab-accent: var(--c-review); }
+.tabs button[data-tab="bios"], main[data-tab="bios"] { --tab-accent: var(--c-bios); }
 #exportDialog { --tab-accent: var(--c-export); }
 .tabs button::before { content: ''; width: 10px; height: 10px; border-radius: 50%; background: var(--tab-accent); opacity: .7; }
 .tabs button.active::before, .tabs button:hover::before { opacity: 1; box-shadow: 0 0 0 3px color-mix(in srgb, var(--tab-accent) 25%, transparent); }
@@ -324,19 +325,18 @@ select { font: inherit; color: var(--text); background: var(--surface); border: 
 .menu-list hr { border: 0; border-top: 1px solid var(--border); margin: 4px 6px; }
 .topbar { padding: 8px 20px; }
 
-/* Tools › Microsoft BIOS passwords */
-dialog.full #biosBody { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; }
+/* BIOS passwords tab (Tools › Microsoft BIOS passwords) */
+#biosBody { display: flex; flex-direction: column; gap: 16px; }
 .bios-drop { padding: 40px; text-align: center; }
 .bios-summary { padding: 10px 14px; }
 .banner.warn { background: var(--warn-soft); color: var(--warn); }
-.bios-layout { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; }
-.bios-list { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
-.bios-list .table-wrap { flex: 1; min-height: 0; overflow: auto; }
+.bios-layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
+.bios-list .table-wrap { overflow: auto; }
 .bios-table:focus { outline: none; }
 .bios-table tbody tr { cursor: pointer; }
 .bios-table tr.not-in-project > * { color: var(--muted); }
 .grid .mono, .bios-qr code { font-family: var(--mono); }
-.bios-qr { overflow: auto; }
+.bios-qr { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow: auto; }
 .qr-box { margin: 12px 0 0; display: flex; flex-direction: column; gap: 6px; }
 .qr-box .qr { background: #fff; padding: 8px; border-radius: 8px; width: 240px; max-width: 100%; }
 .qr-box .qr svg { display: block; width: 100%; height: auto; }

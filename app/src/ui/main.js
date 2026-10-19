@@ -25,6 +25,7 @@ import { PROJECT_JSON, partFileName, projectDirName, projectsDir, projectDir, re
 const STORE_PROJECT = 'auditApp.project';
 const STORE_MODELS = 'auditApp.models';
 const STORE_TAB = 'auditApp.tab';
+const TABS = ['data', 'manual', 'review', 'bios']; // Alt+1 … Alt+4
 
 // ---------- state ----------
 const emptyProject = () => ({
@@ -64,7 +65,7 @@ const state = {
   project: migrate(load(STORE_PROJECT, {})),
   models: withNewLists(load(STORE_MODELS, null) || structuredClone(defaultModels)),
   config: withDefaults(load(STORE_CONFIG, null) || DEFAULT_CONFIG), // DevMode rules (the shared config.json)
-  tab: ['data', 'manual', 'review'].includes(load(STORE_TAB, 'data')) ? load(STORE_TAB, 'data') : 'review',
+  tab: TABS.includes(load(STORE_TAB, 'data')) ? load(STORE_TAB, 'data') : 'review',
   report: null,
   reviewFilter: '', reviewIssuesOnly: false,
   hideEmpty: { review: false, export: false }, // "Hide empty rows" on Review / Export (only hides them from view)
@@ -143,6 +144,7 @@ function emptyRow(n) {
 function changed({ rerender = true } = {}) {
   state.project.savedToFile = false;
   if (state.collab) recordMine();
+  else scheduleAutosave();
   store(STORE_PROJECT, state.project);
   recompute();
   if (rerender) render(); else renderChrome();
@@ -206,6 +208,7 @@ function renderChrome() {
     : '<b>No project set up</b>';
   const saved = $('#saveState');
   if (state.collab) renderCollabState(saved);
+  else if (autosaves()) renderAutosaveState(saved);
   else {
     saved.className = 'save-state';
     saved.textContent = !state.project.savedToFile ? 'Unsaved changes' : state.fileName ? `Saved · ${state.fileName}` : '';
@@ -226,6 +229,8 @@ function renderChrome() {
     review: checks,
     export: '',
   };
+  // the BIOS passwords tab is there once a password file is loaded (or while it's open, to load one)
+  $('#tabs [data-tab="bios"]').hidden = !biosFile() && state.tab !== 'bios';
   document.querySelectorAll('#tabs button').forEach(b => {
     b.classList.toggle('active', b.dataset.tab === state.tab);
     b.querySelector('.count').innerHTML = counts[b.dataset.tab] ?? '';
@@ -235,7 +240,7 @@ function renderChrome() {
 function render() {
   renderChrome();
   const main = $('#main');
-  const views = { data: renderData, manual: renderManual, review: renderReview };
+  const views = { data: renderData, manual: renderManual, review: renderReview, bios: renderBiosTab };
   keepScroll(main, () => views[state.tab](main));
   fitTallTable();
   // the Export window, when open, is redrawn too (keeping its tables' scroll position)
@@ -1389,6 +1394,35 @@ function qrSvg(text) {
   return q.createSvgTag({ cellSize: 4, margin: 4, scalable: true });
 }
 
+// the BIOS passwords tab: the buttons on top, the list and QR code below (renderBios redraws only those)
+function renderBiosTab(main) {
+  main.innerHTML = `
+  <section class="card">
+    <div class="card-head">
+      <div><h2>Microsoft BIOS passwords</h2>
+      <p class="hint">Load the BulkBiosPasswordDetails .txt file from Microsoft. Each asset tag is matched to its item; select a device to get a QR code of its password.
+      The file is saved with the project, so you only load it once.</p></div>
+      <div class="actions">
+        <button class="btn" id="biosLoad">Load password file…</button>
+        <button class="btn" id="biosCopy" title="Copy the list to paste into a sheet">Copy with headers</button>
+        <button class="btn" id="biosXlsx">Download .xlsx</button>
+      </div>
+    </div>
+  </section>
+  <div id="biosBody"></div>`;
+  $('#biosLoad').onclick = () => $('#biosFile').click();
+  $('#biosCopy').onclick = async () => {
+    const { cols, rows } = biosSheet(biosShown(biosMatch()));
+    const ok = await copyText(toTsv(cols, rows, true));
+    toast(ok ? `Copied ${plural(rows.length, 'device')}. Paste it into a sheet.` : 'Copy failed. Try again.', ok ? 'ok' : 'bad');
+  };
+  $('#biosXlsx').onclick = () => {
+    const { cols, rows } = biosSheet(biosShown(biosMatch()));
+    if (!downloadXlsx([{ name: 'BIOS passwords', cols, rows }], state.project.settings, 'BIOS passwords')) toast('Nothing to download', 'bad');
+  };
+  renderBios();
+}
+
 function renderBios() {
   const body = $('#biosBody');
   const file = biosFile();
@@ -1423,7 +1457,7 @@ function renderBios() {
           <span class="muted">${rows.length === m.rows.length ? plural(rows.length, 'device') : `${rows.length} of ${plural(m.rows.length, 'device')}`}</span>
           <span class="hint">Click a device or use the arrow keys.</span>
         </div>
-        <div class="table-wrap"><table class="grid bios-table" tabindex="0">
+        <div class="table-wrap tall"><table class="grid bios-table" tabindex="0">
           <thead><tr>${cols.map(([, l]) => `<th>${esc(l)}</th>`).join('')}</tr></thead>
           <tbody>${rows.map(r => `<tr data-key="${r.key}" class="${r.key === bios.selected ? 'selected' : ''}${r.inProject ? '' : ' not-in-project'}" ${r.inProject ? '' : 'title="This asset tag isn\'t on any item in this project"'}>
             <th>${esc(r.item || '—')}</th><td>${esc(r.sn)}</td><td>${esc(r.asset)}</td><td>${esc(r.device)}</td>
@@ -1483,6 +1517,7 @@ function renderBios() {
     const ok = await copyText(sel.passwords[Number(b.dataset.copyPw)]);
     toast(ok ? 'Password copied' : 'Copy failed. Try again.', ok ? 'ok' : 'bad');
   });
+  fitTallTable();
 }
 
 function attachBiosDrop(zone) {
@@ -1505,23 +1540,11 @@ async function loadBiosFile(file) {
 function setBiosFile(f) {
   state.project.inputs.bios = { ...f, at: Math.max(Date.now(), (reportProject().inputs.bios?.at || 0) + 1) };
   changed();
-  if ($('#biosDialog').open) renderBios();
 }
 
 function initBios() {
-  $('#btnBios').onclick = () => { renderBios(); $('#biosDialog').showModal(); };
-  $('#biosClose').onclick = () => $('#biosDialog').close();
-  $('#biosLoad').onclick = () => $('#biosFile').click();
+  $('#btnBios').onclick = () => setTab('bios');
   $('#biosFile').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) loadBiosFile(f); };
-  $('#biosCopy').onclick = async () => {
-    const { cols, rows } = biosSheet(biosShown(biosMatch()));
-    const ok = await copyText(toTsv(cols, rows, true));
-    toast(ok ? `Copied ${plural(rows.length, 'device')}. Paste it into a sheet.` : 'Copy failed. Try again.', ok ? 'ok' : 'bad');
-  };
-  $('#biosXlsx').onclick = () => {
-    const { cols, rows } = biosSheet(biosShown(biosMatch()));
-    if (!downloadXlsx([{ name: 'BIOS passwords', cols, rows }], state.project.settings, 'BIOS passwords')) toast('Nothing to download', 'bad');
-  };
 }
 
 // ---------- tabs & top-level actions ----------
@@ -1595,10 +1618,59 @@ async function saveProject({ saveAs = false } = {}) {
     await rememberFile(handle);
     state.fileName = handle.name;
   }
+  clearTimeout(autosave.timer);
+  autosave.error = ''; autosave.paused = false; autosave.savedAt = Date.now();
   state.project.savedToFile = true;
   store(STORE_PROJECT, state.project);
   renderChrome();
   toast(canSaveInPlace ? `Saved to ${state.fileName}` : `Downloaded ${name}`);
+}
+
+// Auto-save: once a project has a file (saved or opened once), every change is written to it a few seconds later.
+// The browser may want a click to allow editing the file again (after a restart): then Save / the status asks once.
+const AUTOSAVE_DELAY = 3000;
+const autosave = { timer: 0, writing: false, error: '', paused: false, savedAt: 0, changes: 0 };
+const autosaves = () => !state.collab && canSaveInPlace && !!state.fileName;
+function scheduleAutosave() {
+  autosave.changes++;
+  clearTimeout(autosave.timer);
+  if (autosaves()) autosave.timer = setTimeout(autosaveProject, AUTOSAVE_DELAY);
+}
+async function autosaveProject() {
+  clearTimeout(autosave.timer);
+  if (!autosaves() || state.project.savedToFile) return;
+  if (autosave.writing) { autosave.timer = setTimeout(autosaveProject, 300); return; } // one write at a time
+  const handle = await rememberedFile();
+  if (!handle) return;
+  const project = state.project, changes = autosave.changes;
+  autosave.writing = true;
+  renderChrome();
+  try {
+    if (!(await hasPermission(handle))) { autosave.paused = true; return; } // asking needs a click
+    const copy = { ...project }; delete copy.savedToFile;
+    await writeFile(handle, JSON.stringify(copy, null, 1));
+    autosave.error = ''; autosave.paused = false; autosave.savedAt = Date.now();
+    if (state.project === project && autosave.changes === changes) { // nothing changed while writing
+      project.savedToFile = true;
+      store(STORE_PROJECT, project);
+    }
+  } catch (err) {
+    autosave.error = err.name === 'NotFoundError' ? 'the file was moved or deleted' : err.message;
+  } finally {
+    autosave.writing = false;
+    renderChrome();
+  }
+}
+function renderAutosaveState(el) {
+  const unsaved = !state.project.savedToFile;
+  const [kind, icon, text, title] =
+    autosave.error && unsaved ? ['bad', SYNC_ICONS.error, 'Not saved', `Couldn't save to ${state.fileName}: ${autosave.error}. Click to save.`]
+    : autosave.paused && unsaved ? ['off', SYNC_ICONS.off, 'Not saved · click to save', `The browser needs a click to allow saving to ${state.fileName} again. After that, changes save by themselves.`]
+    : unsaved ? ['busy', SYNC_ICONS.sync, 'Saving…', `Changes are saved to ${state.fileName} a few seconds after you stop`]
+    : ['good', SYNC_ICONS.done, `Saved · ${state.fileName}`, `All changes are saved to ${state.fileName}${autosave.savedAt ? ` (at ${new Date(autosave.savedAt).toLocaleTimeString()})` : ''}. Changes save by themselves.`];
+  el.className = `save-state sync ${kind}`;
+  el.innerHTML = `${icon}<span>${esc(text)}</span>`;
+  el.title = title;
 }
 
 // Browse… in the Open window: the browser's file picker (starting in the Projects folder)
@@ -1842,7 +1914,7 @@ function renderPeopleChip() {
   b.title = `Shared project (Projects\\${state.collab.dir}). Click to see who is working on it.`;
 }
 function clickSaveState() {
-  if (!state.collab) return;
+  if (!state.collab) { if (autosaves() && !state.project.savedToFile) saveProject(); return; }
   if (!collabRoot()) { collabRootAsk(); return; }
   if (state.collab.error) { saveMine({ announce: true }); refreshCollab(); return; }
   openPeople();
@@ -2131,8 +2203,17 @@ function init() {
   $('#openFile').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) openProjectFile(f); };
   document.addEventListener('keydown', e => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); document.activeElement?.blur?.(); saveProject({ saveAs: e.shiftKey }); }
+    // Alt+1 … Alt+4: the tabs (the number keys above the letters; Alt + the number pad types characters in Windows)
+    const n = /^Digit([1-9])$/.exec(e.code)?.[1];
+    if (n && e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && !document.querySelector('dialog[open]')) {
+      const tab = TABS[n - 1];
+      if (!tab || (tab === 'bios' && !biosFile())) return;
+      e.preventDefault();
+      document.activeElement?.blur?.(); // a cell being typed in is kept first
+      if (tab !== state.tab) setTab(tab);
+    }
   });
-  rememberedFile().then(h => { state.fileName = h?.name || ''; renderChrome(); });
+  rememberedFile().then(h => { state.fileName = h?.name || ''; renderChrome(); if (!state.project.savedToFile) autosaveProject(); });
   $('#btnNew').onclick = () => {
     if (state.collab) {
       if (!confirm('Start a new project? The shared project stays in the shared folder; open it again with File › Open.')) return;

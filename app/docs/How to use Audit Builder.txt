@@ -67,10 +67,12 @@ The menu bar at the very top works like in a Windows program:
 - File: New project, Open..., Save project (Ctrl+S), Save as... (Ctrl+Shift+S),
   Share project... (see "Working on a project together")
 - Settings: Dictionary..., DevMode...
-- Tools: Microsoft BIOS passwords... (see below)
+- Tools: Microsoft BIOS passwords (see below)
 The sun / moon button next to Tools switches between light and dark.
 Under the menus: the project (click it to change the project setup), the
 Output picker (Shuru or SIMS) and whether the project is saved.
+Keyboard: Alt+1 Data, Alt+2 Manual entries, Alt+3 Review, Alt+4 BIOS passwords
+(the number keys above the letters, not the number pad).
 
 
 DOING A PROJECT
@@ -210,8 +212,13 @@ SAVING AND SHARING PROJECTS
   Builder folder isn't connected, it asks where to save instead.)
   After that it saves over the same file without asking. The top bar shows
   which file you're saving to.
-- After reopening the browser, the first save may show a small "allow this
-  site to edit the file?" message. Click Allow (or "Edit file").
+- Auto-save: once the project has a file (saved once, or opened from a
+  file), every change is saved to it by itself a few seconds later. The top
+  bar shows "Saving..." and then "Saved". Ctrl+S still saves right away.
+- After reopening the browser, the browser needs one click before it lets
+  the app edit the file again: the top bar shows "Not saved - click to save".
+  Click it (or press Ctrl+S) and click Allow (or "Edit file") in the small
+  message. After that, auto-save carries on by itself.
 - File > Save as... (Ctrl+Shift+S) asks for a file name and place (it starts
   in the Projects folder). That file is used from then on.
 - File > Open... lists the projects in the Projects folder, so you pick one
@@ -307,8 +314,12 @@ For Microsoft devices that are BIOS locked: Microsoft sends a file like
 BulkBiosPasswordDetails-29065708.txt with the asset tag and password(s) of
 each device.
 
-1. Open the project, then Tools > Microsoft BIOS passwords...
-2. Click "Load password file..." (or drop the .txt file in the window).
+1. Open the project, then Tools > Microsoft BIOS passwords. This opens the
+   BIOS passwords tab (next to Review).
+2. Click "Load password file..." (or drop the .txt file on the tab).
+   From then on the tab stays there for this project: jump to it with Alt+4
+   and back with Alt+1 / Alt+2 / Alt+3. Your search and the selected device
+   stay as they were.
 3. The list shows every asset tag in the file with its item number, S.N.
    and device from the project, items first (by item number), then asset
    tags that aren't in the project. Some devices have more than one

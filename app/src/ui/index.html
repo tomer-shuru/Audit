@@ -32,7 +32,7 @@
   <div class="menu">
     <button class="menu-btn" aria-haspopup="menu" aria-expanded="false">Tools</button>
     <div class="menu-list" role="menu">
-      <button role="menuitem" id="btnBios" title="Passwords from Microsoft's BulkBiosPasswordDetails file, matched to the items, with QR codes">Microsoft BIOS passwords…</button>
+      <button role="menuitem" id="btnBios" title="Passwords from Microsoft's BulkBiosPasswordDetails file, matched to the items, with QR codes (opens the BIOS passwords tab, Alt+4)">Microsoft BIOS passwords</button>
     </div>
   </div>
   <button class="btn ghost theme-btn" id="btnTheme" aria-label="Toggle light or dark mode"></button>
@@ -48,9 +48,10 @@
 </header>
 
 <nav id="tabs" class="tabs">
-  <button data-tab="data" title="Paste and add everything the report is built from">Data<span class="count"></span></button>
-  <button data-tab="manual" title="Devices the tools couldn't read (dead, BIOS locked…)">Manual entries<span class="count"></span></button>
-  <button data-tab="review" title="Check everything is right and make small corrections">Review<span class="count"></span></button>
+  <button data-tab="data" title="Paste and add everything the report is built from (Alt+1)">Data<span class="count"></span></button>
+  <button data-tab="manual" title="Devices the tools couldn't read (dead, BIOS locked…) (Alt+2)">Manual entries<span class="count"></span></button>
+  <button data-tab="review" title="Check everything is right and make small corrections (Alt+3)">Review<span class="count"></span></button>
+  <button data-tab="bios" title="Microsoft BIOS passwords with QR codes; shown once a password file is loaded (Alt+4)" hidden>BIOS passwords<span class="count"></span></button>
 </nav>
 
 <div id="sharedBar" class="shared-bar" hidden></div>
@@ -121,20 +122,7 @@
   <div id="exportBody"></div>
 </dialog>
 
-<dialog id="biosDialog" class="full">
-  <div class="dialog-head">
-    <div><h2>Microsoft BIOS passwords</h2><p class="hint">Load the BulkBiosPasswordDetails .txt file from Microsoft. Each asset tag is matched to its item; select a device to get a QR code of its password.
-      The file is saved with the project, so you only load it once.</p></div>
-    <div class="actions">
-      <button class="btn" id="biosLoad">Load password file…</button>
-      <button class="btn" id="biosCopy" title="Copy the list to paste into a sheet">Copy with headers</button>
-      <button class="btn" id="biosXlsx">Download .xlsx</button>
-      <button class="btn primary" id="biosClose">Done</button>
-    </div>
-  </div>
-  <div id="biosBody"></div>
-  <input type="file" id="biosFile" accept=".txt,.csv,text/plain" hidden>
-</dialog>
+<input type="file" id="biosFile" accept=".txt,.csv,text/plain" hidden>
 
 <dialog id="devLogin">
   <form id="devLoginForm">
