@@ -181,7 +181,7 @@ function clickSaveState() {
 // ---------- File › Open… ----------
 // The shared projects and the project files in the connected Audit Builder folder (Projects), picked
 // in the app. Browse… opens the browser's file picker, for a file somewhere else or an old Audit.xlsm.
-async function openProjectList() {
+export async function openProjectList() {
   if (!canSaveInPlace) { $('#openFile').click(); return; }
   // after a browser restart the folder waits for one OK; this click lets the browser ask
   try { await allowFolder(); } catch { /* not connected: shown below */ }

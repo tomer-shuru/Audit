@@ -71,6 +71,11 @@ dialog.collab h3 .muted { font-size: 12px; margin-left: 6px; }
 dialog.collab .project-list { max-height: 40vh; overflow: auto; }
 .project-list li[hidden] { display: none; }
 .open-search { width: 100%; }
+/* Project setup when the app opens: continue / open, then the new project form */
+.setup-start { display: flex; flex-direction: column; gap: 8px; margin: 8px 0 4px; }
+.setup-start .btn { justify-content: flex-start; text-align: left; }
+.setup-start .setup-note { display: block; font-size: 12px; font-weight: 400; opacity: .85; }
+.setup-start .setup-or { margin: 6px 0 0; }
 .files-drop { border-radius: 8px; padding: 4px; min-height: 120px; }
 .files-drop .project-list .actions { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
 .files-drop .project-list b { word-break: break-all; }
@@ -160,7 +165,9 @@ table.grid { border-collapse: separate; border-spacing: 0; width: max-content; m
 .review .s1 { min-width: 170px; }
 .grid tr.issue-warn th.s0 { box-shadow: inset 3px 0 0 var(--warn); }
 .grid tr.issue-error th.s0 { box-shadow: inset 3px 0 0 var(--bad); }
-.manual .item-col { display: flex; align-items: center; gap: 4px; min-width: 120px; }
+/* stays a table cell (display: flex would undo the frozen header and column); its parts sit on one line */
+.manual .item-col { min-width: 120px; white-space: nowrap; }
+.manual .item-col > * { vertical-align: middle; margin-right: 4px; }
 .row-pick { display: inline-flex; padding: 2px; cursor: pointer; }
 .row-pick input { margin: 0; cursor: pointer; }
 .warnings li.link { cursor: pointer; border-radius: 4px; }

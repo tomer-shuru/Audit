@@ -7,24 +7,25 @@
 //   folder.js    shared Audit Builder folder + shared Dictionary file
 //   project.js   File menu: New, Open, Save, auto-save    share.js / collab.js   shared projects
 //   menus.js     menu bar, theme, shortcuts               util.js / icons.js     helpers
-//   files-tool.js  Tools › Shared Files
+//   files-tool.js  Tools › Shared Files                  start.js     what the app opens on
 import { canSaveInPlace } from './filesave.js';
 import { state, settingsComplete } from './state.js';
 import { $ } from './util.js';
-import { recompute, render, setTab, setOutput, fitTallTable } from './app.js';
+import { setTab, setOutput, fitTallTable } from './app.js';
 import { initMenus, initTheme, initShortcuts } from './menus.js';
 import { initBios } from './bios-tab.js';
 import { initSharedFiles } from './files-tool.js';
-import { initSetup, openSetup } from './setup.js';
+import { initSetup } from './setup.js';
 import { initDictionary } from './dictionary.js';
 import { initDevMode } from './devmode.js';
-import { initFileMenu, reconnectProjectFile, createProjectFile } from './project.js';
+import { initFileMenu } from './project.js';
 import { shared, loadSharedModels, reconnectShared } from './folder.js';
-import { restoreCollab, refreshCollab, collabUnsaved, COLLAB_POLL } from './collab.js';
+import { refreshCollab, collabUnsaved, COLLAB_POLL } from './collab.js';
+import { openStart } from './start.js';
 
 function init() {
-  state.collab = restoreCollab();
-  recompute();
+  // starts on Project setup (like File › New), offering to continue the last project or open one
+  openStart();
   initTheme();
   initMenus();
   initBios();
@@ -33,7 +34,6 @@ function init() {
   document.addEventListener('change', e => { if (e.target.matches?.('select[data-output]')) setOutput(e.target.value); });
   initFileMenu();
   initShortcuts();
-  reconnectProjectFile();
   initSetup();
   initDictionary();
   $('#exportClose').onclick = () => $('#exportDialog').close();
@@ -57,8 +57,6 @@ function init() {
     if (unsaved && settingsComplete(state.project.settings)) e.preventDefault();
   });
 
-  render();
-  if (!settingsComplete(state.project.settings)) openSetup({ force: true, onSave: createProjectFile });
 }
 
 init();

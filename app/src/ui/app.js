@@ -12,6 +12,7 @@ import { renderManual } from './manual-tab.js';
 import { renderReview, LEVEL_WORDS, levelCount } from './review-tab.js';
 import { renderBiosTab, biosFile } from './bios-tab.js';
 import { renderExport, exportCols } from './export.js';
+import { closeStart } from './setup.js';
 
 export function recompute() {
   state.sheet = readSheet();
@@ -90,6 +91,7 @@ export function replaceProject(project) {
   clearHistory();
   keepInBrowser();
   recompute();
+  if (settingsComplete(project.settings)) closeStart(); // opened from the window the app starts on
 }
 
 // The browser keeps a copy of the open project (about 5 MB at most). If it can't, say so once,

@@ -6,6 +6,8 @@ import { $, esc, plural, toast } from './util.js';
 import { grid } from './grid.js';
 import { changed, render, undoEdit, redoEdit } from './app.js';
 
+let pickAnchor = ''; // the row whose tick was clicked last (Shift-click ticks everything from there)
+
 const sortedCodes = man => Object.keys(man).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 
 // suggest the code after the highest one used so far (GG01 for an empty project)
@@ -38,7 +40,7 @@ export function renderManual(main) {
   <section class="card">
     <div class="card-head">
       <div><h2>Manual entries</h2>
-      <p class="hint">For devices the tools can't read (dead, locked, no report). Anything typed here takes priority over the tools' data;
+      <p class="hint">For devices the tools can't read (dead, locked, no report). Tick rows to delete them; Shift-click a tick to tick or untick everything from the last one. Anything typed here takes priority over the tools' data;
       Diagnostics and Locked/Faulty are added to what the tools found. An item shows on Review once something is typed in it.</p></div>
       <div class="actions">
         ${sel.size ? `<button class="btn danger" id="delSelected">Delete ${plural(sel.size, 'selected item')}</button>` : ''}
@@ -88,9 +90,13 @@ export function renderManual(main) {
   if (delSel) delSel.onclick = () => remove(codes.filter(c => sel.has(c)));
   const selAll = $('#selAll');
   if (selAll) selAll.onchange = e => { if (e.target.checked) codes.forEach(c => sel.add(c)); else sel.clear(); render(); };
-  main.querySelectorAll('[data-sel]').forEach(cb => cb.onchange = e => {
+  // Shift-click: every row between the last clicked one and this one gets the same tick (like the Export window)
+  main.querySelectorAll('[data-sel]').forEach(cb => cb.onclick = e => {
     const c = cb.dataset.sel;
-    if (e.target.checked) sel.add(c); else sel.delete(c);
+    const a = codes.indexOf(pickAnchor), b = codes.indexOf(c);
+    const range = e.shiftKey && a >= 0 ? codes.slice(Math.min(a, b), Math.max(a, b) + 1) : [c];
+    for (const x of range) { if (cb.checked) sel.add(x); else sel.delete(x); }
+    pickAnchor = c;
     render();
   });
   main.querySelectorAll('[data-del]').forEach(b => b.onclick = () => remove([b.dataset.del]));

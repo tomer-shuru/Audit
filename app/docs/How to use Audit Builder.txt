@@ -48,13 +48,23 @@ Open with > Google Chrome (or Microsoft Edge), and tick "Always use this app".
 Open it from File Explorer (the G: drive), not from the Google Drive website.
 The website can't run the app and only shows its code.
 
+The app always opens on Project setup, like File > New project. From there:
+- "Continue where you left off" opens the project you last worked on, as you
+  left it (it says if that was a shared project, or if it has changes not
+  saved to its file yet).
+- "Open a project..." shows the project list (like File > Open).
+- Or fill in the form and click Save to start a new project.
+Starting a new project or opening another one asks first if the last
+project has changes that aren't saved to its file.
+
 
 UPDATES
 -------
 
 Updates are automatic. When a new version is published, Google Drive
 replaces AuditBuilder.html in the folder, and you get it the next time you
-open the app (or press F5 if it's already open). Your current work is kept.
+open the app (or press F5 if it's already open). Your current work is kept:
+click "Continue where you left off".
 
 The version (date and time) is shown at the top left of the app, next to its
 name, in case you want to check you have the latest one.
@@ -100,7 +110,9 @@ DOING A PROJECT
    letters too: -M5 gives MS-M05, P5 gives MSP05. To add many at
    once, fill in "or items ... to ..." (e.g. 10 to 20) and click "Add range";
    items that already have a manual entry are skipped. A new item shows on
-   Review once something is typed in it.
+   Review once something is typed in it. To delete several, tick their rows
+   (tick one, then hold Shift and click another to tick or untick everything
+   in between) and click "Delete selected items".
 4. Review tab (check everything is right, make small corrections): every
    check is listed at the top. The Review tab button shows how many there
    are: red = problems, yellow = warnings, gray = notes. Rows with a problem
