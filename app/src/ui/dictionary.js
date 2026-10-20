@@ -2,7 +2,7 @@
 // Saving them (on this computer and to the shared models.json) is in folder.js.
 import { simsIssues, splitList, normDiag } from '../engine/sims.js';
 import { downloadJson, readJsonFile } from './io.js';
-import { state, withNewLists, builtInModels } from './state.js';
+import { state, withNewLists } from './state.js';
 import { $, esc, plural, toast, gridKeys, redrawKeepingCaret, flash } from './util.js';
 import { render } from './app.js';
 import { shared, isModelsData, loadSharedModels, saveModels, renderShared } from './folder.js';
@@ -220,9 +220,5 @@ export function initDictionary() {
       if (!confirm(`Replace the Dictionary with ${file.name}?${sharedNote()}`)) return;
       state.models = withNewLists(m); renderModels(); await saveModels(); toast('Dictionary imported');
     } catch (err) { toast(`Couldn't import: ${err.message}`, 'bad'); }
-  };
-  $('#modelsReset').onclick = async () => {
-    if (!confirm(`Replace the Dictionary with the built-in defaults?${sharedNote()}`)) return;
-    state.models = builtInModels(); renderModels(); await saveModels();
   };
 }

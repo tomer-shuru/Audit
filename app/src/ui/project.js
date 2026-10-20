@@ -2,14 +2,15 @@
 import { importWorkbook, downloadJson, readJsonFile } from './io.js';
 import { canSaveInPlace, rememberedFile, rememberFile, chooseSaveFile, chooseOpenFile, writeFile, hasPermission, canUseFolder } from './filesave.js';
 import { projectsDir, listSharedProjects, listProjectFiles } from './sharedfiles.js';
-import { state, store, emptyProject, migrate, settingsComplete, STORE_PROJECT } from './state.js';
+import { state, store, migrate, settingsComplete, STORE_PROJECT } from './state.js';
 import { $, esc, toast, ago, renderSyncState } from './util.js';
 import { ICONS } from './icons.js';
-import { render, renderChrome, replaceProject, setTab } from './app.js';
+import { render, renderChrome, replaceProject } from './app.js';
 import { folder, allowFolder, connectFolder } from './folder.js';
 import { reportProject, setCollab, saveMine, collabRoot, renderCollabState, clickCollabState } from './collab.js';
 import { shareProject, joinShared, leaveCollab, openPeople } from './share.js';
 import { openSetup } from './setup.js';
+import { openStart } from './start.js';
 
 // what goes into a project file: the project without savedToFile (it only matters on this computer)
 const fileCopy = ({ savedToFile, ...project }) => project;
@@ -21,18 +22,6 @@ export const forgetProjectFile = () => { state.fileName = ''; rememberFile(null)
 // opening another project: changes to a normal project that aren't saved yet would be lost
 export const okToReplace = () => state.collab || state.project.savedToFile || !settingsComplete(state.project.settings)
   || confirm('Open another project? Changes to the open project since you last saved it will be lost.');
-
-// File › New project
-function newProject() {
-  if (state.collab) {
-    if (!confirm('Start a new project? The shared project stays in the shared folder; open it again with File › Open.')) return;
-    setCollab(null);
-  } else if (!state.project.savedToFile && !confirm('Start a new project? Changes since you last saved the project file will be lost.')) return;
-  forgetProjectFile();
-  replaceProject(emptyProject());
-  setTab('data');
-  openSetup({ force: true, onSave: createProjectFile });
-}
 
 // a project file (.audit.json) or an old Audit.xlsm / .xlsx workbook; true when it opened
 async function openProjectFile(file) {
@@ -274,7 +263,7 @@ async function projectFileInFolder(name) {
 }
 
 export function initFileMenu() {
-  $('#btnNew').onclick = newProject;
+  $('#btnNew').onclick = () => openStart({ fromMenu: true }); // the same window the app opens on
   $('#btnOpen').onclick = openProjectList;
   $('#btnSave').onclick = () => saveProject();
   $('#btnSaveAs').hidden = !canSaveInPlace;

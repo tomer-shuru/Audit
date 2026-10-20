@@ -11,7 +11,7 @@ import { renderData, sheetWarnings } from './data-tab.js';
 import { renderManual } from './manual-tab.js';
 import { renderReview, LEVEL_WORDS, levelCount } from './review-tab.js';
 import { renderBiosTab, biosFile } from './bios-tab.js';
-import { renderExport, exportCols } from './export.js';
+import { exportCols } from './report-view.js';
 import { closeStart } from './setup.js';
 
 export function recompute() {
@@ -27,7 +27,7 @@ export function recompute() {
 }
 
 // Rows already in the Google Sheet (Data tab): one more input for the report, the last in line. They are
-// read with the columns ticked in the Export window (of the chosen output), the way they get pasted back.
+// read with the columns shown on the Final Report (of the chosen output), the way they get pasted back.
 function readSheet() {
   const text = state.project.inputs.sheet;
   if (!text.trim()) return null;
@@ -114,14 +114,14 @@ function restoreEdit(from, to, what) {
 export const undoEdit = () => restoreEdit(history.undo, history.redo, 'undo');
 export const redoEdit = () => restoreEdit(history.redo, history.undo, 'redo');
 
-// the Output pickers (top bar, Review, Export window) all change the same project setting
+// the Output picker in the top bar: a project setting
 const OUTPUTS = { shuru: 'Shuru', sims: 'SIMS' };
 export function setOutput(value) {
   if (!OUTPUTS[value] || value === (state.project.settings.output || 'shuru')) return;
   if (!canEditSettings()) { renderChrome(); toast(`Only ${state.collab.owner} can change the output of this shared project`, 'bad'); return; }
   state.project.settings.output = value;
   changed();
-  toast(`Output: ${OUTPUTS[value]}. Review and Export now use the ${OUTPUTS[value]} layout.`);
+  toast(`Output: ${OUTPUTS[value]}. The Final Report now uses the ${OUTPUTS[value]} layout.`);
 }
 
 export function setTab(tab) {
@@ -139,7 +139,7 @@ export function renderChrome() {
   renderSaveState($('#saveState'));
   renderPeopleChip();
   document.querySelectorAll('select[data-output]').forEach(sel => { sel.value = s.output || 'shuru'; });
-  // Review shows how many checks there are: red = problems, yellow = warnings, gray = notes
+  // the Final Report tab shows how many checks there are: red = problems, yellow = warnings, gray = notes
   const checks = Object.entries(LEVEL_WORDS).map(([l, word]) => {
     const n = levelCount(r.warnings, l);
     return n ? `<span class="badge ${l}" title="${plural(n, word)}">${n}</span>` : '';
@@ -164,13 +164,6 @@ export function render() {
   const main = $('#main');
   keepScroll(main, () => VIEWS[state.tab](main));
   fitTallTable();
-  // the Export window, when open, is redrawn too (keeping its tables' scroll position)
-  if ($('#exportDialog').open) {
-    const body = $('#exportBody');
-    const before = tableScroll(body);
-    renderExport(body);
-    restoreTableScroll(body, before);
-  }
 }
 
 // re-render without making tables jump back to the top-left (unless it's another tab)
@@ -182,7 +175,7 @@ function keepScroll(main, draw) {
   if (tab === state.tab) restoreTableScroll(main, before);
 }
 
-// The Review table gets the height that fits the window: below what's above it if that leaves enough room,
+// The Final Report table gets the height that fits the window: below what's above it if that leaves enough room,
 // otherwise the height at which its whole card (header, table, scrollbar) fits once scrolled to it.
 export function fitTallTable() {
   const wrap = $('#main .table-wrap.tall');

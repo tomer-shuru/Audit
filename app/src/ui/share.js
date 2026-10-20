@@ -119,7 +119,7 @@ function contribution(p) {
   const manual = Object.values(p.items || {}).filter(x => !x.deleted).length;
   const edits = ['overrides', 'simsOverrides'].reduce((n, k) => n + Object.values(p.cells[k] || {}).reduce((m, r) => m + Object.keys(r).length, 0), 0);
   return [devices && plural(devices, 'device') + ' in reports', p.inputs.blanccoFiles.length && plural(p.inputs.blanccoFiles.length, 'Blancco file'),
-    manual && plural(manual, 'manual entry').replace('entrys', 'entries'), edits && plural(edits, 'Review edit')].filter(Boolean).join(' · ') || 'nothing yet';
+    manual && plural(manual, 'manual entry').replace('entrys', 'entries'), edits && plural(edits, 'Final Report edit')].filter(Boolean).join(' · ') || 'nothing yet';
 }
 
 // who works on the shared project, and what each has added

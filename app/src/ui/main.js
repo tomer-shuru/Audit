@@ -1,7 +1,8 @@
 // Audit Builder - browser UI. This file starts the app; each screen is its own module:
 //   state.js     state, localStorage, undo history        app.js       recompute, render, changed()
 //   data-tab.js / manual-tab.js / review-tab.js / bios-tab.js   the tabs
-//   export.js    Export window                            setup.js     project setup window
+//   export.js    Copy / Download of the Final Report      setup.js     project setup window
+//   report-view.js  what the Final Report shows (sheets, filters, hidden columns)   popover.js  small menus
 //   dictionary.js  Settings › Dictionary                 devmode.js   Settings › DevMode (editor)
 //   config-file.js  the shared DevMode rules file (Config/config.json) and its bar
 //   folder.js    shared Audit Builder folder + shared Dictionary file
@@ -36,7 +37,6 @@ function init() {
   initShortcuts();
   initSetup();
   initDictionary();
-  $('#exportClose').onclick = () => $('#exportDialog').close();
   initDevMode(); // the rules in the shared config.json, behind a password
 
   // shared files: reconnect on start, and pick up coworkers' changes when coming back to the app

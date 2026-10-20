@@ -56,6 +56,8 @@ The app always opens on Project setup, like File > New project. From there:
 - Or fill in the form and click Save to start a new project.
 Starting a new project or opening another one asks first if the last
 project has changes that aren't saved to its file.
+File > New project shows this same window at any time ("Continue where you
+left off" then goes back to the project that was open).
 
 
 UPDATES
@@ -81,7 +83,7 @@ The menu bar at the very top works like in a Windows program:
 The sun / moon button next to Tools switches between light and dark.
 Under the menus: the project (click it to change the project setup), the
 Output picker (Shuru or SIMS) and whether the project is saved.
-Keyboard: Alt+1 Data, Alt+2 Manual entries, Alt+3 Review, Alt+4 BIOS passwords
+Keyboard: Alt+1 Data, Alt+2 Manual entries, Alt+3 Final Report, Alt+4 BIOS passwords
 (the number keys above the letters, not the number pad).
 
 
@@ -96,7 +98,7 @@ DOING A PROJECT
    MS-P or MSP for PCs)? Just enter the common start (MS). Codes that start
    with it and have more letters are found by themselves: each one is its
    own item group, numbered from 1, listed after the main prefix. The
-   Review tab shows a gray note with the groups found, so a typo that
+   Final Report tab shows a gray note with the groups found, so a typo that
    became a group (like MSS05) stands out.
 2. Data tab (everything the report is built from): click "Add files..." and
    choose the Blancco exports (.csv, .xlsx or .zip). You can choose several
@@ -110,18 +112,18 @@ DOING A PROJECT
    letters too: -M5 gives MS-M05, P5 gives MSP05. To add many at
    once, fill in "or items ... to ..." (e.g. 10 to 20) and click "Add range";
    items that already have a manual entry are skipped. A new item shows on
-   Review once something is typed in it. To delete several, tick their rows
+   the Final Report once something is typed in it. To delete several, tick their rows
    (tick one, then hold Shift and click another to tick or untick everything
    in between) and click "Delete selected items".
-4. Review tab (check everything is right, make small corrections): every
-   check is listed at the top. The Review tab button shows how many there
+4. Final Report tab (check everything is right, make small corrections, then
+   get the report out): every check is listed at the top. The tab shows how many there
    are: red = problems, yellow = warnings, gray = notes. Rows with a problem
    are highlighted, and clicking a check jumps to its row. Edited cells turn
    blue, and clearing a cell (Delete) goes back to the calculated value.
    Diagnostic codes (like LM or CD) work in the Diagnostics and Locked or
    Faulty cells too.
 
-The Review and Manual entries tables work like a spreadsheet:
+The Final Report and Manual entries tables work like a spreadsheet:
    - Click a cell, or move with the arrow keys, Tab, Enter, Home / End,
      Page Up / Page Down. Ctrl + arrow jumps to the end of the filled cells,
      or to the next filled cell (like Excel).
@@ -137,42 +139,58 @@ The Review and Manual entries tables work like a spreadsheet:
    The item code columns can be selected and copied but not changed.
    Green cells are values from the Google Sheet rows (Data tab); they can
    be changed like any other cell.
-5. Getting the finished report out: on the Review tab, click "Copy for
-   Google Sheet" and paste at the first item row of the sheet. It copies the
-   same rows and columns as "Copy rows" in the Export window. Open
-   "Export..." to choose rows or columns, for the Locked and Faulty list, or
-   for an Excel file. In Export, click "Copy rows" and paste into the Google Sheet.
-   If there are locked or faulty devices, copy that list too. Untick
-   columns the Google Sheet doesn't have. If problems (red) are still open
-   on Review, the app asks before opening Export.
+5. Getting the finished report out, also on the Final Report tab. What you
+   see is what you copy:
+   - Filters: the arrow on each column header opens a list of that column's
+     values (with a search box), like in Google Sheets or Excel. Untick
+     values to hide those rows; it applies at once and the arrow turns into
+     a funnel. "Search..." finds text in any column, and "Only items with
+     issues" shows the rows with a check. "Clear filters" shows everything.
+     Item numbers with no data yet are "(No data yet)" in the Item Lookup
+     filter.
+   - Columns: "Hide column" in a header's menu hides a column the Google
+     Sheet doesn't have. Hidden columns aren't shown, copied or downloaded;
+     "... hidden columns - Show all" brings them back. This is remembered on
+     your computer.
+   - "Copy all rows" copies the rows and columns shown: click the ITEM cell of
+     the first item row in the Google Sheet and paste. The small arrow next
+     to it has "Copy with headers". When filters are on, the button turns
+     amber and says "Copy filtered rows", and the message says how many
+     (e.g. "12 of 80 rows (filtered)"). Item Lookup is never copied.
+   - The tabs above the table switch between the Audit Report and Locked
+     and Faulty (send that list along with the report).
+   - Download Excel saves both lists, as shown, in one .xlsx file.
+   If problems (red) are still open, the app asks before copying or
+   downloading. While filters are on, a row you change stays in view until
+   you change the filters, even if it no longer matches them.
 
-Review and Export show a row for every item number from the first item
+The Final Report shows a row for every item number from the first item
 number up to the highest one. Numbers with no data yet get an empty (yellow)
-row, so the rows line up with the Google Sheet; typing in one on Review adds
+row, so the rows line up with the Google Sheet; typing in one adds
 a manual entry. The "No data yet for" warning jumps to the first one.
 An item number far above the others (more than 200, e.g. GG9999 among
 GG01-GG80) is most likely a typo: it gets a red check, and no empty rows are
 made up to it. Fix the item number where it came from (report line, Blancco
 or manual entry).
-"Hide empty rows" only hides them from view: Copy rows and the Excel file
-always include them.
+They are copied too, so the paste lines up. To leave them out, untick
+"(No data yet)" in the Item Lookup filter.
 
 If some items are already in the Google Sheet (for example BM20 was typed in
 by hand):
    a. In the Google Sheet, select the rows you'd paste over (from the first
-      item row down past the last filled row, same columns as the export)
+      item row down past the last filled row, same columns as the Final Report shows)
       and copy them.
    b. Paste them in "Rows already in the Google Sheet" on the Data tab. It is
       saved with the project.
    c. The sheet's values are used like any other input, but last in line:
       for every cell, Blancco, the Mac / Windows reports and manual entries
       win if they have a value; if they leave it empty, the sheet's value
-      stays. Values that came from the sheet are green on Review. An item
+      stays. Values that came from the sheet are green on the Final Report. An item
       that is only in the sheet is a normal row.
-   d. You can change them like anything else: a manual entry or a Review
-      edit wins over the sheet. Any problem (for example no item codes
-      found) is listed on the Review tab.
-   e. In Export (button on Review) click "Copy rows", click the ITEM cell of
+   d. You can change them like anything else: a manual entry or an edit on
+      the Final Report wins over the sheet. Any problem (for example no item
+      codes found) is listed on the Final Report tab.
+   e. On the Final Report click "Copy all rows", click the ITEM cell of
       the first item row in the Google Sheet and paste. The sheet's values
       are included, so they aren't lost (formulas become plain values).
 
@@ -184,9 +202,9 @@ Some contractors (SIMS) want their own sheet instead of ours. The data and
 the Manual entries stay exactly the same; only the output changes.
 
 1. Set "Output" to SIMS. It is in the top bar next to the project name
-   (always there), and also on the Review tab and in the Export window.
+   (always there).
    It is saved with the project; switch back to Shuru any time.
-2. The Review table then shows the SIMS columns D (Item No) to T (Blancco
+2. The Final Report table then shows the SIMS columns D (Item No) to T (Blancco
    Result): Category (from the device type), Model (make, model, screen,
    year), Purchase Description (CPU, RAM, disk, or n/a), our Diagnostics,
    the SIMS Diagnostic Codes, Item Remark, Weight and Blancco Result
@@ -198,12 +216,13 @@ the Manual entries stay exactly the same; only the output changes.
 3. Diagnostic codes: each diagnostic becomes the SIMS code of the device's
    category (e.g. "Sticky kb" on a laptop is LPT107). A diagnostic with no
    SIMS code goes to Item Remark and the device gets the "see remarks" code
-   (e.g. LPT172). Review lists those as blue SIMS notes, so you can add them
+   (e.g. LPT172). The Final Report lists those as blue SIMS notes, so you can add them
    to the Dictionary. "Ok" is left out.
-4. Export (button on Review) has three lists: Item per service project
-   (paste at the Item No cell, column D, of the first item row), HDD (one
-   row per data carrier serial from "S.N. Data carrier") and Locked and
-   Faulty. "Download SIMS .xlsx" fills the SIMS template with the rows,
+4. The Final Report has three lists (tabs above the table): Item per service
+   project (paste at the Item No cell, column D, of the first item row), HDD
+   (one row per data carrier serial from "S.N. Data carrier") and Locked and
+   Faulty. Filters and hidden columns work the same. Download > "SIMS file"
+   fills the SIMS template with the rows shown,
    so their logos, comments and Summary stay as they are; the Summary
    counts itself when you open the file. The template is
    G:\My Drive\Audit Builder\Templates\SIMS.xlsx. When SIMS sends a new
@@ -284,7 +303,7 @@ same one as for the shared Dictionary).
 - Each person adds their own Blancco files and report lines on the Data tab.
   Everyone's are added together; what the others added is listed under
   yours with their name, and only they can remove it.
-- Manual entries, Review edits and the Google Sheet rows are shared: anyone
+- Manual entries, Final Report edits and the Google Sheet rows are shared: anyone
   can change them, and everyone sees the change.
 - There is no need to press Save. The top bar shows the status, like Google
   Sheets: "Saving..." while your changes are being saved, then "Saved to
@@ -295,7 +314,7 @@ same one as for the shared Dictionary).
 - "Shared - 3 people" in the top bar shows who is working on the project
   and what each has added.
 - If two people change the same cell at the same moment, the newest change
-  is used and a gray note on Review says what the other person typed.
+  is used and a gray note on the Final Report says what the other person typed.
   Typing the right value in that cell again removes the note.
 - Ctrl+Z only undoes your own changes.
 - Only the person who shared the project can change its settings (project
@@ -319,7 +338,7 @@ Everyone shares two files in the Audit Builder folder on the Drive:
   reports or the Blancco export (e.g. MacBookPro15,1) into its name (Pro A1990)
   and fills in Screen and Year.
 - Config\config.json: the rules the report is built with (battery grades,
-  how Blancco comments are read, which checks show on Review, column
+  how Blancco comments are read, which checks show on the Final Report, column
   headers...), so everyone's report comes out the same.
 
 Connect once (the browser only lets the app use files you picked yourself):
@@ -352,7 +371,7 @@ BulkBiosPasswordDetails-29065708.txt with the asset tag and password(s) of
 each device.
 
 1. Open the project, then Tools > Microsoft BIOS passwords. This opens the
-   BIOS passwords tab (next to Review).
+   BIOS passwords tab (next to Final Report).
 2. Click "Load password file..." (or drop the .txt file on the tab).
    From then on the tab stays there for this project: jump to it with Alt+4
    and back with Alt+1 / Alt+2 / Alt+3. Your search and the selected device

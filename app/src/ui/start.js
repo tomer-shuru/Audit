@@ -1,13 +1,17 @@
-// When Audit Builder opens it starts on Project setup (like File › New), not in the last project. The window
-// also offers to continue where you left off (the last project, kept as it was until you choose) or to open one.
+// The start window: Project setup for a new project, plus "Continue where you left off" (the last project, kept as
+// it was until you choose) and "Open a project…". Shown when Audit Builder opens, and by File › New project.
 import { state, emptyProject, settingsComplete } from './state.js';
-import { recompute, render, replaceProject } from './app.js';
-import { restoreCollab, setCollab, refreshCollab } from './collab.js';
+import { recompute, render, replaceProject, setTab } from './app.js';
+import { restoreCollab, setCollab, refreshCollab, saveMine } from './collab.js';
 import { reconnectProjectFile, forgetProjectFile, createProjectFile, openProjectList } from './project.js';
 import { openSetup } from './setup.js';
 
-export function openStart() {
-  const last = { project: state.project, collab: restoreCollab() };
+// fromMenu: File › New project, so the last project is the one open now (when the app opens, the one kept in the browser)
+export async function openStart({ fromMenu = false } = {}) {
+  // a shared project's changes not written yet go to the Drive first (a new project would leave it)
+  if (fromMenu && (state.collab?.dirty || state.collab?.settingsDirty)) await saveMine();
+  if (fromMenu && state.collab) clearTimeout(state.collab.timer);
+  const last = { project: state.project, collab: fromMenu ? state.collab : restoreCollab() };
   state.project = emptyProject(); // shown behind the window until a choice is made; nothing is stored yet
   state.collab = null;
   recompute();
@@ -40,6 +44,7 @@ export function openStart() {
         if (!okToLeave()) return false;
         setCollab(null);
         forgetProjectFile();
+        setTab('data'); // a new project starts with its inputs
         return true;
       },
     },

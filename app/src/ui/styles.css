@@ -98,7 +98,7 @@ dialog.collab .project-list { max-height: 40vh; overflow: auto; }
 .tabs button.active { color: var(--text); border-bottom-color: var(--tab-accent); font-weight: 650; }
 .count { display: inline-flex; gap: 4px; font-size: 12px; color: var(--muted); }
 .count:empty { display: none; }
-/* number of checks on the Review tab: red = problems, yellow = warnings, gray = notes */
+/* number of checks on the Final Report tab: red = problems, yellow = warnings, gray = notes */
 .badge { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; font-size: 12px; font-weight: 700; line-height: 1; }
 .badge.error { background: var(--bad); color: #fff; }
 .badge.warn { background: var(--warn); color: #fff; }
@@ -186,24 +186,51 @@ table.grid { border-collapse: separate; border-spacing: 0; width: max-content; m
 .badges i { font-style: normal; font-size: 10px; font-weight: 700; color: var(--muted); background: var(--surface-2); border-radius: 3px; padding: 0 3px; }
 .row-tools { white-space: nowrap; }
 
-/* export: tick rows and columns to include */
-.table-wrap.export { max-height: 55vh; }
 .pick-bar { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .pick-bar .hint { margin-left: 8px; }
 .btn.small { padding: 3px 10px; font-size: 13px; }
-.grid.pick th.pick-col { width: 34px; min-width: 34px; text-align: center; }
-.grid.pick input { cursor: pointer; margin: 0; }
-.col-pick { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
-.grid.pick .off, .grid.pick tr.off > td { color: var(--muted); opacity: .45; }
-.grid.pick thead th.off { opacity: .6; }
-.grid.pick tr.off > th { opacity: .7; }
+
+/* Final Report: its sheets, the bar above the table, and the filter button on each column header */
+.sheet-tabs { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid var(--border); }
+.sheet-tabs button { font: inherit; border: 1px solid transparent; border-bottom: 0; background: none; color: var(--muted); padding: 6px 12px; border-radius: 8px 8px 0 0; cursor: pointer; margin-bottom: -1px; }
+.sheet-tabs button:hover { color: var(--text); background: var(--surface-2); }
+.sheet-tabs button.active { color: var(--text); font-weight: 600; background: var(--surface); border-color: var(--border); }
+.sheet-tabs .count { font-size: 12px; color: var(--muted); font-weight: 400; margin-left: 4px; }
+.report-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.report-bar input[type=search] { width: 220px; }
+.report-bar .spacer { flex: 1; }
+.report-bar .chip { font-size: 13px; color: var(--accent); background: var(--accent-soft); border-radius: 999px; padding: 2px 10px; }
+.split { display: inline-flex; }
+.split .btn:first-child { border-radius: 6px 0 0 6px; }
+/* filters are on: Copy filtered rows is amber, so it's clear not everything is copied */
+.split.filtered .btn.primary { background: var(--warn); border-color: var(--warn); }
+.split .btn:last-child { border-radius: 0 6px 6px 0; border-left: 1px solid color-mix(in srgb, var(--accent-ink) 35%, transparent); padding: 6px 6px; }
+.btn svg { vertical-align: -3px; }
+.grid thead th .hl { margin-right: 4px; }
+.grid thead th .hf { border: 0; background: none; color: var(--muted); padding: 0 2px; border-radius: 4px; cursor: pointer; vertical-align: middle; line-height: 0; }
+.grid thead th .hf:hover, .grid thead th .hf.open { background: var(--border); color: var(--text); }
+.grid thead th .hf.on { color: var(--accent); }
+
+/* small menus under a button (popover.js): column filters, Copy ▾, Download ▾ */
+.popover { position: fixed; z-index: 60; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / .2); padding: 8px; display: flex; flex-direction: column; gap: 6px; min-width: 200px; overflow: hidden; }
+.popover.filter-menu { width: 280px; }
+.popover .pv-head { font-weight: 600; padding: 2px 4px; }
+.popover .pv-list { overflow: auto; min-height: 40px; max-height: 260px; border: 1px solid var(--border); border-radius: 6px; padding: 4px 0; }
+.popover .pv-item { display: flex; gap: 8px; align-items: center; padding: 3px 8px; cursor: pointer; }
+.popover .pv-item:hover { background: var(--surface-2); }
+.popover .pv-item span:first-of-type { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.popover .pv-item[hidden] { display: none; }
+.popover .pv-all { font-weight: 600; }
+.popover .pv-actions { display: flex; gap: 6px; justify-content: space-between; }
+.popover .pv-action { font: inherit; text-align: left; border: 0; background: none; color: var(--text); padding: 6px 10px; border-radius: 6px; cursor: pointer; }
+.popover .pv-action:hover { background: var(--surface-2); }
 
 /* dialogs */
 dialog { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text); padding: 24px; width: min(460px, calc(100vw - 32px)); }
 dialog.wide { width: min(1100px, calc(100vw - 32px)); }
 dialog.full { width: calc(100vw - 32px); max-width: 1500px; height: calc(100vh - 32px); max-height: none; display: none; flex-direction: column; padding: 20px; }
 dialog.full[open] { display: flex; }
-dialog.full #exportBody { flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 16px; }
 dialog::backdrop { background: rgb(10 14 22 / .45); }
 dialog form { display: flex; flex-direction: column; gap: 12px; }
 dialog form label { display: flex; flex-direction: column; gap: 4px; font-weight: 600; font-size: 13px; }
@@ -229,11 +256,11 @@ dialog form label input { font-weight: 400; }
 .toast.show { opacity: 1; transform: translateX(-50%); }
 .toast.bad { background: var(--bad); color: #fff; }
 
-/* rows already in the Google Sheet (pasted on the Data tab), on Review and Export */
+/* rows already in the Google Sheet (pasted on the Data tab), on the Final Report */
 /* a value that came from the Google Sheet rows (Data tab) */
 .grid td.from-sheet { background: var(--good-soft); }
 
-/* Review and Manual entries tables behave like a spreadsheet (grid.js) */
+/* Final Report and Manual entries tables behave like a spreadsheet (grid.js) */
 .grid-sink { position: fixed; top: 0; left: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; border: 0; padding: 0; resize: none; }
 .grid.sheet [data-r] { cursor: cell; user-select: none; }
 .grid.sheet td[data-r] { min-width: 60px; }
@@ -252,15 +279,14 @@ dialog form label input { font-weight: 400; }
 .range-add .prefix { font-weight: 600; margin-right: -2px; }
 .range-add .prefix:empty { display: none; }
 
-/* item numbers with no data yet (Review / Export) */
+/* item numbers with no data yet (Final Report) */
 .grid tr.empty-row > th { color: var(--muted); font-weight: 500; }
 
-/* a soft color per part of the app: Data blue, Manual entries violet, Review teal, Export rose */
+/* a soft color per part of the app: Data blue, Manual entries violet, Final Report teal */
 .tabs button[data-tab="data"], main[data-tab="data"] { --tab-accent: var(--c-data); }
 .tabs button[data-tab="manual"], main[data-tab="manual"] { --tab-accent: var(--c-manual); }
 .tabs button[data-tab="review"], main[data-tab="review"] { --tab-accent: var(--c-review); }
 .tabs button[data-tab="bios"], main[data-tab="bios"] { --tab-accent: var(--c-bios); }
-#exportDialog { --tab-accent: var(--c-export); }
 .tabs button::before { content: ''; width: 10px; height: 10px; border-radius: 50%; background: var(--tab-accent); opacity: .7; }
 .tabs button.active::before, .tabs button:hover::before { opacity: 1; box-shadow: 0 0 0 3px color-mix(in srgb, var(--tab-accent) 25%, transparent); }
 .tabs button.active { color: var(--tab-accent); border-bottom-color: var(--tab-accent); background: linear-gradient(to top, color-mix(in srgb, var(--tab-accent) 18%, transparent), transparent 85%); }
@@ -269,10 +295,6 @@ main .card {
   background: linear-gradient(color-mix(in srgb, var(--tab-accent) 7%, var(--surface)), var(--surface) 90px);
 }
 main .card h2 { color: color-mix(in srgb, var(--tab-accent) 75%, var(--text)); }
-#exportDialog { border-top: 5px solid var(--tab-accent); }
-/* the boxes inside the Export window stay quiet: just a thin edge in the window's color */
-#exportDialog .card { border-top: 2px solid color-mix(in srgb, var(--tab-accent) 35%, var(--border)); }
-#exportDialog .dialog-head h2 { color: var(--tab-accent); }
 
 /* DevMode: the rules editor (a window behind a password) */
 #devDialog { --tab-accent: #8a6d1f; border-top: 5px solid var(--tab-accent); }
@@ -305,7 +327,7 @@ select { font: inherit; color: var(--text); background: var(--surface); border: 
 .grid.dev-table td.changed { background: var(--edited); color: var(--edited-ink); }
 #devLoginError:empty { display: none; }
 
-/* SIMS output: the Output picker on Review, the SIMS lists in the Dictionary */
+/* SIMS output: the Output picker, the SIMS lists in the Dictionary */
 .output-pick { display: flex; gap: 6px; align-items: center; color: var(--muted); }
 .output-pick select, .filter-bar select { font: inherit; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
 .output-pick select { font-weight: 600; color: var(--text); }

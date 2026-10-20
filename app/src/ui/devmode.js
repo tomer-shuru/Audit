@@ -132,7 +132,7 @@ const SECTIONS = {
         ${table('modelFromVersion', [{ k: '_', label: 'Make' }], { add: '' })}</div>
     </div>` },
   checks: { label: 'Checks', keys: ['checks'], html: d => `
-    <p class="hint">How each check shows on the Review tab. Problems (red) also ask for confirmation before Export. "Off" hides the check.</p>
+    <p class="hint">How each check shows on the Final Report tab. Problems (red) also ask for confirmation before copying or downloading the report. "Off" hides the check.</p>
     <table class="grid dev-table"><thead><tr><th>Check</th><th>Shows as</th></tr></thead><tbody>
       ${Object.entries(CHECKS).map(([k, label]) => `<tr><td>${esc(label)}</td><td>
         <select data-o="checks" data-k="${k}">${CHECK_LEVELS.map(l => `<option value="${l}" ${d.checks[k] === l ? 'selected' : ''}>${LEVELS[l]}</option>`).join('')}</select></td></tr>`).join('')}

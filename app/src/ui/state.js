@@ -22,7 +22,7 @@ export const store = (key, val) => { try { localStorage.setItem(key, JSON.string
 
 export const emptyProject = () => ({
   version: 2,
-  // output: which sheet layout Review and Export use ('shuru' or 'sims')
+  // output: which sheet layout the Final Report uses ('shuru' or 'sims')
   settings: { projectNumber: '', prefix: '', endClient: '', startNumber: 1, output: 'shuru' },
   inputs: { reports: '', blanccoFiles: [], sheet: '', bios: null }, // bios: the Microsoft BIOS password file { fileName, text, at }
   manual: {}, overrides: {},
@@ -62,8 +62,6 @@ export const state = {
   tab: TABS.includes(load(STORE_TAB, 'data')) ? load(STORE_TAB, 'data') : 'review',
   report: null, // set by recompute(), with sims (SIMS layout) and sheet (Google Sheet rows)
   fileName: '', // the project file Save writes to
-  reviewFilter: '', reviewIssuesOnly: false,
-  hideEmpty: { review: false, export: false }, // "Hide empty rows" on Review / Export (only hides them from view)
   modelsTab: 'models',
   modelsFilter: {}, // Dictionary filters per tab: { q, category, mapped }
   manualSelected: new Set(),

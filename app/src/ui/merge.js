@@ -25,8 +25,8 @@ export function parseTsv(text) {
 
 const escRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-// sheetText: rows copied from the Google Sheet (same columns as the export, starting at the first item row)
-// cols: the export columns that are ticked; prefix: the project's item code prefix;
+// sheetText: rows copied from the Google Sheet (same columns as the Final Report shows, starting at the first item row)
+// cols: the columns shown (not hidden) on the Final Report; prefix: the project's item code prefix;
 // itemPrefix: the start of the ITEM column ("ITD", from the config)
 // Returns records: { [item code]: { column key: value } } (the first row of a code counts), codes (sorted),
 // and what was left out: duplicates, headerRows (above the first item), otherRows (no item code), lineBreaks.

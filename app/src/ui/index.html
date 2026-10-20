@@ -41,7 +41,7 @@
 <header class="topbar">
   <div class="brand">Audit Builder <span class="version" title="Version of this app">{{VERSION}}</span></div>
   <button id="projectChip" class="project-chip" title="Edit project settings"></button>
-  <label class="output-pick" title="Which sheet layout Review and Export use: ours (Shuru) or a contractor's (SIMS). Saved with the project; the data stays the same.">Output
+  <label class="output-pick" title="Which sheet layout the Final Report uses: ours (Shuru) or a contractor's (SIMS). Saved with the project; the data stays the same.">Output
     <select data-output><option value="shuru">Shuru</option><option value="sims">SIMS</option></select></label>
   <span id="saveState" class="save-state"></span>
   <button id="peopleChip" class="people-chip" hidden></button>
@@ -51,7 +51,7 @@
 <nav id="tabs" class="tabs">
   <button data-tab="data" title="Paste and add everything the report is built from (Alt+1)">Data<span class="count"></span></button>
   <button data-tab="manual" title="Devices the tools couldn't read (dead, BIOS locked…) (Alt+2)">Manual entries<span class="count"></span></button>
-  <button data-tab="review" title="Check everything is right and make small corrections (Alt+3)">Review<span class="count"></span></button>
+  <button data-tab="review" title="Check everything is right, make small corrections, then copy or download the report (Alt+3)">Final Report<span class="count"></span></button>
   <button data-tab="bios" title="Microsoft BIOS passwords with QR codes; shown once a password file is loaded (Alt+4)" hidden>BIOS passwords<span class="count"></span></button>
 </nav>
 
@@ -111,7 +111,6 @@
     <div class="actions">
       <button class="btn ghost" id="modelsImport">Import…</button>
       <button class="btn ghost" id="modelsExport">Export</button>
-      <button class="btn ghost" id="modelsReset">Reset to defaults</button>
       <button class="btn primary" id="modelsClose">Done</button>
     </div>
     <input type="file" id="modelsFile" accept=".json" hidden>
@@ -120,14 +119,6 @@
   <div id="modelsBody"></div>
 </dialog>
 
-<dialog id="exportDialog" class="full">
-  <div class="dialog-head">
-    <div><h2>Export</h2><p class="hint">Copy the report and paste it into the project's Google Sheet, or download it as an Excel file.</p></div>
-    <div class="actions"><label class="output-pick" title="Which sheet layout Review and Export use: ours (Shuru) or a contractor's (SIMS). Saved with the project; the data stays the same.">Output
-    <select data-output><option value="shuru">Shuru</option><option value="sims">SIMS</option></select></label><button class="btn primary" id="exportClose">Done</button></div>
-  </div>
-  <div id="exportBody"></div>
-</dialog>
 
 <input type="file" id="biosFile" accept=".txt,.csv,text/plain" hidden>
 

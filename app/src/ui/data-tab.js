@@ -63,8 +63,8 @@ export function renderData(main) {
     <div class="card-head">
       <div><h2>Rows already in the Google Sheet <span class="muted">optional</span></h2>
       <p class="hint">If some items are already filled in the project's Google Sheet, copy those rows there (from the first item row down past the last filled one,
-      same columns as the export) and paste them here. They are used like the other inputs, last in line: Blancco, the Mac and Windows reports and manual entries
-      win wherever they have a value, and the sheet fills in what they leave empty (green cells on Review). Review edits and manual entries can change them.${isSims() ? ' This project\'s output is SIMS, so copy them from the SIMS sheet, columns D (Item No) to T (Blancco Result).' : ''}${state.collab ? ' Shared project: everyone sees the same rows here, and the newest paste counts.' : ''} </p></div>
+      same columns as the Final Report shows) and paste them here. They are used like the other inputs, last in line: Blancco, the Mac and Windows reports and manual entries
+      win wherever they have a value, and the sheet fills in what they leave empty (green cells on the Final Report). Edits there and manual entries can change them.${isSims() ? ' This project\'s output is SIMS, so copy them from the SIMS sheet, columns D (Item No) to T (Blancco Result).' : ''}${state.collab ? ' Shared project: everyone sees the same rows here, and the newest paste counts.' : ''} </p></div>
       ${inp.sheet.trim() ? '<div class="actions"><button class="btn ghost" id="sheetClear">Clear</button></div>' : ''}
     </div>
     <textarea id="sheetInput" class="mono" rows="4" spellcheck="false" placeholder="Paste the Google Sheet rows here">${esc(inp.sheet)}</textarea>
@@ -133,19 +133,19 @@ export function parseReports(text) {
   return { mac: parseMacLines(sorted.mac), win: parseWindowsLines(sorted.windows), unknown: sorted.unknown };
 }
 
-// "24 devices (16 Mac, 8 Windows)"; lines that are neither are listed on the Review tab
+// "24 devices (16 Mac, 8 Windows)"; lines that are neither are listed on the Final Report tab
 function reportsStatus(text) {
   const { mac, win, unknown } = parseReports(text);
   const n = mac.length + win.length, noCode = [...mac, ...win].filter(x => !x.item).length;
   const parts = [`${plural(n, 'device')}${n ? ` (${mac.length} Mac, ${win.length} Windows)` : ''}`];
   if (noCode) parts.push(`<span class="bad-text">${noCode} without item code</span>`);
-  if (unknown.length) parts.push(`<span class="bad-text">${plural(unknown.length, 'line')} not recognised (see Review)</span>`);
+  if (unknown.length) parts.push(`<span class="bad-text">${plural(unknown.length, 'line')} not recognised (see Final Report)</span>`);
   return parts.join(' · ');
 }
 
 const sheetStatus = () => (state.sheet ? `${plural(state.sheet.codes.length, 'item')} read from the sheet` : 'Nothing pasted');
 
-// checks for the Google Sheet rows pasted on the Data tab (shown on the Review tab)
+// checks for the Google Sheet rows pasted on the Data tab (shown on the Final Report tab)
 export function sheetWarnings(m) {
   const settings = state.project.settings;
   const list = codes => (codes.length > 12 ? `${codes.slice(0, 12).join(', ')} and ${codes.length - 12} more` : codes.join(', '));

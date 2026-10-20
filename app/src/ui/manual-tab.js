@@ -41,7 +41,7 @@ export function renderManual(main) {
     <div class="card-head">
       <div><h2>Manual entries</h2>
       <p class="hint">For devices the tools can't read (dead, locked, no report). Tick rows to delete them; Shift-click a tick to tick or untick everything from the last one. Anything typed here takes priority over the tools' data;
-      Diagnostics and Locked/Faulty are added to what the tools found. An item shows on Review once something is typed in it.</p></div>
+      Diagnostics and Locked/Faulty are added to what the tools found. An item shows on the Final Report once something is typed in it.</p></div>
       <div class="actions">
         ${sel.size ? `<button class="btn danger" id="delSelected">Delete ${plural(sel.size, 'selected item')}</button>` : ''}
         <span class="range-add" title="Add a manual entry for this item number${groupTip}">
@@ -90,7 +90,7 @@ export function renderManual(main) {
   if (delSel) delSel.onclick = () => remove(codes.filter(c => sel.has(c)));
   const selAll = $('#selAll');
   if (selAll) selAll.onchange = e => { if (e.target.checked) codes.forEach(c => sel.add(c)); else sel.clear(); render(); };
-  // Shift-click: every row between the last clicked one and this one gets the same tick (like the Export window)
+  // Shift-click: every row between the last clicked one and this one gets the same tick (like the column filters elsewhere)
   main.querySelectorAll('[data-sel]').forEach(cb => cb.onclick = e => {
     const c = cb.dataset.sel;
     const a = codes.indexOf(pickAnchor), b = codes.indexOf(c);
