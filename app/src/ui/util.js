@@ -50,6 +50,24 @@ export function pickFile(accept) {
   });
 }
 
+// a small window with a question and buttons: [[value, label, class]]; resolves to the value clicked, or null (Cancel / Esc)
+export function choose(title, text, buttons) {
+  return new Promise(resolve => {
+    const d = $('#choiceDialog');
+    $('#choiceTitle').textContent = title;
+    $('#choiceText').textContent = text;
+    $('#choiceButtons').innerHTML = `<button type="button" class="btn ghost" data-choice="">Cancel</button>${buttons.map(([v, label, cls]) => `<button type="button" class="btn ${cls || ''}" data-choice="${esc(v)}">${esc(label)}</button>`).join('')}`;
+    // answered straight from the click (or Esc), not from the window's close event
+    let done = false;
+    const finish = v => { if (done) return; done = true; if (d.open) d.close(); resolve(v); };
+    d.querySelectorAll('[data-choice]').forEach(b => b.onclick = () => finish(b.dataset.choice || null));
+    d.oncancel = e => { e.preventDefault(); finish(null); };
+    d.onclose = () => finish(null);
+    d.showModal();
+    d.querySelector('.btn.primary')?.focus();
+  });
+}
+
 // Enter moves down, Tab moves right (default), Esc cancels: for the editable cells of the Dictionary tables
 export function gridKeys(e) {
   if (e.key === 'Enter') {

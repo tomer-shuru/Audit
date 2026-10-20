@@ -7,12 +7,14 @@
 //   folder.js    shared Audit Builder folder + shared Dictionary file
 //   project.js   File menu: New, Open, Save, auto-save    share.js / collab.js   shared projects
 //   menus.js     menu bar, theme, shortcuts               util.js / icons.js     helpers
+//   files-tool.js  Tools › Shared Files
 import { canSaveInPlace } from './filesave.js';
 import { state, settingsComplete } from './state.js';
 import { $ } from './util.js';
 import { recompute, render, setTab, setOutput, fitTallTable } from './app.js';
 import { initMenus, initTheme, initShortcuts } from './menus.js';
 import { initBios } from './bios-tab.js';
+import { initSharedFiles } from './files-tool.js';
 import { initSetup, openSetup } from './setup.js';
 import { initDictionary } from './dictionary.js';
 import { initDevMode } from './devmode.js';
@@ -26,6 +28,7 @@ function init() {
   initTheme();
   initMenus();
   initBios();
+  initSharedFiles();
   document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => setTab(b.dataset.tab));
   document.addEventListener('change', e => { if (e.target.matches?.('select[data-output]')) setOutput(e.target.value); });
   initFileMenu();

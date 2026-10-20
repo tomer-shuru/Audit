@@ -20,8 +20,8 @@ export async function collabRootAsk() {
   return collabRoot();
 }
 
-// asks this person's name once (it names their file in every shared project)
-function askName({ again = false } = {}) {
+// asks this person's name once (it names their file in every shared project, and shows who added a shared file)
+export function askName({ again = false } = {}) {
   const known = load(STORE_PERSON, '');
   if (known && !again) return Promise.resolve(known);
   return new Promise(resolve => {

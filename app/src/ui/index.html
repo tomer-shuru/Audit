@@ -32,6 +32,7 @@
   <div class="menu">
     <button class="menu-btn" aria-haspopup="menu" aria-expanded="false">Tools</button>
     <div class="menu-list" role="menu">
+      <button role="menuitem" id="btnSharedFiles" title="Files shared with everyone through the Audit Builder folder on the Drive (Shared Files): add, download or delete them">Shared Files</button>
       <button role="menuitem" id="btnBios" title="Passwords from Microsoft's BulkBiosPasswordDetails file, matched to the items, with QR codes (opens the BIOS passwords tab, Alt+4)">Microsoft BIOS passwords</button>
     </div>
   </div>
@@ -148,6 +149,12 @@
   <div id="devFile" class="shared-box"></div>
   <div id="devBody"></div>
   <div id="devFooter"></div>
+</dialog>
+
+<dialog id="choiceDialog">
+  <h2 id="choiceTitle"></h2>
+  <p class="hint" id="choiceText"></p>
+  <div class="dialog-actions" id="choiceButtons"></div>
 </dialog>
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>

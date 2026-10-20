@@ -67,7 +67,7 @@ The menu bar at the very top works like in a Windows program:
 - File: New project, Open..., Save project (Ctrl+S), Save as... (Ctrl+Shift+S),
   Share project... (see "Working on a project together")
 - Settings: Dictionary..., DevMode...
-- Tools: Microsoft BIOS passwords (see below)
+- Tools: Shared Files and Microsoft BIOS passwords (see below)
 The sun / moon button next to Tools switches between light and dark.
 Under the menus: the project (click it to change the project setup), the
 Output picker (Shuru or SIMS) and whether the project is saved.
@@ -360,3 +360,25 @@ password in the file.
 The password file is saved with the project (also in a shared project, where
 everyone sees it; the newest file anyone loaded is used), so you only load it
 once. "Remove" takes the passwords out of the project.
+
+
+SHARED FILES (Tools menu)
+-------------------------
+
+A place to share any file with everyone (price lists, guides, templates...):
+the folder G:\My Drive\Audit Builder\Shared Files on the Drive. The app makes
+it the first time it's used.
+
+1. Tools > Shared Files lists the files there, newest first: who added each
+   one, its size and when it last changed. Search finds a file by name.
+2. Add files...: choose one or more files, or drop them on the window. If a
+   file with the same name is already there, the app asks: Replace (the new
+   one overwrites it), Keep both (the new one gets a number, e.g.
+   "Guide (2).pdf") or Cancel.
+3. Download saves a copy to your computer (usually the Downloads folder).
+4. The x deletes a file for everyone (after asking). Google Drive keeps
+   deleted files in its Trash for 30 days, so a mistake can be undone there.
+"Added by" uses the same name as shared projects (asked once). A file put in
+the folder or changed outside the app shows no name. The .audit-builder
+folder inside Shared Files holds those names; leave it there.
+The Audit Builder folder needs to be connected (like for File > Open).
