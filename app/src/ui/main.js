@@ -1,6 +1,6 @@
 // Audit Builder - browser UI. This file starts the app; each screen is its own module:
 //   state.js     state, localStorage, undo history        app.js       recompute, render, changed()
-//   data-tab.js / manual-tab.js / review-tab.js / bios-tab.js   the tabs
+//   data-tab.js / manual-tab.js / report-tab.js / bios-tab.js   the tabs
 //   export.js    Copy / Download of the Final Report      setup.js     project setup window
 //   report-view.js  what the Final Report shows (sheets, filters, hidden columns)   popover.js  small menus
 //   dictionary.js  Settings › Dictionary                 devmode.js   Settings › DevMode (editor)
@@ -9,7 +9,8 @@
 //   project.js   File menu: New, Open, Save, auto-save    share.js / collab.js   shared projects
 //   menus.js     menu bar, theme, shortcuts               util.js / icons.js     helpers
 //   files-tool.js  Tools › Shared Files                  start.js     what the app opens on
-//   pdf-tool.js / pdfs.js  Tools › PDF merger
+//   pdf-tool.js / pdfs.js  Tools › PDF merger         whats-new.js  Help menu (What's new, the guide)
+//   errors.js    unexpected errors: a message with Copy details
 import { canSaveInPlace } from './filesave.js';
 import { state, settingsComplete } from './state.js';
 import { $ } from './util.js';
@@ -17,6 +18,8 @@ import { setTab, setOutput, fitTallTable } from './app.js';
 import { initMenus, initTheme, initShortcuts } from './menus.js';
 import { initBios } from './bios-tab.js';
 import { initSharedFiles } from './files-tool.js';
+import { watchErrors } from './errors.js';
+import { initHelp, showNewUpdates } from './whats-new.js';
 import { initPdfMerger } from './pdf-tool.js';
 import { initSetup } from './setup.js';
 import { initDictionary } from './dictionary.js';
@@ -27,6 +30,7 @@ import { refreshCollab, collabUnsaved, COLLAB_POLL } from './collab.js';
 import { openStart } from './start.js';
 
 function init() {
+  watchErrors(); // an unexpected error shows a message with "Copy details"
   // starts on Project setup (like File › New), offering to continue the last project or open one
   openStart();
   initTheme();
@@ -34,6 +38,7 @@ function init() {
   initBios();
   initSharedFiles();
   initPdfMerger();
+  initHelp();
   document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => setTab(b.dataset.tab));
   document.addEventListener('change', e => { if (e.target.matches?.('select[data-output]')) setOutput(e.target.value); });
   initFileMenu();
@@ -60,6 +65,7 @@ function init() {
     if (unsaved && settingsComplete(state.project.settings)) e.preventDefault();
   });
 
+  showNewUpdates(); // the first time after an update: what changed (every update this computer missed)
 }
 
 init();

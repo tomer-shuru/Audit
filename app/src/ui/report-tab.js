@@ -21,7 +21,7 @@ export const LEVEL_WORDS = { error: 'problem', warn: 'warning', sims: 'SIMS note
 const LEVEL_ICONS = { error: '✖', warn: '!', sims: 'S', info: 'i' };
 export const levelCount = (warnings, level) => warnings.filter(w => w.level === level).length;
 
-export function renderReview(main) {
+export function renderReport(main) {
   const r = state.report;
   const kind = currentSheet(), mainSheet = isMain(kind), sims = isSims();
   const isEditable = k => mainSheet && (sims ? k !== 'itemLookup' && simsEditable(k) : EDITABLE.has(k));
@@ -67,7 +67,7 @@ export function renderReview(main) {
     </div>
     <div class="sheet-tabs" role="tablist">${sheetKinds().map(k => `<button role="tab" class="${k === kind ? 'active' : ''}" data-sheet="${k}">${SHEETS[k].title} <span class="count">${count(k)}</span></button>`).join('')}</div>
     <div class="report-bar">
-      <input type="search" id="reviewSearch" placeholder="Search…" value="${esc(view.search)}">
+      <input type="search" id="reportSearch" placeholder="Search…" value="${esc(view.search)}">
       ${mainSheet ? `<label class="check"><input type="checkbox" id="issuesOnly" ${view.issuesOnly ? 'checked' : ''}> Only items with issues</label>` : ''}
       ${filters.length ? `<span class="chip">Filtered: ${filters.map(k => esc(colName(cols.find(c => c[0] === k) || [k, k]))).join(', ')}</span>` : ''}
       ${isFiltered(kind) ? '<button class="btn small ghost" id="clearFilters">Clear filters</button>' : ''}
@@ -79,7 +79,7 @@ export function renderReview(main) {
     </div>
     ${allRows.length ? `
     <div class="table-wrap tall">
-      <table class="grid review">
+      <table class="grid report">
         <thead><tr>${cols.map(head).join('')}</tr></thead>
         <tbody>${rows.map((row, i) => `
           <tr data-code="${esc(rowKey(row))}" class="${rowClass(row)}"${row._empty ? ' title="No data yet for this item"' : ''}>
@@ -93,7 +93,7 @@ export function renderReview(main) {
   </section>`;
 
   main.querySelectorAll('[data-sheet]').forEach(b => b.onclick = () => { view.sheet = b.dataset.sheet; closePopover(); render(); });
-  $('#reviewSearch').oninput = e => { view.search = e.target.value; view.keep.clear(); redrawKeepingCaret(e.target, render); };
+  $('#reportSearch').oninput = e => { view.search = e.target.value; view.keep.clear(); redrawKeepingCaret(e.target, render); };
   const issuesOnly = $('#issuesOnly');
   if (issuesOnly) issuesOnly.onchange = e => { view.issuesOnly = e.target.checked; view.keep.clear(); render(); };
   const clear = $('#clearFilters');
@@ -111,8 +111,8 @@ export function renderReview(main) {
     ]);
   } else $('#dlReport').onclick = () => downloadReport();
 
-  const table = main.querySelector('table.review');
-  if (table) grid('review').attach(table, {
+  const table = main.querySelector('table.report');
+  if (table) grid('report').attach(table, {
     rows: rows.length, cols: cols.length,
     value: (r, c) => rows[r][cols[c][0]] ?? '',
     // in SIMS layout, an item with no data yet only takes the columns that are also in the Shuru layout
@@ -154,7 +154,7 @@ export function renderReview(main) {
     tr.scrollIntoView({ block: 'center', behavior: 'smooth' });
     flash(tr);
     const first = tr.querySelector('[data-r]');
-    if (first) grid('review').select(+first.dataset.r, 0);
+    if (first) grid('report').select(+first.dataset.r, 0);
   });
 }
 

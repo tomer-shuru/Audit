@@ -13,7 +13,7 @@ const REPORT = [
 ];
 const LOCKED = [['sn', 'S.N'], ['type', 'Type'], ['make', 'Make'], ['model', 'Model'], ['issue', 'Issue type'], ['wiped', 'Wiped']];
 
-// Every check the Review tab can show: [key, default level, what it means (shown in DevMode)]
+// Every check the Final Report tab can show: [key, default level, what it means (shown in DevMode)]
 const CHECK_LIST = [
   ['reportLineUnknown', 'error', 'A report line is neither a Mac nor a Windows line'],
   ['blanccoMissingColumns', 'error', 'The Blancco export is missing columns'],
@@ -32,6 +32,7 @@ const CHECK_LIST = [
   ['noErasureWindows', 'info', 'No Blancco erasure for a Windows report device'],
   ['diagnosticsEmpty', 'warn', 'Diagnostics is empty'],
   ['duplicateAsset', 'warn', 'The same asset tag is on more than one device'],
+  ['duplicateSerial', 'warn', 'The same serial number (S.N.) is on more than one item'],
   ['simsNoCode', 'sims', 'SIMS output: a diagnostic has no SIMS code (it goes to Item Remark)'],
   ['simsNoCategory', 'sims', 'SIMS output: a device type has no SIMS category or codes'],
 ];

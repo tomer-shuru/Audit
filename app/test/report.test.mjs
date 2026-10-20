@@ -77,7 +77,7 @@ test('item codes that are just numbers (empty prefix), with or without leading z
   assert.ok(texts(r).includes('No data yet for: 01, 03–06, 08–09'));
 });
 
-test('diagnostic codes typed in the Review table are expanded too', () => {
+test('diagnostic codes typed in the Final Report table are expanded too', () => {
   const r = buildReport(project({ manual: { GG01: { sn: 'A1' } }, overrides: { GG01: { diagnostics: 'CD B, LM b, kb sticky', locked: 'AID' } } }), models);
   assert.equal(r.rows[0].diagnostics, 'Chassis damage B, Label marks B, Kb sticky');
   assert.equal(r.rows[0].locked, 'Apple ID');
@@ -141,4 +141,11 @@ test('an item number far above the others (a typo?) is flagged and gets no empty
   assert.ok(t.includes('No data yet for: GG02, GG04–GG149'));
   // a gap of up to 200 is still filled
   assert.ok(!texts(buildReport(project({ manual: { GG01: { diagnostics: 'ok' }, GG201: { diagnostics: 'ok' } } }), models)).some(x => x.includes('far above')));
+});
+
+test('warns when the same serial number is on more than one item (a device scanned twice)', () => {
+  const r = buildReport(project({ manual: { GG01: { sn: 'ABC123', diagnostics: 'ok' }, GG02: { sn: 'abc123 ', diagnostics: 'ok' }, GG03: { sn: 'N/A', diagnostics: 'ok' }, GG04: { sn: 'n/a', diagnostics: 'ok' } } }), models);
+  const dup = r.warnings.filter(w => w.text.includes('S.N.'));
+  assert.deepEqual(dup.map(w => [w.item, w.level]), [['GG01', 'warn'], ['GG02', 'warn']]);
+  assert.equal(dup[0].text, 'GG01: S.N. ABC123 is also used by GG02');
 });

@@ -71,6 +71,15 @@ click "Continue where you left off".
 The version (date and time) is shown at the top left of the app, next to its
 name, in case you want to check you have the latest one.
 
+The first time you open the app after an update, a "What's new" window lists
+what changed: every update since you last opened it, newest first (if you
+missed many, the older ones are folded at the bottom). Help > What's new
+shows the list again any time.
+
+If something unexpected goes wrong, a red message at the bottom says
+"Something went wrong: ...". Click "Copy details" and send that text to whoever
+looks after Audit Builder, so they can see exactly what happened.
+
 
 THE MENUS
 ---------
@@ -80,7 +89,8 @@ The menu bar at the very top works like in a Windows program:
   Share project... (see "Working on a project together")
 - Settings: Dictionary..., DevMode...
 - Tools: Shared Files, PDF merger and Microsoft BIOS passwords (see below)
-The sun / moon button next to Tools switches between light and dark.
+- Help: How to use Audit Builder (this guide, inside the app) and What's new
+The sun / moon button next to Help switches between light and dark.
 Under the menus: the project (click it to change the project setup), the
 Output picker (Shuru or SIMS) and whether the project is saved.
 Keyboard: Alt+1 Data, Alt+2 Manual entries, Alt+3 Final Report, Alt+4 BIOS passwords

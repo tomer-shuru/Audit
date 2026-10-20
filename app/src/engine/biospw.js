@@ -27,7 +27,7 @@ export function parseBiosPasswords(text) {
 }
 
 /**
- * parsed: parseBiosPasswords(); rows: the project's rows (Review rows: { item, itemLookup, sn, asset, make, model
+ * parsed: parseBiosPasswords(); rows: the project's rows (Final Report rows: { item, itemLookup, sn, asset, make, model
  * or modelLine, diagnostics, locked }); order(row): sort key for a row (item number), null for none.
  * Returns { rows, matched, lockedWithout }:
  * rows = one per asset tag in the file, with its project item(s) (first the ones in the project, by item number),

@@ -58,7 +58,7 @@ test('Blancco wins over the sheet where it has a value; an empty Blancco value k
   assert.ok(r._sources.sheet && r._sources.blancco);
 });
 
-test('manual entries and Review edits win over the sheet; an item only in the sheet is a normal row', () => {
+test('manual entries and Final Report edits win over the sheet; an item only in the sheet is a normal row', () => {
   const sheet = { BM01: { sn: 'SHEET-SN', type: 'Laptop', diagnostics: 'Outdated' }, BM02: { sn: 'ONLY-SHEET', type: 'Desktop SFF', diagnostics: 'Ok' } };
   const p = project({ manual: { BM01: { sn: 'MANUAL-SN' } }, overrides: { BM02: { diagnostics: 'Dead' } } });
   const [a, b] = buildReport(p, models, undefined, sheet).rows;

@@ -12,7 +12,7 @@ export const STORE_THEME = 'auditApp.theme';
 export const STORE_EXPORT_COLS = 'auditApp.exportHiddenCols';
 export const STORE_PERSON = 'auditApp.person', STORE_DEVICE = 'auditApp.device', STORE_COLLAB = 'auditApp.collab';
 
-export const TABS = ['data', 'manual', 'review', 'bios']; // Alt+1 … Alt+4
+export const TABS = ['data', 'manual', 'report', 'bios']; // Alt+1 … Alt+4
 
 export const load = (key, fallback) => {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch { return fallback; }
@@ -26,7 +26,7 @@ export const emptyProject = () => ({
   settings: { projectNumber: '', prefix: '', endClient: '', startNumber: 1, output: 'shuru' },
   inputs: { reports: '', blanccoFiles: [], sheet: '', bios: null }, // bios: the Microsoft BIOS password file { fileName, text, at }
   manual: {}, overrides: {},
-  simsOverrides: {}, // edits of SIMS-only columns, made in the Review table in SIMS layout
+  simsOverrides: {}, // edits of SIMS-only columns, made in the Final Report table in SIMS layout
   savedToFile: true,
 });
 
@@ -59,7 +59,7 @@ export const state = {
   project: migrate(load(STORE_PROJECT, {})),
   models: withNewLists(load(STORE_MODELS, null) || builtInModels()),
   config: withDefaults(load(STORE_CONFIG, null) || DEFAULT_CONFIG), // DevMode rules (the shared config.json)
-  tab: TABS.includes(load(STORE_TAB, 'data')) ? load(STORE_TAB, 'data') : 'review',
+  tab: (t => (t === 'review' ? 'report' : TABS.includes(t) ? t : 'report'))(load(STORE_TAB, 'data')), // (the Final Report tab was called review)
   report: null, // set by recompute(), with sims (SIMS layout) and sheet (Google Sheet rows)
   fileName: '', // the project file Save writes to
   modelsTab: 'models',
@@ -75,7 +75,7 @@ export const canEditSettings = () => !state.collab || state.collab.owner === sta
 // in a shared project: the others' parts
 export const otherParts = () => (state.collab ? Object.values(state.collab.others).map(o => o.part) : []);
 
-// ---------- undo / redo for edits in the Review and Manual entries tables ----------
+// ---------- undo / redo for edits in the Final Report and Manual entries tables ----------
 export const history = { undo: [], redo: [] };
 export const snapshot = () => JSON.stringify({ manual: state.project.manual, overrides: state.project.overrides, simsOverrides: state.project.simsOverrides });
 export function recordEdit() {

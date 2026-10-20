@@ -3,7 +3,7 @@
 // G:\My Drive\Audit Builder\Projects\<End client_Project number>\: everyone's app writes only its own <name>.part.json
 // (a moment after each change) and reads the others' every few seconds. state.project is everyone's work together:
 // inputs.reports and inputs.blanccoFiles are this person's own (the others' are added in reportProject); manual entries,
-// Review edits and the Google Sheet rows are everyone's. Project settings are changed by the person who shared it.
+// Final Report edits and the Google Sheet rows are everyone's. Project settings are changed by the person who shared it.
 import { reportColumns, MANUAL_FIELDS } from '../engine/report.js';
 import { SIMS_COLUMNS } from '../engine/sims.js';
 import { normalizePart, diffShared, patchShared, recordOps, combineParts, combinedInputs } from '../engine/parts.js';
@@ -189,7 +189,7 @@ function applyCombined() {
   if (again && again !== active) { again.focus(); if (sel) try { again.setSelectionRange(...sel); } catch { /* not a text box */ } }
 }
 
-// cells two people changed at the same moment: a note on Review (the newest value is used)
+// cells two people changed at the same moment: a note on the Final Report (the newest value is used)
 export function conflictWarnings() {
   const label = (c, f) => {
     const cols = c === 'manual' ? MANUAL_FIELDS : c === 'simsOverrides' ? SIMS_COLUMNS : reportColumns(state.config);

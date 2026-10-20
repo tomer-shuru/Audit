@@ -125,7 +125,7 @@ const SECTIONS = {
   texts: { label: 'Texts', keys: ['texts', 'noAssetTag', 'modelFromVersion'], html: d => `
     ${Object.entries(TEXTS).map(([k, [l, h]]) => field('texts', k, l, h, 'text', d.texts[k])).join('')}
     <div class="dev-cols">
-      <div><h3>"No asset tag" values</h3><p class="hint">Asset tags that mean the device has none, so they're never flagged as duplicates.
+      <div><h3>"No asset tag" values</h3><p class="hint">Asset tags (or serial numbers) that mean the device has none, so they're never flagged as duplicates.
         Dots, slashes, spaces and capitals don't matter (N/A also covers NA, n/a, N.A.); "-" covers any number of dashes.</p>
         ${table('noAssetTag', [{ k: '_', label: 'Value' }], { add: '' })}</div>
       <div><h3>Model from "System version"</h3><p class="hint">Makes whose model name Blancco puts in System version instead of System model (capitals don't matter).</p>

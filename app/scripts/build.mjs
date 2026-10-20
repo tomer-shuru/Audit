@@ -7,6 +7,8 @@ import { fileURLToPath } from 'node:url';
 import * as esbuild from 'esbuild';
 import * as XLSX from 'xlsx';
 
+import { PREVIOUS, versionOf } from './release-files.mjs';
+
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ui = path.join(root, 'src', 'ui');
 const dist = path.join(root, 'dist');
@@ -20,6 +22,7 @@ const result = await esbuild.build({
   entryPoints: [path.join(ui, 'main.js')],
   bundle: true, minify: true, format: 'iife', target: 'es2022', write: false,
   legalComments: 'none',
+  loader: { '.txt': 'text' }, // the user guide, shown in Help › How to use Audit Builder
 });
 const js = result.outputFiles[0].text.replace(/<\/script/gi, '<\\/script');
 const css = fs.readFileSync(path.join(ui, 'styles.css'), 'utf8');
@@ -51,7 +54,16 @@ if (pi > 0) {
   const target = process.argv[pi + 1];
   if (!target || !fs.existsSync(target)) throw new Error(`Publish folder not found: ${target}`);
   const guide = 'How to use Audit Builder.txt';
-  fs.copyFileSync(out, path.join(target, 'AuditBuilder.html'));
+  // the version that was there goes to "Previous version" first, so `npm run rollback` can bring it back
+  const live = path.join(target, 'AuditBuilder.html');
+  if (fs.existsSync(live) && fs.readFileSync(live, 'utf8') !== html) {
+    const prev = path.join(target, PREVIOUS);
+    fs.mkdirSync(prev, { recursive: true });
+    fs.copyFileSync(live, path.join(prev, 'AuditBuilder.html'));
+    if (fs.existsSync(path.join(target, guide))) fs.copyFileSync(path.join(target, guide), path.join(prev, guide));
+    console.log(`Kept the version that was there (${versionOf(path.join(prev, 'AuditBuilder.html'))}) in ${PREVIOUS}`);
+  }
+  fs.copyFileSync(out, live);
   fs.copyFileSync(path.join(root, 'docs', guide), path.join(target, guide));
   for (const old of fs.readdirSync(target)) {
     if (/^AuditBuilder .*\.zip$/.test(old)) {

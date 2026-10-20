@@ -28,7 +28,9 @@ Work is also auto-saved in the browser, but the project file is the real record.
 npm install
 npm test        # rule tests + comparison with real Audit.xlsm output
 npm run build   # writes AuditBuilder.html
-npm run release # build + copy AuditBuilder.html and the guide to G:\My Drive\Audit Builder (coworkers get it automatically)
+npm run release # build + copy AuditBuilder.html and the guide to G:\My Drive\Audit Builder (coworkers get it automatically);
+                #   the version that was there is kept in "Previous version". Add a What's new entry first (src/ui/whats-new.js)
+npm run rollback # a release went wrong: put the previous version back (run it again to undo)
 npm run package # optional: also writes dist/AuditBuilder <version>.zip (app + guide) for sending as a zip
 ```
 - `src/engine/` – all calculation rules (one function per old formula), no browser code

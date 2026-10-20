@@ -9,7 +9,8 @@
     "build": "node scripts/build.mjs",
     "package": "node scripts/build.mjs --zip",
     "release": "node scripts/build.mjs --publish \"G:/My Drive/Audit Builder\"",
-    "fixture": "node scripts/extract-fixture.mjs"
+    "fixture": "node scripts/extract-fixture.mjs",
+    "rollback": "node scripts/rollback.mjs \"G:/My Drive/Audit Builder\""
   },
   "devDependencies": {
     "esbuild": "^0.28.2",

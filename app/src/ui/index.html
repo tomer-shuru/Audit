@@ -37,6 +37,13 @@
       <button role="menuitem" id="btnBios" title="Passwords from Microsoft's BulkBiosPasswordDetails file, matched to the items, with QR codes (opens the BIOS passwords tab, Alt+4)">Microsoft BIOS passwords</button>
     </div>
   </div>
+  <div class="menu">
+    <button class="menu-btn" aria-haspopup="menu" aria-expanded="false">Help</button>
+    <div class="menu-list" role="menu">
+      <button role="menuitem" id="btnGuide" title="The user guide, inside the app">How to use Audit Builder</button>
+      <button role="menuitem" id="btnWhatsNew" title="What changed in the latest updates">What's new</button>
+    </div>
+  </div>
   <button class="btn ghost theme-btn" id="btnTheme" aria-label="Toggle light or dark mode"></button>
 </nav>
 <header class="topbar">
@@ -52,7 +59,7 @@
 <nav id="tabs" class="tabs">
   <button data-tab="data" title="Paste and add everything the report is built from (Alt+1)">Data<span class="count"></span></button>
   <button data-tab="manual" title="Devices the tools couldn't read (dead, BIOS locked…) (Alt+2)">Manual entries<span class="count"></span></button>
-  <button data-tab="review" title="Check everything is right, make small corrections, then copy or download the report (Alt+3)">Final Report<span class="count"></span></button>
+  <button data-tab="report" title="Check everything is right, make small corrections, then copy or download the report (Alt+3)">Final Report<span class="count"></span></button>
   <button data-tab="bios" title="Microsoft BIOS passwords with QR codes; shown once a password file is loaded (Alt+4)" hidden>BIOS passwords<span class="count"></span></button>
 </nav>
 
@@ -147,6 +154,14 @@
   <div id="devFile" class="shared-box"></div>
   <div id="devBody"></div>
   <div id="devFooter"></div>
+</dialog>
+
+<dialog id="helpDialog" class="wide help">
+  <div class="dialog-head">
+    <h2 id="helpTitle"></h2>
+    <div class="actions"><button class="btn primary" id="helpClose">Done</button></div>
+  </div>
+  <div id="helpBody"></div>
 </dialog>
 
 <dialog id="textDialog">

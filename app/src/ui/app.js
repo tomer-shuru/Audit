@@ -9,7 +9,7 @@ import { reportProject, recordMine, conflictWarnings, renderPeopleChip } from '.
 import { scheduleAutosave, renderSaveState, saveProject } from './project.js';
 import { renderData, sheetWarnings } from './data-tab.js';
 import { renderManual } from './manual-tab.js';
-import { renderReview, LEVEL_WORDS, levelCount } from './review-tab.js';
+import { renderReport, LEVEL_WORDS, levelCount } from './report-tab.js';
 import { renderBiosTab, biosFile } from './bios-tab.js';
 import { exportCols } from './report-view.js';
 import { closeStart } from './setup.js';
@@ -147,7 +147,7 @@ export function renderChrome() {
   const counts = {
     data: r.counts.mac + r.counts.win + r.counts.blancco + (state.sheet?.codes.length || 0) || '',
     manual: r.counts.manual || '',
-    review: checks,
+    report: checks,
   };
   // the BIOS passwords tab is there once a password file is loaded (or while it's open, to load one)
   $('#tabs [data-tab="bios"]').hidden = !biosFile() && state.tab !== 'bios';
@@ -157,7 +157,7 @@ export function renderChrome() {
   });
 }
 
-const VIEWS = { data: renderData, manual: renderManual, review: renderReview, bios: renderBiosTab };
+const VIEWS = { data: renderData, manual: renderManual, report: renderReport, bios: renderBiosTab };
 
 export function render() {
   renderChrome();

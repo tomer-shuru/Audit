@@ -1,4 +1,4 @@
-// Spreadsheet-style behaviour for the Review and Manual entries tables: a selected cell and ranges,
+// Spreadsheet-style behaviour for the Final Report and Manual entries tables: a selected cell and ranges,
 // moving with the keyboard, typing to edit, copy / cut / paste (also blocks from Google Sheets or Excel),
 // Delete, fill down, and undo / redo through the app.
 //

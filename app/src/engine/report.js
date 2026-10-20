@@ -37,7 +37,7 @@ export const MANUAL_FIELDS = [
   ['weight', 'Weight'], ['itemStatus', 'Item status'], ['estValue', 'Est. Value'],
 ];
 
-// Report columns that can be edited in the Review table
+// Report columns that can be edited in the Final Report table
 export const EDITABLE = new Set(REPORT_COLUMNS.map(([k]) => k).filter(k => k !== 'itemLookup' && k !== 'item'));
 
 // group: an extra item group (MS-M); left out = the project's prefix
@@ -53,13 +53,13 @@ const first = (...vals) => { for (const v of vals) if (!isBlank(v)) return v; re
  *   inputs: { reports: string, blanccoFiles: [{ name, table: string[][] (with header row) }] },
  *     (reports: Mac and Windows report lines together; older projects have them apart in mac / windows)
  *   manual: { [itemCode]: { field: value } },      // My_Audit-style entries (merged like the workbook)
- *   overrides: { [itemCode]: { field: value } },   // Review-table edits (replace the final value)
+ *   overrides: { [itemCode]: { field: value } },   // Final Report edits (replace the final value)
  * }
  */
 // config: the DevMode rules (config.json); left out = the built-in defaults
 // sheet: rows already in the project's Google Sheet, { [itemCode]: { column key: value } } (Data tab).
 //   They are the last input in line: manual entries, the reports and Blancco win where they have a value,
-//   the sheet fills in the rest (row._fromSheet lists those columns). Review edits still win over everything.
+//   the sheet fills in the rest (row._fromSheet lists those columns). Final Report edits still win over everything.
 export function buildReport(project, models, config, sheet = null) {
   const cfg = withDefaults(config);
   const lk = makeLookups(models, cfg);
@@ -154,9 +154,9 @@ export function buildReport(project, models, config, sheet = null) {
     row._sources = { manual: manBy.has(k), mac: !!m, win: !!w, blancco: !!c, sheet: !!sh };
     row._fromSheet = fromSheet;
     row._manual = Object.keys(man).filter(f => f !== 'item' && !isBlank(man[f]));
-    // edits made in the Review table replace the final value; diagnostic codes work there too
+    // edits made in the Final Report table replace the final value; diagnostic codes work there too
     const edits = overrides[code] || overrides[k] || {};
-    const reviewValue = (f, v) => {
+    const editedValue = (f, v) => {
       if (f === 'diagnostics') return formatDiagnostics(expandDiagCodes(v, lk.diagCodes));
       if (f === 'locked') return expandDiagCodes(v, lk.diagCodes);
       return v;
@@ -164,7 +164,7 @@ export function buildReport(project, models, config, sheet = null) {
     row._edited = []; row._base = {};
     for (const [f, v] of Object.entries(edits)) {
       if (EDITABLE.has(f) && !isBlank(v)) {
-        row._base[f] = row[f]; row[f] = reviewValue(f, v); row._edited.push(f);
+        row._base[f] = row[f]; row[f] = editedValue(f, v); row._edited.push(f);
         row._fromSheet = row._fromSheet.filter(x => x !== f);
       }
     }
@@ -181,20 +181,24 @@ export function buildReport(project, models, config, sheet = null) {
     return row;
   });
 
-  // Asset tags are unique per device: flag any tag used by more than one item
-  // (dashes, N/A, none… mean the device has no tag: config "Asset tags")
-  const byAsset = new Map();
-  for (const r of rows) {
-    const a = str(r.asset).trim();
-    if (!isNoAssetTag(a, cfg.noAssetTag)) pushTo(byAsset, a.toLowerCase(), r);
-  }
-  for (const group of byAsset.values()) {
-    if (group.length < 2) continue;
-    for (const r of group) {
-      const others = group.filter(x => x !== r).map(x => x.itemLookup).join(', ');
-      add('duplicateAsset', { item: r.itemLookup, text: `${r.itemLookup}: Asset ${r.asset} is also used by ${others}` });
+  // Asset tags and serial numbers are unique per device: flag any used by more than one item (a device scanned
+  // twice, or two tools giving it different item codes). Dashes, N/A, none… mean there is none: config "No asset tag" values
+  const sameOnSeveral = (field, check, label) => {
+    const byValue = new Map();
+    for (const r of rows) {
+      const v = str(r[field]).trim();
+      if (!isNoAssetTag(v, cfg.noAssetTag)) pushTo(byValue, v.toLowerCase(), r);
     }
-  }
+    for (const group of byValue.values()) {
+      if (group.length < 2) continue;
+      for (const r of group) {
+        const others = group.filter(x => x !== r).map(x => x.itemLookup).join(', ');
+        add(check, { item: r.itemLookup, text: `${r.itemLookup}: ${label} ${r[field]} is also used by ${others}` });
+      }
+    }
+  };
+  sameOnSeveral('asset', 'duplicateAsset', 'Asset');
+  sameOnSeveral('sn', 'duplicateSerial', 'S.N.');
 
   const lockedFaulty = rows.filter(r => !isBlank(r.locked)).map(r => ({
     itemLookup: r.itemLookup, sn: r.sn, type: r.type, make: r.make, model: r.model, issue: r.locked,
