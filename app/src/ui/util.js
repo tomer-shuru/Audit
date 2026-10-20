@@ -57,14 +57,33 @@ export function choose(title, text, buttons) {
     $('#choiceTitle').textContent = title;
     $('#choiceText').textContent = text;
     $('#choiceButtons').innerHTML = `<button type="button" class="btn ghost" data-choice="">Cancel</button>${buttons.map(([v, label, cls]) => `<button type="button" class="btn ${cls || ''}" data-choice="${esc(v)}">${esc(label)}</button>`).join('')}`;
-    // answered straight from the click (or Esc), not from the window's close event
+    // answered straight from the click (or Esc), not from the window's close event (which can come late)
     let done = false;
     const finish = v => { if (done) return; done = true; if (d.open) d.close(); resolve(v); };
     d.querySelectorAll('[data-choice]').forEach(b => b.onclick = () => finish(b.dataset.choice || null));
     d.oncancel = e => { e.preventDefault(); finish(null); };
-    d.onclose = () => finish(null);
     d.showModal();
     d.querySelector('.btn.primary')?.focus();
+  });
+}
+
+// a small window asking for one line of text (filled in with value, selected); resolves to the text, or null (Cancel / Esc)
+export function askText({ title, label, value = '', hint = '', ok = 'OK' }) {
+  return new Promise(resolve => {
+    const d = $('#textDialog'), f = $('#textForm');
+    $('#textTitle').textContent = title;
+    $('#textLabel').textContent = label;
+    $('#textHint').textContent = hint; $('#textHint').hidden = !hint;
+    $('#textOk').textContent = ok;
+    f.text.value = value;
+    // answered straight from the click (or Esc), not from the window's close event (which can come late)
+    let done = false;
+    const finish = v => { if (done) return; done = true; if (d.open) d.close(); resolve(v); };
+    f.onsubmit = e => { e.preventDefault(); if (f.text.value.trim()) finish(f.text.value.trim()); };
+    $('#textCancel').onclick = () => finish(null);
+    d.oncancel = e => { e.preventDefault(); finish(null); };
+    d.showModal();
+    f.text.focus(); f.text.select();
   });
 }
 

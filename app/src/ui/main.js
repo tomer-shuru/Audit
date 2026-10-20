@@ -9,6 +9,7 @@
 //   project.js   File menu: New, Open, Save, auto-save    share.js / collab.js   shared projects
 //   menus.js     menu bar, theme, shortcuts               util.js / icons.js     helpers
 //   files-tool.js  Tools › Shared Files                  start.js     what the app opens on
+//   pdf-tool.js / pdfs.js  Tools › PDF merger
 import { canSaveInPlace } from './filesave.js';
 import { state, settingsComplete } from './state.js';
 import { $ } from './util.js';
@@ -16,6 +17,7 @@ import { setTab, setOutput, fitTallTable } from './app.js';
 import { initMenus, initTheme, initShortcuts } from './menus.js';
 import { initBios } from './bios-tab.js';
 import { initSharedFiles } from './files-tool.js';
+import { initPdfMerger } from './pdf-tool.js';
 import { initSetup } from './setup.js';
 import { initDictionary } from './dictionary.js';
 import { initDevMode } from './devmode.js';
@@ -31,6 +33,7 @@ function init() {
   initMenus();
   initBios();
   initSharedFiles();
+  initPdfMerger();
   document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => setTab(b.dataset.tab));
   document.addEventListener('change', e => { if (e.target.matches?.('select[data-output]')) setOutput(e.target.value); });
   initFileMenu();

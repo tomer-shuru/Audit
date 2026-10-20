@@ -79,7 +79,7 @@ The menu bar at the very top works like in a Windows program:
 - File: New project, Open..., Save project (Ctrl+S), Save as... (Ctrl+Shift+S),
   Share project... (see "Working on a project together")
 - Settings: Dictionary..., DevMode...
-- Tools: Shared Files and Microsoft BIOS passwords (see below)
+- Tools: Shared Files, PDF merger and Microsoft BIOS passwords (see below)
 The sun / moon button next to Tools switches between light and dark.
 Under the menus: the project (click it to change the project setup), the
 Output picker (Shuru or SIMS) and whether the project is saved.
@@ -413,3 +413,23 @@ it the first time it's used.
 the folder or changed outside the app shows no name. The .audit-builder
 folder inside Shared Files holds those names; leave it there.
 The Audit Builder folder needs to be connected (like for File > Open).
+
+
+PDF MERGER (Tools menu)
+-----------------------
+
+Merges PDFs (e.g. the wiping reports) into one PDF file.
+
+1. Tools > PDF merger. Click "Add files..." or drop files on the window:
+   PDFs, or .zip files with PDFs in them (also in folders inside the zip).
+   Other files are skipped; the message says which.
+2. The window shows how many PDF files were found and lists them in the
+   order they will be merged: by file name, numbers counted as numbers
+   (GG2 before GG10). The x leaves a file out; "Remove all" empties the list.
+3. "Merge ... PDFs..." asks for the name of the merged file, filled in
+   as WipingReports-<project number> (e.g. WipingReports-SHR11734). Change
+   it if you like, then "Merge and download": the browser saves it like any
+   download (usually to Downloads).
+A file that isn't a real PDF (or is damaged) is left out, and the message
+says which. The files stay in the window while the app is open; they are
+not saved in the project.

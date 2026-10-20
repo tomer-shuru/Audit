@@ -178,10 +178,11 @@ export function fillSimsTemplate(bytes, { items = [], hdd = [], codes = [] }) {
   return out instanceof Uint8Array ? out : new Uint8Array(out);
 }
 
-export function downloadBytes(bytes, filename) {
-  const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+// type: the file's type (an .xlsx unless said otherwise, e.g. 'application/pdf' for the PDF merger)
+export function downloadBytes(bytes, filename, type = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
+  const blob = new Blob([bytes], { type });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = filename;
   document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  setTimeout(() => URL.revokeObjectURL(a.href), 30000); // a big file may take a moment to start saving
 }

@@ -33,6 +33,7 @@
     <button class="menu-btn" aria-haspopup="menu" aria-expanded="false">Tools</button>
     <div class="menu-list" role="menu">
       <button role="menuitem" id="btnSharedFiles" title="Files shared with everyone through the Audit Builder folder on the Drive (Shared Files): add, download or delete them">Shared Files</button>
+      <button role="menuitem" id="btnPdfMerge" title="Merge PDFs (e.g. the wiping reports), also out of .zip files, into one PDF">PDF merger</button>
       <button role="menuitem" id="btnBios" title="Passwords from Microsoft's BulkBiosPasswordDetails file, matched to the items, with QR codes (opens the BIOS passwords tab, Alt+4)">Microsoft BIOS passwords</button>
     </div>
   </div>
@@ -146,6 +147,18 @@
   <div id="devFile" class="shared-box"></div>
   <div id="devBody"></div>
   <div id="devFooter"></div>
+</dialog>
+
+<dialog id="textDialog">
+  <form id="textForm">
+    <h2 id="textTitle"></h2>
+    <label><span id="textLabel"></span><input name="text" required autocomplete="off" spellcheck="false"></label>
+    <p class="hint" id="textHint"></p>
+    <div class="dialog-actions">
+      <button type="button" class="btn ghost" id="textCancel">Cancel</button>
+      <button type="submit" class="btn primary" id="textOk">OK</button>
+    </div>
+  </form>
 </dialog>
 
 <dialog id="choiceDialog">
