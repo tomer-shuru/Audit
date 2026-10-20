@@ -28,6 +28,10 @@ test('RAM formats', () => {
   assert.equal(formatRamWindows(''), '');
   assert.equal(formatRamBlancco('32 GiB', 'DDR4 / DDR4 / DDR4 / DDR4'), '32 GB DDR4');
   assert.equal(formatRamBlancco('16 GiB', 'Unknown / LPDDR5'), '16 GB LPDDR5');
+  // newer Blancco exports separate the slots with ";" and list empty ones
+  assert.equal(formatRamBlancco('16 GiB', 'DDR4;Empty slot'), '16 GB DDR4');
+  assert.equal(formatRamBlancco('8 GiB', 'LPDDR3;Empty slot;LPDDR3;Empty slot'), '8 GB LPDDR3');
+  assert.equal(formatRamBlancco('8 GiB', 'Empty slot;DDR4'), '8 GB DDR4');
 });
 
 test('disks', () => {

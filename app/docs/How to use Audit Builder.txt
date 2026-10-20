@@ -316,11 +316,16 @@ same one as for the shared Dictionary).
 - Manual entries, Final Report edits and the Google Sheet rows are shared: anyone
   can change them, and everyone sees the change.
 - There is no need to press Save. The top bar shows the status, like Google
-  Sheets: "Saving..." while your changes are being saved, then "Saved to
-  Drive". "Not saved" (red) or "Not connected": click it to try again or
+  Sheets: "Saving..." while your changes are being saved, then "Saved -
+  checked 3 s ago" (when the app last looked for your coworkers' changes).
+  Hover over it to see when each coworker last changed something.
+  "Not saved" (red) or "Not connected": click it to try again or
   to connect the folder. Your changes are kept on your computer until then.
-- Your coworkers' changes come in every few seconds, once Google Drive has
-  synced them (usually within seconds, at most about a minute).
+- Your coworkers' changes come in by themselves, without reloading: the app
+  checks every 5 seconds, once Google Drive has synced them (usually within
+  seconds, at most about a minute). A message says what came in (e.g.
+  "Dana updated GG04, GG05" or "Avi joined the shared project") and those
+  rows flash for a moment. While you're typing, it waits until you pause.
 - "Shared - 3 people" in the top bar shows who is working on the project
   and what each has added.
 - If two people change the same cell at the same moment, the newest change

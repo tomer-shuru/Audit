@@ -73,7 +73,8 @@ export function formatRamWindows(raw) {
 // CSV N: "32 GiB" + "DDR4 / DDR4" -> "32 GB DDR4"
 export function formatRamBlancco(totalMemory, memoryType) {
   const size = str(totalMemory).replace(/i/g, '');
-  const ddr = str(memoryType).split(' / ').find(p => p.toUpperCase().includes('DDR')) || '';
+  // one type per memory slot: "DDR4 / DDR4", or "DDR4;Empty slot" in newer exports (empty slots are skipped)
+  const ddr = str(memoryType).split(/\s*[/;,]\s*/).find(p => p.toUpperCase().includes('DDR')) || '';
   return joinNonEmpty(' ', size, ddr);
 }
 

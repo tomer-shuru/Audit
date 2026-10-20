@@ -9,13 +9,15 @@ import { SIMS_COLUMNS } from '../engine/sims.js';
 import { normalizePart, diffShared, patchShared, recordOps, combineParts, combinedInputs } from '../engine/parts.js';
 import { PROJECT_JSON, partFileName, projectDir, readJson, writeJson, readParts } from './sharedfiles.js';
 import { state, load, store, history, otherParts, canEditSettings, STORE_PROJECT, STORE_DEVICE, STORE_COLLAB } from './state.js';
-import { $, toast, renderSyncState } from './util.js';
+import { $, toast, flash, ago, renderSyncState } from './util.js';
 import { ICONS } from './icons.js';
 import { recompute, render, renderChrome } from './app.js';
 import { folder } from './folder.js';
 import { collabRootAsk, openPeople } from './share.js';
 
-export const COLLAB_POLL = 15000;
+// how often the others' parts are checked while the app is in view: cheap (a file that hasn't changed isn't read
+// again); Google Drive taking a few seconds up to a minute to bring a change is the real wait
+export const COLLAB_POLL = 5000;
 const SAVE_DELAY = 1500;
 export const thisDevice = load(STORE_DEVICE, '') || (() => {
   const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -145,12 +147,16 @@ export async function refreshCollab() {
     let info = null;
     try { info = (await readJson(dir, PROJECT_JSON))?.data; } catch { /* still syncing: next time */ }
     const others = await readParts(dir, c.others, partFileName(c.me));
+    const first = !c.readAt; // the first read after the app opened: everything is "new", so nothing is announced
     c.readAt = Date.now();
     if (c.error.includes('Projects\\')) c.error = '';
-    const partsChanged = Object.keys(others).length !== Object.keys(c.others).length || Object.entries(others).some(([k, o]) => c.others[k] !== o);
+    const changed = Object.entries(others).filter(([k, o]) => c.others[k] !== o).map(([k]) => k);
+    const partsChanged = changed.length || Object.keys(others).length !== Object.keys(c.others).length;
     const settingsChanged = !!info && !canEditSettings() && (info.settingsAt || 0) !== c.settingsAt;
     if (!partsChanged && !settingsChanged) return;
     if (isEditing()) { setTimeout(() => refreshCollab(), 2500); return; } // read again once they pause
+    const joined = changed.filter(k => !c.others[k]).map(k => others[k].part.person);
+    const by = changed.filter(k => c.others[k]).map(k => others[k].part.person);
     c.others = others;
     if (settingsChanged) {
       Object.assign(state.project.settings, info.settings);
@@ -158,7 +164,9 @@ export async function refreshCollab() {
       c.settingsAt = info.settingsAt || 0;
       c.settingsText = JSON.stringify(state.project.settings);
     }
+    const before = rowSignatures();
     applyCombined();
+    if (!first) tellWhatArrived({ by, joined, settingsBy: settingsChanged ? c.owner : '', rows: changedRows(before, rowSignatures()) });
   } catch (err) {
     c.error = err.message;
   } finally {
@@ -189,6 +197,28 @@ function applyCombined() {
   if (again && again !== active) { again.focus(); if (sel) try { again.setSelectionRange(...sel); } catch { /* not a text box */ } }
 }
 
+// ---------- what the others' changes did ----------
+// every report row as text, to see which rows an update changed (whatever it was: a cell, a manual entry,
+// their report lines or Blancco files)
+const rowSignatures = () => new Map(state.report.rows.map(r => [r.itemLookup, JSON.stringify(r, (k, v) => (k.startsWith('_') ? undefined : v))]));
+const changedRows = (a, b) => [...b].filter(([code, sig]) => a.get(code) !== sig).map(([code]) => code)
+  .concat([...a.keys()].filter(code => !b.has(code))); // and rows that are gone
+
+// says what arrived ("Dana updated GG04, GG05") and flashes those rows in the open table
+function tellWhatArrived({ by, joined, settingsBy, rows }) {
+  const names = list => (list.length > 1 ? `${list.slice(0, -1).join(', ')} and ${list[list.length - 1]}` : list[0]);
+  const items = rows.length > 6 ? `${rows.slice(0, 5).join(', ')} and ${rows.length - 5} more` : rows.join(', ');
+  const said = [];
+  if (settingsBy) said.push(`${settingsBy} changed the project setup`);
+  else if (rows.length) said.push(`${names(by.length ? by : joined) || 'Someone'} updated ${items}`);
+  if (joined.length) said.push(`${names(joined)} joined the shared project`);
+  if (!said.length) return;
+  toast(said.join('. '));
+  if (settingsBy) return; // every row may have changed: nothing to point at
+  const shown = new Set(rows);
+  for (const tr of document.querySelectorAll('#main tr[data-code]')) if (shown.has(tr.dataset.code)) flash(tr);
+}
+
 // cells two people changed at the same moment: a note on the Final Report (the newest value is used)
 export function conflictWarnings() {
   const label = (c, f) => {
@@ -202,15 +232,26 @@ export function conflictWarnings() {
   }));
 }
 
-// the save status at the top, like Google Sheets: Saving… / Saved to Drive / Not saved / Not connected
+// "3 s ago": the status is redrawn after every check, so seconds are worth showing
+const since = t => { const s = Math.round((Date.now() - t) / 1000); return s < 5 ? 'just now' : s < 60 ? `${s} s ago` : ago(t); };
+
+// the save status at the top, like Google Sheets: Saving… / Saved · checked 3 s ago / Not saved / Not connected.
+// Hovering says when the others' changes were last checked and when each of them last changed something.
 export function renderCollabState(el) {
   const c = state.collab;
+  const others = Object.values(c.others).map(o => o.part).filter(p => p.updatedAt).sort((a, b) => b.updatedAt - a.updatedAt);
+  const sync = [
+    c.readAt ? `Checked for the others' changes ${since(c.readAt)} (every few seconds while the app is in view).` : 'Checking for the others\' changes…',
+    ...others.map(p => `${p.person}'s last change: ${since(p.updatedAt)}.`),
+    'Google Drive can take up to a minute to bring a change from another computer.',
+  ].join('\n');
   renderSyncState(el,
     !collabRoot() ? ['off', ICONS.off, collabUnsaved() ? 'Not connected · changes kept here' : 'Not connected',
       'The Audit Builder folder isn\'t connected, so changes can\'t be shared. Click to connect it.']
     : c.error ? ['bad', ICONS.error, 'Not saved', `Couldn't save to the shared project: ${c.error}. Click to try again.`]
-    : collabUnsaved() ? ['busy', ICONS.sync, 'Saving…', 'Saving your changes to the shared project']
-    : ['good', ICONS.done, 'Saved to Drive', `All your changes are saved in the shared project${c.savedAt ? ` (at ${new Date(c.savedAt).toLocaleTimeString()})` : ''}. Google Drive sends them on to the others.`]);
+    : collabUnsaved() ? ['busy', ICONS.sync, 'Saving…', `Saving your changes to the shared project\n${sync}`]
+    : ['good', ICONS.done, c.readAt ? `Saved · checked ${since(c.readAt)}` : 'Saved to Drive',
+      `All your changes are saved in the shared project${c.savedAt ? ` (at ${new Date(c.savedAt).toLocaleTimeString()})` : ''}.\n${sync}`]);
 }
 export function renderPeopleChip() {
   const b = $('#peopleChip');

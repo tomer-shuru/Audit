@@ -15,7 +15,9 @@ export const UPDATES = [
     'New in Tools: <b>Shared Files</b> (files for everyone, kept in the Drive) and <b>PDF merger</b> (merge the wiping reports into one PDF, also from a .zip).',
     'Manual entries: tick one row, then Shift-click another to tick everything in between.',
     'New check: the same serial number (S.N.) on more than one item.',
+    'Fixed: RAM from newer Blancco exports showed "16 GB DDR4;Empty slot"; it is now "16 GB DDR4".',
     'If something unexpected goes wrong, a red message says so: click <b>Copy details</b> and send them along.',
+    'Shared projects: coworkers\' changes are checked every 5 seconds; a message says what came in ("Dana updated GG04, GG05") and those rows flash. The status at the top says when it last checked.',
   ] },
   { id: 1, date: '2026-10-19', items: [
     'Item groups: with prefix MS, codes like MS-M01 or MSP01 are found by themselves, each numbered from 1.',
