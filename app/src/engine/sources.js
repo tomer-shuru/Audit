@@ -198,7 +198,8 @@ export function macRecord(m, lk, blanccoResult) {
   const grade = batteryGrade(pct, battery);
   const service = eqi(m.batteryHealth, 'Service') ? texts.batteryService : '';
   const appleId = eqi(m.activationLock, 'Enabled') ? texts.appleIdLock : '';
-  const remote = eqi(m.remote, 'Remote Lock') ? texts.remoteLocked : '';
+  // "Remote Lock", "Remote Locked", ... (the Mac tool and hand edits don't always use the same word)
+  const remote = /^\s*remote\s*lock/i.test(str(m.remote)) ? texts.remoteLocked : '';
   const blancco = blanccoResult(m.sn);
   return {
     source: 'mac', item: m.item, sn: m.sn, asset: m.asset, type: m.type, make: m.make,

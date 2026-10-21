@@ -9,6 +9,9 @@ import { load, store, STORE_PROJECT } from './state.js';
 import { $, esc, plural } from './util.js';
 
 export const UPDATES = [
+  { id: 3, date: '2026-10-21', items: [
+    'Fixed: a Mac whose report says "Remote Locked" (not only "Remote Lock") is now marked <b>Remote Locked</b> and listed on Locked and Faulty.',
+  ] },
   { id: 2, date: '2026-10-20', items: [
     'Review is now called <b>Final Report</b>, and the Export window is gone. Use the arrow on a column header to filter it (like Google Sheets) or hide the column, then <b>Copy all rows</b> (it says <b>Copy filtered rows</b> when filters are on) or <b>Download</b>. Locked and Faulty is a tab above the table.',
     'The app opens on <b>Project setup</b>: <b>Continue where you left off</b>, <b>Open a project…</b>, or set up a new one. File › New project shows the same window.',

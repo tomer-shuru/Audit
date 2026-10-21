@@ -89,6 +89,12 @@ test('texts: item prefix, no-disk text and Mac lock texts', () => {
   assert.equal(r.lockedFaulty[0].issue, 'iCloud lock');
 });
 
+test('Mac remote lock: "Remote Lock", "Remote Locked" and any case count', () => {
+  const locked = v => buildReport(project({ inputs: { reports: `GG01*MACSN**Laptop*Apple*MacBookPro18,2*M1 Max*32 GB LPDDR5*1 TB SSD*Normal***${v}*90*x*t*ok`, blanccoFiles: [] } }), models).rows[0].locked;
+  for (const v of ['Remote Lock', 'Remote Locked', 'remote locked', ' REMOTE LOCK ']) assert.equal(locked(v), 'Remote Locked', v);
+  for (const v of ['', 'None', 'Not locked']) assert.equal(locked(v), '', v);
+});
+
 test('checks can change level or be turned off', () => {
   const p = project({ manual: { GG01: { sn: 'A' }, GG03: { sn: 'B', diagnostics: 'ok' } } });
   const levels = r => r.warnings.map(w => [w.text.replace(/:.*/, ''), w.level]);
