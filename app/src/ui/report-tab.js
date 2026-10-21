@@ -1,10 +1,10 @@
-// Final Report tab: the checks, then the finished report as an editable table (Shuru or SIMS layout), with its
+// Final Report tab: the checks, then the finished report as an editable table (Shuru, SIMS or Google layout), with its
 // other sheets (Locked and Faulty; SIMS: HDD). Each column header has a filter like Google Sheets / Excel, and
 // columns can be hidden. What is shown is what Copy and Download take (see report-view.js).
 import { EDITABLE } from '../engine/report.js';
 import { itemKey } from '../engine/sources.js';
 import { SIMS_SHARED, simsEditable } from '../engine/sims.js';
-import { state, isSims, recordEdit } from './state.js';
+import { state, isSims, outputOf, recordEdit } from './state.js';
 import { $, esc, plural, redrawKeepingCaret, flash } from './util.js';
 import { ICONS } from './icons.js';
 import { grid } from './grid.js';
@@ -19,6 +19,7 @@ import {
 // check levels, worst first: red = problems, yellow = warnings, blue = SIMS notes, gray = notes
 export const LEVEL_WORDS = { error: 'problem', warn: 'warning', sims: 'SIMS note', info: 'note' };
 const LEVEL_ICONS = { error: '✖', warn: '!', sims: 'S', info: 'i' };
+const OUTPUT_TAGS = { shuru: 'Shuru layout', sims: 'SIMS layout', google: 'Google layout' };
 export const levelCount = (warnings, level) => warnings.filter(w => w.level === level).length;
 
 export function renderReport(main) {
@@ -58,9 +59,9 @@ export function renderReport(main) {
   </section>` : ''}
   <section class="card">
     <div class="card-head">
-      <div><h2>Final Report</h2><p class="hint">Works like a spreadsheet: arrow keys, Shift to select, type or double-click to change a cell, Ctrl+C / Ctrl+V, Ctrl+Z to undo.
+      <div><h2>Final Report <span class="output-tag" title="The Output picker in the top bar chooses the layout">${OUTPUT_TAGS[outputOf()] ?? ''}</span></h2><p class="hint">Works like a spreadsheet: arrow keys, Shift to select, type or double-click to change a cell, Ctrl+C / Ctrl+V, Ctrl+Z to undo.
       Edited cells are highlighted; clear a cell (Delete) to go back to the calculated value.
-      ${sims ? 'SIMS layout: columns D (Item No) to T (Blancco Result) of the SIMS sheet. Serial No, asset tag, Diagnostics and weight are the same as in the Shuru layout; changing another column only changes the SIMS output. Codes come from Dictionary › SIMS diagnostics.' : ''}
+      ${sims ? 'SIMS layout: columns D (Item No) to T (Blancco Result) of the SIMS sheet. Serial No, asset tag, Diagnostics and weight are the same as in the Shuru layout; changing another column only changes the SIMS output. Codes come from Dictionary › SIMS diagnostics.' : outputOf() === 'google' ? 'Google layout: their ITAD REPORT columns, Item to Weight (KG); the prices after it are filled in their sheet. It is the Shuru data, so an edit here changes Shuru too.' : ''}
       ${state.sheet ? 'Green cells come from the Google Sheet rows on the Data tab (the other inputs had nothing there).' : ''}
       Empty yellow rows are item numbers with no data yet; typing in one adds a manual entry.
       The arrow on a column header filters or hides it. <b>Copy and Download take what is shown.</b></p></div>
@@ -75,7 +76,7 @@ export function renderReport(main) {
       <span class="spacer"></span>
       <span class="split${filtered ? ' filtered' : ''}"><button class="btn primary" id="copyRows" ${rows.length ? '' : 'disabled'} title="Copy the ${filtered ? `${plural(rows.length, 'row')} the filters show` : 'rows'} and the columns shown, to paste into the Google Sheet">${filtered ? 'Copy filtered rows' : 'Copy all rows'}</button><button class="btn primary" id="copyMenu" data-popover="copy" ${rows.length ? '' : 'disabled'} title="More ways to copy">${ICONS.menu}</button></span>
       ${sims ? `<button class="btn" id="dlMenu" data-popover="download" ${r.rows.length ? '' : 'disabled'}>Download ${ICONS.menu}</button>`
-        : `<button class="btn" id="dlReport" ${r.rows.length ? '' : 'disabled'} title="An Excel file with the Audit Report and Locked and Faulty, as shown">Download Excel</button>`}
+        : `<button class="btn" id="dlReport" ${r.rows.length ? '' : 'disabled'} title="An Excel file with the ${SHEETS[sheetKinds()[0]].title} and Locked and Faulty, as shown">Download Excel</button>`}
     </div>
     ${allRows.length ? `
     <div class="table-wrap tall">

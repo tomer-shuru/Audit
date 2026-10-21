@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildReport } from '../src/engine/report.js';
+import { buildReport, GOOGLE_COLUMNS, EXPORT_COLUMNS } from '../src/engine/report.js';
 import models from '../src/data/default-models.json' with { type: 'json' };
 
 const project = (extra = {}) => ({
@@ -148,4 +148,10 @@ test('warns when the same serial number is on more than one item (a device scann
   const dup = r.warnings.filter(w => w.text.includes('S.N.'));
   assert.deepEqual(dup.map(w => [w.item, w.level]), [['GG01', 'warn'], ['GG02', 'warn']]);
   assert.equal(dup[0].text, 'GG01: S.N. ABC123 is also used by GG02');
+});
+
+test('Google output: their ITAD REPORT columns, Item to Weight (KG), all taken from the Shuru report', () => {
+  assert.deepEqual(GOOGLE_COLUMNS.map(c => c[1]), ['Item', 'S.N', 'Asset Tag', 'Type', 'Make', 'Model', 'CPU', 'RAM', 'Disk Capacity', 'Diagnostics', 'Comments', 'Power Supply', 'Weight (KG)']);
+  const shuru = new Set(EXPORT_COLUMNS.map(c => c[0]));
+  assert.deepEqual(GOOGLE_COLUMNS.filter(([k]) => !shuru.has(k)), []);
 });

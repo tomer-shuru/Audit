@@ -22,7 +22,7 @@ export const store = (key, val) => { try { localStorage.setItem(key, JSON.string
 
 export const emptyProject = () => ({
   version: 2,
-  // output: which sheet layout the Final Report uses ('shuru' or 'sims')
+  // output: which sheet layout the Final Report uses ('shuru', 'sims' or 'google')
   settings: { projectNumber: '', prefix: '', endClient: '', startNumber: 1, output: 'shuru' },
   inputs: { reports: '', blanccoFiles: [], sheet: '', bios: null }, // bios: the Microsoft BIOS password file { fileName, text, at }
   manual: {}, overrides: {},
@@ -70,6 +70,7 @@ export const state = {
 
 export const settingsComplete = s => s.projectNumber.trim() && s.endClient.trim(); // the prefix may be empty (codes that are just numbers)
 export const isSims = () => state.project.settings.output === 'sims';
+export const outputOf = () => state.project.settings.output || 'shuru';
 // a shared project's settings are changed by the person who shared it
 export const canEditSettings = () => !state.collab || state.collab.owner === state.collab.me;
 // in a shared project: the others' parts

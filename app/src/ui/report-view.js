@@ -1,11 +1,11 @@
-// What the Final Report tab shows: its sheets (the main list of the chosen output, Locked and Faulty, and for
+// What the Final Report tab shows: its sheets (the main list of the chosen output: Shuru, SIMS or Google; Locked and Faulty, and for
 // SIMS the HDD list), each with its columns, the rows that pass the filters, and the columns hidden from view.
 // What is shown is also what Copy and Download take ("what you see is what you copy").
 // Hidden columns are remembered on this computer (they are also how the Google Sheet rows on the Data tab are read);
 // filters last while the app is open.
-import { exportColumns, lockedColumns } from '../engine/report.js';
+import { exportColumns, lockedColumns, GOOGLE_COLUMNS } from '../engine/report.js';
 import { SIMS_COLUMNS, HDD_COLUMNS, hddRows } from '../engine/sims.js';
-import { state, isSims, load, store, STORE_EXPORT_COLS } from './state.js';
+import { state, outputOf, load, store, STORE_EXPORT_COLS } from './state.js';
 import { reportRows } from './app.js';
 
 // [key, header in the sheet, name shown when the header is empty]
@@ -13,11 +13,15 @@ const LOOKUP = ['itemLookup', 'Item Lookup']; // first column of every sheet her
 export const SHEETS = {
   report: { title: 'Audit Report', cols: () => exportColumns(state.config), rows: () => reportRows() },
   sims: { title: 'Item per service project', cols: () => SIMS_COLUMNS, rows: () => reportRows() },
+  google: { title: 'ITAD Report', cols: () => GOOGLE_COLUMNS, rows: () => reportRows() },
   hdd: { title: 'HDD', cols: () => HDD_COLUMNS, rows: () => hddRows(state.report.rows) },
   locked: { title: 'Locked and Faulty', cols: () => lockedColumns(state.config), rows: () => state.report.lockedFaulty },
 };
-export const sheetKinds = () => (isSims() ? ['sims', 'hdd', 'locked'] : ['report', 'locked']);
-export const isMain = kind => kind === 'report' || kind === 'sims';
+const MAIN = { shuru: 'report', sims: 'sims', google: 'google' };
+// the main sheet of the chosen output
+export const mainKind = () => MAIN[outputOf()] ?? 'report';
+export const sheetKinds = () => (mainKind() === 'sims' ? ['sims', 'hdd', 'locked'] : [mainKind(), 'locked']);
+export const isMain = kind => Object.values(MAIN).includes(kind);
 export const rowKey = row => row._key ?? row.itemLookup; // HDD rows: one per serial, so several per item
 
 // search: one text over all columns; issuesOnly: main sheet only; filters: { [kind]: { [column]: Set of values left out } };

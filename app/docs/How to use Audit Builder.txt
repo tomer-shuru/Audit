@@ -92,7 +92,10 @@ The menu bar at the very top works like in a Windows program:
 - Help: How to use Audit Builder (this guide, inside the app) and What's new
 The sun / moon button next to Help switches between light and dark.
 Under the menus: the project (click it to change the project setup), the
-Output picker (Shuru or SIMS) and whether the project is saved.
+Output picker (Shuru, SIMS or Google) and whether the project is saved. Each
+output has its own color (Shuru blue-grey, SIMS royal blue, Google green): the
+whole Final Report tab, the picker and a "... layout" tag take it, so
+you can see at a glance which layout you are copying.
 Keyboard: Alt+1 Data, Alt+2 Manual entries, Alt+3 Final Report, Alt+4 BIOS passwords
 (the number keys above the letters, not the number pad).
 Alt+S jumps to the search box of whatever is in front (a tab, an open window,
@@ -205,6 +208,22 @@ by hand):
    e. On the Final Report click "Copy all rows", click the ITEM cell of
       the first item row in the Google Sheet and paste. The sheet's values
       are included, so they aren't lost (formulas become plain values).
+
+
+GOOGLE PROJECTS (THEIR ITAD REPORT LAYOUT)
+------------------------------------------
+
+Google's ITAD REPORT sheet has our data in a slightly different order.
+Set "Output" to Google (top bar). The Final Report then shows their columns:
+Item, S.N, Asset Tag, Type, Make, Model, CPU, RAM, Disk Capacity,
+Diagnostics, Comments, Power Supply, Weight (KG). The price columns after
+Weight (Value Back per asset, costs) are filled in their sheet, not here.
+- It is the same data as Shuru, so an edit here also changes the Shuru
+  layout, and switching back and forth loses nothing.
+- Copy all rows and paste at the Item cell of the first item row. Download
+  Excel gives the ITAD Report and Locked and Faulty.
+- Rows already in their sheet can be pasted on the Data tab (copy Item to
+  Weight (KG)).
 
 
 SIMS PROJECTS (A DIFFERENT SHEET LAYOUT)

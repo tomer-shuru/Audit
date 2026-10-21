@@ -18,6 +18,14 @@ export const REPORT_COLUMNS = reportColumns();
 export const EXPORT_COLUMNS = exportColumns();
 export const LOCKED_COLUMNS = lockedColumns();
 
+// Google output: the Shuru data in Google's ITAD REPORT layout (their sheet goes on after Weight with prices
+// they fill in themselves). Every column is a Shuru column, so edits here are the same edits as in Shuru.
+export const GOOGLE_COLUMNS = [
+  ['item', 'Item'], ['sn', 'S.N'], ['asset', 'Asset Tag'], ['type', 'Type'], ['make', 'Make'], ['model', 'Model'],
+  ['cpu', 'CPU'], ['ram', 'RAM'], ['disk', 'Disk Capacity'], ['diagnostics', 'Diagnostics'], ['comments', 'Comments'],
+  ['powerSupply', 'Power Supply'], ['weight', 'Weight (KG)'],
+];
+
 // asset tag values that mean "no tag" (config): compared without dots, slashes, spaces or capitals; "-" covers "--" etc.
 export function isNoAssetTag(value, words = DEFAULT_CONFIG.noAssetTag) {
   const a = str(value).trim();

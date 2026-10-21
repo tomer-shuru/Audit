@@ -10,6 +10,8 @@ import { $, esc, plural } from './util.js';
 
 export const UPDATES = [
   { id: 3, date: '2026-10-21', items: [
+    'New output: <b>Google</b> (Output picker in the top bar). The Final Report then shows Google’s ITAD REPORT columns, Item to Weight (KG). It is the same data as Shuru, so edits carry over.',
+    'The Final Report tab takes the color of the output (Shuru blue-grey, SIMS royal blue, Google green), with a "layout" tag next to its title, so it is clear which one you are copying.',
     '<b>Alt+S</b> jumps to the search box of the tab or window in front, so you can start typing.',
     'Fixed: a Mac whose report says "Remote Locked" (not only "Remote Lock") is now marked <b>Remote Locked</b> and listed on Locked and Faulty.',
   ] },

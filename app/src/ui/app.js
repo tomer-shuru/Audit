@@ -11,7 +11,7 @@ import { renderData, sheetWarnings } from './data-tab.js';
 import { renderManual } from './manual-tab.js';
 import { renderReport, LEVEL_WORDS, levelCount } from './report-tab.js';
 import { renderBiosTab, biosFile } from './bios-tab.js';
-import { exportCols } from './report-view.js';
+import { exportCols, mainKind } from './report-view.js';
 import { closeStart } from './setup.js';
 
 export function recompute() {
@@ -31,10 +31,10 @@ export function recompute() {
 function readSheet() {
   const text = state.project.inputs.sheet;
   if (!text.trim()) return null;
-  return readSheetRows({ sheetText: text, cols: exportCols(isSims() ? 'sims' : 'report'), prefix: state.project.settings.prefix, itemPrefix: state.config.texts.itemPrefix });
+  return readSheetRows({ sheetText: text, cols: exportCols(mainKind()), prefix: state.project.settings.prefix, itemPrefix: state.config.texts.itemPrefix });
 }
 
-// the rows of the chosen output (Shuru: the Audit Report, SIMS: the SIMS rows)
+// the rows of the chosen output (Shuru and Google: the Audit Report, SIMS: the SIMS rows)
 export const outputRows = () => state.sims?.rows ?? state.report.rows;
 
 // all rows of the chosen output, plus an empty row for every item number from the first item number
@@ -115,7 +115,7 @@ export const undoEdit = () => restoreEdit(history.undo, history.redo, 'undo');
 export const redoEdit = () => restoreEdit(history.redo, history.undo, 'redo');
 
 // the Output picker in the top bar: a project setting
-const OUTPUTS = { shuru: 'Shuru', sims: 'SIMS' };
+const OUTPUTS = { shuru: 'Shuru', sims: 'SIMS', google: 'Google' };
 export function setOutput(value) {
   if (!OUTPUTS[value] || value === (state.project.settings.output || 'shuru')) return;
   if (!canEditSettings()) { renderChrome(); toast(`Only ${state.collab.owner} can change the output of this shared project`, 'bad'); return; }
@@ -139,6 +139,7 @@ export function renderChrome() {
   renderSaveState($('#saveState'));
   renderPeopleChip();
   document.querySelectorAll('select[data-output]').forEach(sel => { sel.value = s.output || 'shuru'; });
+  document.body.dataset.output = s.output || 'shuru'; // each output has its own soft color (styles.css)
   // the Final Report tab shows how many checks there are: red = problems, yellow = warnings, gray = notes
   const checks = Object.entries(LEVEL_WORDS).map(([l, word]) => {
     const n = levelCount(r.warnings, l);

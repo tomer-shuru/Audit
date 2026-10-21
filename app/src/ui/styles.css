@@ -4,6 +4,7 @@
   --good: #1d7a46; --good-soft: #e6f4ec; --bad: #c0352b; --bad-soft: #fcebea; --warn: #a76200; --warn-soft: #fff4e0;
   --edited: #e3ecff; --edited-ink: #1d3f99; --row-warn: #fff6d6; --row-error: #fde6e4; --radius: 8px; --sel: rgba(40, 48, 64, 0.16);
   --c-data: #2f6fdb; --c-manual: #7a52c7; --c-report: #138a7e; --c-export: #c0457d; --c-bios: #b26a00; /* one soft color per part of the app */
+  --o-shuru: #6a87a6; --o-sims: #2343b0; --o-google: #1e8e3e; /* one soft color per output (Shuru, SIMS, Google) */
   --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
   color-scheme: light;
@@ -14,7 +15,7 @@
   --accent: #5b8cff; --accent-ink: #0b1020; --accent-soft: #22304f;
   --good: #5cc98a; --good-soft: #17301f; --bad: #ff7a70; --bad-soft: #3a1c1a; --warn: #f0b04a; --warn-soft: #3a2c12;
   --edited: #1f2f55; --edited-ink: #a9c3ff; --row-warn: #332a12; --row-error: #3a1d1b; --sel: rgba(255, 255, 255, 0.14); color-scheme: dark;
-  --c-data: #6b9cff; --c-manual: #a98bf0; --c-report: #4cc7b8; --c-export: #f07aaf; --c-bios: #f0b04f;
+  --c-data: #6b9cff; --c-manual: #a98bf0; --c-report: #4cc7b8; --c-export: #f07aaf; --c-bios: #f0b04f; --o-shuru: #9fb6cc; --o-sims: #6f8cf5; --o-google: #5cc98a;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
@@ -22,7 +23,7 @@
     --accent: #5b8cff; --accent-ink: #0b1020; --accent-soft: #22304f;
     --good: #5cc98a; --good-soft: #17301f; --bad: #ff7a70; --bad-soft: #3a1c1a; --warn: #f0b04a; --warn-soft: #3a2c12;
     --edited: #1f2f55; --edited-ink: #a9c3ff; --row-warn: #332a12; --row-error: #3a1d1b; --sel: rgba(255, 255, 255, 0.14); color-scheme: dark;
-  --c-data: #6b9cff; --c-manual: #a98bf0; --c-report: #4cc7b8; --c-export: #f07aaf; --c-bios: #f0b04f;
+  --c-data: #6b9cff; --c-manual: #a98bf0; --c-report: #4cc7b8; --c-export: #f07aaf; --c-bios: #f0b04f; --o-shuru: #9fb6cc; --o-sims: #6f8cf5; --o-google: #5cc98a;
   }
 }
 .theme-btn { display: inline-grid; place-items: center; padding: 6px 9px; }
@@ -293,7 +294,7 @@ dialog form label input { font-weight: 400; }
 /* a soft color per part of the app: Data blue, Manual entries violet, Final Report teal */
 .tabs button[data-tab="data"], main[data-tab="data"] { --tab-accent: var(--c-data); }
 .tabs button[data-tab="manual"], main[data-tab="manual"] { --tab-accent: var(--c-manual); }
-.tabs button[data-tab="report"], main[data-tab="report"] { --tab-accent: var(--c-report); }
+.tabs button[data-tab="report"], main[data-tab="report"] { --tab-accent: var(--out); } /* the chosen output's color (below) */
 .tabs button[data-tab="bios"], main[data-tab="bios"] { --tab-accent: var(--c-bios); }
 .tabs button::before { content: ''; width: 10px; height: 10px; border-radius: 50%; background: var(--tab-accent); opacity: .7; }
 .tabs button.active::before, .tabs button:hover::before { opacity: 1; box-shadow: 0 0 0 3px color-mix(in srgb, var(--tab-accent) 25%, transparent); }
@@ -339,6 +340,16 @@ select { font: inherit; color: var(--text); background: var(--surface); border: 
 .output-pick { display: flex; gap: 6px; align-items: center; color: var(--muted); }
 .output-pick select, .filter-bar select { font: inherit; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
 .output-pick select { font-weight: 600; color: var(--text); }
+/* each output has its own color (body[data-output], set in app.js): the whole Final Report tab, the Output picker, the
+   layout tag and the table headers, so it's clear at a glance which layout is being copied */
+body { --out: var(--o-shuru); }
+body[data-output="sims"] { --out: var(--o-sims); }
+body[data-output="google"] { --out: var(--o-google); }
+.output-pick select { border-color: color-mix(in srgb, var(--out) 45%, var(--border)); background: color-mix(in srgb, var(--out) 8%, var(--surface)); box-shadow: inset 3px 0 0 var(--out); }
+.output-tag { display: inline-block; vertical-align: 2px; margin-left: 6px; padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  color: color-mix(in srgb, var(--out) 80%, var(--text)); background: color-mix(in srgb, var(--out) 11%, transparent); border: 1px solid color-mix(in srgb, var(--out) 30%, transparent); }
+.sheet-tabs button:first-child.active { box-shadow: inset 0 2px 0 var(--out); }
+.grid.report thead th { background: color-mix(in srgb, var(--out) 7%, var(--surface-2)); }
 .subtab-sep { align-self: center; margin-left: 10px; color: var(--muted); font-size: 12px; }
 .filter-bar { margin: 8px 0; }
 .grid .muted-cell { color: var(--muted); }

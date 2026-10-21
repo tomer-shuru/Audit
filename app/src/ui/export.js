@@ -4,7 +4,7 @@ import { SIMS_COLUMNS, HDD_COLUMNS } from '../engine/sims.js';
 import { downloadXlsx, toTsv } from './io.js';
 import { fillSimsTemplate, downloadBytes, SIMS_TEMPLATE } from './simstemplate.js';
 import { folderFile } from './filesave.js';
-import { state } from './state.js';
+import { state, outputOf } from './state.js';
 import { plural, toast, copyAndTell, pickFile } from './util.js';
 import { folder, allowFolder } from './folder.js';
 import { SHEETS, sheetKinds, exportCols, hiddenCols, shownRows, isFiltered } from './report-view.js';
@@ -23,14 +23,14 @@ export function copySheet(kind, { withHeader = false } = {}) {
   copyAndTell(toTsv(cols, rows, withHeader), `Copied ${which} × ${plural(cols.length, 'column')}. Paste ${withHeader ? 'it into the sheet' : 'at the first item row of the sheet'}.`);
 }
 
-// Shuru: one Excel file with the Audit Report and Locked and Faulty; SIMS: the template (or only Locked and Faulty)
+// Shuru / Google: one Excel file with the main sheet and Locked and Faulty; SIMS: the template (or only Locked and Faulty)
 export async function downloadReport({ sims = false, pick = false, lockedOnly = false } = {}) {
   if (!okToExport()) return;
   const settings = state.project.settings;
   const sheet = kind => ({ name: SHEETS[kind].title, cols: exportCols(kind), rows: shownRows(kind) });
   if (!sims || lockedOnly) {
     const kinds = lockedOnly ? ['locked'] : sheetKinds();
-    if (!downloadXlsx(kinds.map(sheet), settings, lockedOnly ? 'Locked and Faulty' : undefined)) toast('Nothing to download: no rows or columns shown', 'bad');
+    if (!downloadXlsx(kinds.map(sheet), settings, lockedOnly ? 'Locked and Faulty' : outputOf() === 'google' ? 'Audit Report (Google)' : undefined)) toast('Nothing to download: no rows or columns shown', 'bad');
     else if (kinds.some(isFiltered)) toast('Downloaded the rows shown (filters are on)');
     return;
   }

@@ -2,7 +2,7 @@
 import { itemCode, itemName } from '../engine/report.js';
 import { normalizeBlancco, mergeTables, parseMacLines, parseWindowsLines, sortReportLines } from '../engine/sources.js';
 import { readTableFiles, parsePastedTable } from './io.js';
-import { state, isSims, otherParts } from './state.js';
+import { state, isSims, outputOf, otherParts } from './state.js';
 import { $, esc, plural, toast, dropZone } from './util.js';
 import { changed } from './app.js';
 
@@ -64,7 +64,7 @@ export function renderData(main) {
       <div><h2>Rows already in the Google Sheet <span class="muted">optional</span></h2>
       <p class="hint">If some items are already filled in the project's Google Sheet, copy those rows there (from the first item row down past the last filled one,
       same columns as the Final Report shows) and paste them here. They are used like the other inputs, last in line: Blancco, the Mac and Windows reports and manual entries
-      win wherever they have a value, and the sheet fills in what they leave empty (green cells on the Final Report). Edits there and manual entries can change them.${isSims() ? ' This project\'s output is SIMS, so copy them from the SIMS sheet, columns D (Item No) to T (Blancco Result).' : ''}${state.collab ? ' Shared project: everyone sees the same rows here, and the newest paste counts.' : ''} </p></div>
+      win wherever they have a value, and the sheet fills in what they leave empty (green cells on the Final Report). Edits there and manual entries can change them.${isSims() ? ' This project\'s output is SIMS, so copy them from the SIMS sheet, columns D (Item No) to T (Blancco Result).' : outputOf() === 'google' ? ' This project\'s output is Google, so copy them from the ITAD REPORT sheet, from Item to Weight (KG).' : ''}${state.collab ? ' Shared project: everyone sees the same rows here, and the newest paste counts.' : ''} </p></div>
       ${inp.sheet.trim() ? '<div class="actions"><button class="btn ghost" id="sheetClear">Clear</button></div>' : ''}
     </div>
     <textarea id="sheetInput" class="mono" rows="4" spellcheck="false" placeholder="Paste the Google Sheet rows here">${esc(inp.sheet)}</textarea>
