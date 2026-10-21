@@ -10,6 +10,7 @@ import { $, esc, plural } from './util.js';
 
 export const UPDATES = [
   { id: 3, date: '2026-10-21', items: [
+    '<b>Alt+S</b> jumps to the search box of the tab or window in front, so you can start typing.',
     'Fixed: a Mac whose report says "Remote Locked" (not only "Remote Lock") is now marked <b>Remote Locked</b> and listed on Locked and Faulty.',
   ] },
   { id: 2, date: '2026-10-20', items: [

@@ -51,11 +51,22 @@ export function initTheme() {
   };
 }
 
+// the search box of what's in front: an open column filter, else the top open window, else the page
+function focusSearch() {
+  const dialogs = document.querySelectorAll('dialog[open]');
+  const scope = document.querySelector('.popover') || dialogs[dialogs.length - 1] || document;
+  const box = [...scope.querySelectorAll('input[type="search"]')].find(i => i.offsetParent && !i.disabled);
+  if (!box) return false;
+  box.focus(); box.select();
+  return true;
+}
+
 // Ctrl+S / Ctrl+Shift+S: Save / Save as. Alt+1 … Alt+4: the tabs (the number keys above the letters;
-// Alt + the number pad types characters in Windows)
+// Alt + the number pad types characters in Windows). Alt+S: the search box (by key position, so it works in Hebrew too)
 export function initShortcuts() {
   document.addEventListener('keydown', e => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); document.activeElement?.blur?.(); saveProject({ saveAs: e.shiftKey }); }
+    if (e.code === 'KeyS' && e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && focusSearch()) e.preventDefault();
     const n = /^Digit([1-9])$/.exec(e.code)?.[1];
     if (n && e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && !document.querySelector('dialog[open]')) {
       const tab = TABS[n - 1];

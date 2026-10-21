@@ -95,6 +95,8 @@ Under the menus: the project (click it to change the project setup), the
 Output picker (Shuru or SIMS) and whether the project is saved.
 Keyboard: Alt+1 Data, Alt+2 Manual entries, Alt+3 Final Report, Alt+4 BIOS passwords
 (the number keys above the letters, not the number pad).
+Alt+S jumps to the search box of whatever is in front (a tab, an open window,
+or a column filter), so you can start typing at once.
 
 
 DOING A PROJECT
