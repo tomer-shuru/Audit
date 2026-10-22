@@ -8,7 +8,7 @@ import { state, isSims, outputOf, OUTPUTS, recordEdit } from './state.js';
 import { $, esc, plural, redrawKeepingCaret, flash } from './util.js';
 import { ICONS } from './icons.js';
 import { grid } from './grid.js';
-import { changed, recompute, render, undoEdit, redoEdit } from './app.js';
+import { changed, recompute, render, setTab, undoEdit, redoEdit } from './app.js';
 import { copySheet, downloadReport } from './export.js';
 import { openPopover, closePopover } from './popover.js';
 import {
@@ -150,20 +150,26 @@ export function renderReport(main) {
     undo: undoEdit, redo: redoEdit,
   });
 
-  // a check about an item: show that item's row (clearing the filters if they hide it)
-  const rowOf = code => main.querySelector(`tr[data-code="${CSS.escape(code)}"]`);
-  main.querySelectorAll('[data-goto-item]').forEach(li => li.onclick = () => {
-    let tr = isMain(currentSheet()) && rowOf(li.dataset.gotoItem);
-    if (!tr) {
-      clearFilters(); view.sheet = sheetKinds()[0]; render();
-      tr = rowOf(li.dataset.gotoItem);
-    }
-    if (!tr) return;
-    tr.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    flash(tr);
-    const first = tr.querySelector('[data-r]');
-    if (first) grid('report').select(+first.dataset.r, 0);
-  });
+  // a check about an item: show that item's row
+  main.querySelectorAll('[data-goto-item]').forEach(li => li.onclick = () => showItem(li.dataset.gotoItem));
+}
+
+// shows an item's row in the Final Report table (going to the tab, and clearing the filters if they hide it);
+// false when the report has no such item
+export function showItem(code) {
+  if (state.tab !== 'report') setTab('report');
+  const rowOf = () => $('#main').querySelector(`tr[data-code="${CSS.escape(code)}"]`);
+  let tr = isMain(currentSheet()) && rowOf();
+  if (!tr) {
+    clearFilters(); view.sheet = sheetKinds()[0]; render();
+    tr = rowOf();
+  }
+  if (!tr) return false;
+  tr.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  flash(tr);
+  const first = tr.querySelector('[data-r]');
+  if (first) grid('report').select(+first.dataset.r, 0);
+  return true;
 }
 
 // a small menu of actions under a button: items [[label, run]]

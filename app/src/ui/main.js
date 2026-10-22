@@ -9,6 +9,7 @@
 //   project.js   File menu: New, Open, Save, auto-save    share.js / collab.js   shared projects
 //   menus.js     menu bar, theme, shortcuts               util.js / icons.js     helpers
 //   files-tool.js  Tools › Shared Files                  start.js     what the app opens on
+//   find-tool.js  Tools › Find a device (all projects)  history.js   File › Change history (shared projects)
 //   pdf-tool.js / pdfs.js  Tools › PDF merger         whats-new.js  Help menu (What's new, the guide)
 //   errors.js    unexpected errors: a message with Copy details
 import { canSaveInPlace } from './filesave.js';
@@ -18,6 +19,7 @@ import { setTab, setOutput, fitTallTable } from './app.js';
 import { initMenus, initTheme, initShortcuts } from './menus.js';
 import { initBios } from './bios-tab.js';
 import { initSharedFiles } from './files-tool.js';
+import { initFindDevice } from './find-tool.js';
 import { watchErrors } from './errors.js';
 import { initHelp, showNewUpdates } from './whats-new.js';
 import { initPdfMerger } from './pdf-tool.js';
@@ -37,6 +39,7 @@ function init() {
   initMenus();
   initBios();
   initSharedFiles();
+  initFindDevice();
   initPdfMerger();
   initHelp();
   document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => setTab(b.dataset.tab));

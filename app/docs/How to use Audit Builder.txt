@@ -88,7 +88,8 @@ The menu bar at the very top works like in a Windows program:
 - File: New project, Open..., Save project (Ctrl+S), Save as... (Ctrl+Shift+S),
   Share project... (see "Working on a project together")
 - Settings: Dictionary..., DevMode...
-- Tools: Shared Files, PDF merger and Microsoft BIOS passwords (see below)
+- Tools: Find a device..., Shared Files, PDF merger and Microsoft BIOS
+  passwords (see below)
 - Help: How to use Audit Builder (this guide, inside the app) and What's new
 The sun / moon button next to Help switches between light and dark.
 Under the menus: the project (click it to change the project setup), the
@@ -373,6 +374,13 @@ same one as for the shared Dictionary).
 - If two people change the same cell at the same moment, the newest change
   is used and a gray note on the Final Report says what the other person typed.
   Typing the right value in that cell again removes the note.
+- File > Change history... (also a button in the "Shared - 3 people" window)
+  lists everyone's changes, newest first, grouped by day: who changed which
+  item and cell, to what, and what it was before. It also lists added and
+  deleted manual entries, Blancco files, report lines, Google Sheet pastes
+  and BIOS password files. Search for an item, a person or a value; click
+  an item to see it on the Final Report. (Changes from before this was
+  added show only each cell's latest value, without "was".)
 - Ctrl+Z only undoes your own changes.
 - Only the person who shared the project can change its settings (project
   number, client, prefix, first item number, output).
@@ -394,6 +402,12 @@ Everyone shares two files in the Audit Builder folder on the Drive:
   "Dell Inc." into "Dell". "Models" turns a model ID from the Mac or Windows
   reports or the Blancco export (e.g. MacBookPro15,1) into its name (Pro A1990)
   and fills in Screen and Year.
+  Mac models in the open project that aren't in the list yet are shown in
+  a yellow box above the Models list, with the items that have them. "Add"
+  puts the model in the list with its Type (and Screen / Year when the name
+  says them, e.g. "MacBook Pro (M1 Pro, 14-inch, 2021)"): type its model
+  name over the ID, and fill in what's missing. Apple models that came only
+  from Blancco also get a gray note on the Final Report.
 - Config\config.json: the rules the report is built with (battery grades,
   how Blancco comments are read, which checks show on the Final Report, column
   headers...), so everyone's report comes out the same.
@@ -449,6 +463,27 @@ password in the file.
 The password file is saved with the project (also in a shared project, where
 everyone sees it; the newest file anyone loaded is used), so you only load it
 once. "Remove" takes the passwords out of the project.
+
+
+FIND A DEVICE (Tools menu)
+--------------------------
+
+Finds a device in every project in the Projects folder (project files and
+shared projects), without opening them one by one. Useful when a device
+comes back, or someone asks "did we get this one?".
+
+1. Tools > Find a device... The first time, it reads all the projects (a
+   few seconds; the window counts them). After that only changed ones.
+2. Type in the search box:
+   - an item code: GG07 (GG7 works too) or the whole ITEM, ITD-SHR11734-GG07
+   - an item number alone: 7 finds item 7 in every project (GG07, MS-M07...)
+   - part of a serial number or asset tag, at least 3 characters (capitals,
+     spaces and dashes don't matter)
+   The column that matched is highlighted.
+3. Open opens that project and shows the device on the Final Report (it
+   flashes). For the project that is open now the button says Show.
+The open project is searched as it is now, unsaved changes included.
+The Audit Builder folder needs to be connected (like for File > Open).
 
 
 SHARED FILES (Tools menu)

@@ -6,7 +6,7 @@
 // Final Report edits and the Google Sheet rows are everyone's. Project settings are changed by the person who shared it.
 import { reportColumns, MANUAL_FIELDS } from '../engine/report.js';
 import { SIMS_COLUMNS } from '../engine/sims.js';
-import { normalizePart, diffShared, patchShared, recordOps, combineParts, combinedInputs } from '../engine/parts.js';
+import { normalizePart, diffShared, patchShared, recordOps, logInputs, combineParts, combinedInputs } from '../engine/parts.js';
 import { PROJECT_JSON, partFileName, projectDir, readJson, writeJson, readParts } from './sharedfiles.js';
 import { state, load, store, history, otherParts, canEditSettings, STORE_PROJECT, STORE_DEVICE, STORE_COLLAB } from './state.js';
 import { $, toast, flash, ago, renderSyncState } from './util.js';
@@ -65,18 +65,20 @@ export function restoreCollab() {
   return newCollab({ ...s, mine: normalizePart(s.mine), stamps: s.stamps || {}, base: sharedView(state.project) });
 }
 
-// after every change: what this person changed goes into their part, which is saved a moment later
-export function recordMine() {
+// after every change: what this person changed goes into their part, which is saved a moment later.
+// log: false when it isn't a change made just now (the project's work so far, when it is shared)
+export function recordMine({ log = true } = {}) {
   const c = state.collab;
   const now = sharedView(state.project);
   const ops = diffShared(c.base, now);
-  recordOps(c.mine, ops, c.stamps);
+  recordOps(c.mine, ops, c.stamps, Date.now(), log ? c.base : null);
   c.base = now;
   // setting a cell again (having seen the other value) settles a clash
   if (ops.length && c.conflicts.length) c.conflicts = combineParts([c.mine, ...otherParts()]).conflicts;
   const { reports, blanccoFiles, bios } = state.project.inputs;
   const inputsChanged = reports !== c.mine.inputs.reports || JSON.stringify(blanccoFiles) !== JSON.stringify(c.mine.inputs.blanccoFiles)
     || bios?.at !== c.mine.inputs.bios?.at;
+  if (inputsChanged && log) logInputs(c.mine, c.mine.inputs, { reports, blanccoFiles, bios });
   c.mine.inputs = { reports, blanccoFiles: structuredClone(blanccoFiles), bios };
   const settings = JSON.stringify(state.project.settings);
   if (settings !== c.settingsText && canEditSettings()) { c.settingsText = settings; c.settingsAt = Date.now(); c.settingsDirty = true; }
@@ -220,15 +222,17 @@ function tellWhatArrived({ by, joined, settingsBy, rows }) {
 }
 
 // cells two people changed at the same moment: a note on the Final Report (the newest value is used)
+// the name of a shared cell's column (c: manual, overrides or simsOverrides)
+export function fieldLabel(c, f) {
+  const cols = c === 'manual' ? MANUAL_FIELDS : c === 'simsOverrides' ? SIMS_COLUMNS : reportColumns(state.config);
+  const col = cols.find(([k]) => k === f);
+  return col ? col[2] ?? col[1] : f;
+}
+
 export function conflictWarnings() {
-  const label = (c, f) => {
-    const cols = c === 'manual' ? MANUAL_FIELDS : c === 'simsOverrides' ? SIMS_COLUMNS : reportColumns(state.config);
-    const col = cols.find(([k]) => k === f);
-    return col ? col[2] ?? col[1] : f;
-  };
   return state.collab.conflicts.map(x => ({
     level: 'info', item: x.code,
-    text: `${x.code} ${label(x.c, x.f)}: ${x.kept.person} and ${x.lost.person} changed it at the same time. ${x.kept.person}'s "${x.kept.v || '(empty)'}" is used (the newest); ${x.lost.person} had "${x.lost.v || '(empty)'}".`,
+    text: `${x.code} ${fieldLabel(x.c, x.f)}:${x.kept.person} and ${x.lost.person} changed it at the same time. ${x.kept.person}'s "${x.kept.v || '(empty)'}" is used (the newest); ${x.lost.person} had "${x.lost.v || '(empty)'}".`,
   }));
 }
 
@@ -257,6 +261,7 @@ export function renderPeopleChip() {
   const b = $('#peopleChip');
   b.hidden = !state.collab;
   $('#btnLeaveShared').hidden = !state.collab;
+  $('#btnHistory').hidden = !state.collab;
   if (!state.collab) return;
   const n = 1 + Object.keys(state.collab.others).length;
   b.innerHTML = `${ICONS.people}<span>Shared · ${n === 1 ? '1 person' : `${n} people`}</span>`;

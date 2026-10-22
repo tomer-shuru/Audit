@@ -9,7 +9,8 @@ import { shared, isModelsData, loadSharedModels, saveModels, renderShared } from
 
 const MODEL_TABS = {
   models: { label: 'Models', key: 'models', hint: 'Mac model IDs (e.g. MacBookPro18,3) and Windows model names, with the details used in the report.',
-    cols: [['id', 'Model ID'], ['name', 'Model name'], ['type', 'Type'], ['year', 'Year'], ['screen', 'Screen'], ['weight', 'Weight']] },
+    cols: [['id', 'Model ID'], ['name', 'Model name'], ['type', 'Type'], ['year', 'Year'], ['screen', 'Screen'], ['weight', 'Weight']],
+    above: () => unknownModelsBox() },
   makeMap: { label: 'Make names', key: 'makeMap', hint: 'Turns the make reported by the tools into the name shown in the report, e.g. "Dell Inc." to "Dell". Not case-sensitive.',
     cols: [['from', 'Reported make'], ['to', 'Report make']], unique: 'from' },
   typeMap: { label: 'Type mapping', key: 'typeMap', hint: 'Turns the chassis type reported by the tools (Blancco / Windows) into the type shown in the report.',
@@ -38,6 +39,28 @@ function simsCategoriesBanner() {
   const missing = m.typeWeights.map(t => String(t.type ?? '').trim()).filter(t => t && !types.has(norm(t)) && !codeCats.has(norm(t)));
   return `${bad.length ? `<div class="banner bad">Not a category in SIMS codes: <b>${esc([...new Set(bad)].join(', '))}</b>. Those devices get no codes.</div>` : ''}
     ${missing.length ? `<div class="banner bad">Types in Weights with no SIMS category: <b>${esc(missing.join(', '))}</b>.</div>` : ''}`;
+}
+
+// Models: the Mac models of the open project that aren't in the list yet, each with an Add button
+function unknownModelsBox() {
+  const list = state.report?.unknownModels ?? [];
+  if (!list.length) return '';
+  return `<div class="banner warn unknown-models"><b>Mac models in this project that aren't in the Models list yet</b> (so they have no Screen or Year, and the model name is the ID as it came in, unless one was typed):
+    <table><tbody>${list.map((u, i) => `<tr><td><b>${esc(u.id)}</b></td><td class="muted">from ${esc(u.source)} · ${esc(u.items.join(', '))}</td>
+      <td><button class="btn small" data-add-model="${i}">Add</button></td></tr>`).join('')}</tbody></table></div>`;
+}
+
+// a new Models row for a model that came in: the name starts as the ID (to type over), screen and year from a
+// full name like Blancco's "MacBook Pro (M1 Pro, 14-inch, 2021)"
+function addUnknownModel(u) {
+  const screen = u.id.match(/(\d+(?:\.\d+)?)-inch/i)?.[1], year = u.id.match(/\b(20\d\d)\)?\s*$/)?.[1];
+  state.models.models.push({ id: u.id, name: u.id, type: u.type, year: year ? Number(year) : '', screen: screen ? Number(screen) : '', weight: '' });
+  saveModels(); renderModels();
+  const name = document.querySelector('#modelsBody tbody tr:last-child td[data-k="name"]');
+  if (!name) return;
+  name.scrollIntoView({ block: 'nearest' }); name.focus();
+  getSelection().selectAllChildren(name);
+  toast(`Added ${u.id}. Type its model name over the ID.`);
 }
 
 export function renderModels() {
@@ -94,6 +117,7 @@ function renderModelList(t, nav) {
 
   $('#modelsBody').innerHTML = `${nav}
     ${t.banner ? t.banner() : ''}
+    ${t.above ? t.above() : ''}
     ${dups.length ? `<div class="banner bad">Used more than once: <b>${esc(dups.join(', '))}</b>. Only the first one counts. Remove or rename the extra rows (highlighted).</div>` : ''}
     ${f ? filterBar(state.modelsTab, { categories, shown: rows.length, total: list.length }) : ''}
     <div class="table-wrap tall"><table class="grid">
@@ -104,6 +128,7 @@ function renderModelList(t, nav) {
     <button class="btn" id="modelsAdd">Add row</button>`;
 
   if (f) attachFilterBar(state.modelsTab);
+  document.querySelectorAll('[data-add-model]').forEach(b => b.onclick = () => addUnknownModel(state.report.unknownModels[+b.dataset.addModel]));
   document.querySelectorAll('#modelsBody td[data-k]').forEach(td => {
     td.onblur = () => {
       const i = Number(td.parentElement.dataset.i), k = td.dataset.k, v = td.textContent.trim();

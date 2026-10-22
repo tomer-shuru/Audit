@@ -10,6 +10,11 @@ import { load, store, STORE_PROJECT } from './state.js';
 import { $, esc, plural } from './util.js';
 
 export const UPDATES = [
+  { id: 7, date: '2026-10-22', items: [
+    'New: Tools › <b>Find a device</b>. Search every project in the Projects folder by item code (GG07), item number, serial number or asset tag, and open the project right at that device.',
+    'New for shared projects: File › <b>Change history</b> (also in the "Shared · people" window). Who changed what and when, with what it was before. Click an item to see it on the Final Report.',
+    'Settings › Dictionary › Models now lists the Mac models in the open project that aren’t in the list yet, each with an <b>Add</b> button. Apple models that came only from Blancco also get a gray note on the Final Report.',
+  ] },
   { id: 6, date: '2026-10-21', items: [
     'New output: <b>Google</b> (Output picker in the top bar). The Final Report then shows Google’s ITAD REPORT columns, Item to Weight (KG). It is the same data as Shuru, so edits carry over.',
     'The Final Report tab takes the color of the output (Shuru blue-grey, SIMS royal blue, Google green), with a "layout" tag next to its title, so it is clear which one you are copying.',

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { emptyPart, diffShared, patchShared, recordOps, combineParts, combinedInputs } from '../src/engine/parts.js';
+import { emptyPart, diffShared, patchShared, recordOps, combineParts, combinedInputs, changeHistory, logInputs, combinedProject } from '../src/engine/parts.js';
 
 const view = (v = {}) => ({ manual: {}, overrides: {}, simsOverrides: {}, sheet: '', ...v });
 const clone = v => structuredClone(v);
@@ -128,4 +128,51 @@ test('every computer combines the parts the same way, whatever order it reads th
   a.edit(view(), view({ overrides: { GG1: { model: 'A' } } }), {}, 100);
   b.edit(view(), view({ overrides: { GG1: { model: 'B' } } }), {}, 100); // the very same moment
   assert.deepEqual(combineParts([a.part, b.part]).view, combineParts([b.part, a.part]).view);
+});
+
+test('change history: each change with who, when and what it was', () => {
+  const dana = emptyPart('Dana'), tomer = emptyPart('Tomer');
+  const stamps = {};
+  const v1 = view({ manual: { GG1: {} } });
+  recordOps(dana, diffShared(view(), v1), stamps, 100, view());
+  const v2 = view({ manual: { GG1: { model: 'X' } } });
+  recordOps(dana, diffShared(v1, v2), stamps, 200, v1);
+  const v3 = view({ manual: { GG1: { model: 'Y' } }, overrides: { GG1: { sn: 'S1' } } });
+  recordOps(tomer, diffShared(v2, v3), stamps, 300, v2);
+  const h = changeHistory([dana, tomer]);
+  assert.deepEqual(h.map(e => [e.person, e.c, e.code, e.f, e.v, e.was, e.add]), [
+    ['Tomer', 'overrides', 'GG1', 'sn', 'S1', '', undefined],
+    ['Tomer', 'manual', 'GG1', 'model', 'Y', 'X', undefined],
+    ['Dana', 'manual', 'GG1', 'model', 'X', '', undefined],
+    ['Dana', 'manual', 'GG1', undefined, undefined, undefined, true],
+  ]);
+});
+
+test('change history: parts without a log give each cell\'s latest value; recording without "before" logs nothing', () => {
+  const old = emptyPart('Dana');
+  recordOps(old, [{ c: 'overrides', code: 'GG2', f: 'type', v: 'Laptop' }], {}, 50);
+  assert.equal(old.log.length, 0);
+  assert.deepEqual(changeHistory([old]).map(e => [e.code, e.f, e.v, e.was]), [['GG2', 'type', 'Laptop', undefined]]);
+});
+
+test('change history: inputs (reports, Blancco files, BIOS file) and the sheet', () => {
+  const p = emptyPart('Dana');
+  logInputs(p, { reports: '', blanccoFiles: [{ name: 'a.csv' }] }, { reports: 'l1\nl2\n', blanccoFiles: [{ name: 'b.csv' }], bios: { at: 5, fileName: 'pw.txt' } }, 10);
+  recordOps(p, [{ c: 'sheet', v: 'rows' }], {}, 20, view());
+  assert.deepEqual(changeHistory([p]).map(({ person, ...e }) => e), [
+    { at: 20, c: 'sheet', cleared: false },
+    { at: 10, c: 'bios', file: 'pw.txt' },
+    { at: 10, c: 'blancco', added: ['b.csv'], removed: ['a.csv'] },
+    { at: 10, c: 'reports', lines: 2 },
+  ]);
+});
+
+test('a project of everyone\'s work together', () => {
+  const a = emptyPart('A'), b = emptyPart('B');
+  a.inputs.reports = 'line A'; b.inputs.blanccoFiles = [{ name: 'x.csv', table: [] }];
+  recordOps(b, [{ c: 'manual', code: 'GG1', add: true }, { c: 'manual', code: 'GG1', f: 'sn', v: 'S' }], {}, 10);
+  const p = combinedProject({ prefix: 'GG' }, [a, b]);
+  assert.equal(p.inputs.reports, 'line A');
+  assert.equal(p.inputs.blanccoFiles[0].by, 'B');
+  assert.deepEqual(p.manual, { GG1: { sn: 'S' } });
 });

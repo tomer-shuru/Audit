@@ -20,8 +20,8 @@ export const SHEETS = {
   locked: { title: 'Locked and Faulty', cols: () => lockedColumns(state.config), rows: () => state.report.lockedFaulty },
 };
 const MAIN = { shuru: 'report', sims: 'sims', google: 'google' };
-// the main sheet of the chosen output
-export const mainKind = () => MAIN[outputOf()] ?? 'report';
+// the main sheet of the chosen output (or of another project's output)
+export const mainKind = (output = outputOf()) => MAIN[output] ?? 'report';
 export const sheetKinds = () => (mainKind() === 'sims' ? ['sims', 'hdd', 'lockRequest'] : [mainKind(), 'locked']);
 export const isMain = kind => Object.values(MAIN).includes(kind);
 export const rowKey = row => row._key ?? row.itemLookup; // HDD rows: one per serial, so several per item

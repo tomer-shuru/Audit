@@ -11,6 +11,7 @@ import { reportProject, setCollab, saveMine, collabRoot, renderCollabState, clic
 import { shareProject, joinShared, leaveCollab, openPeople } from './share.js';
 import { openSetup } from './setup.js';
 import { openStart } from './start.js';
+import { openHistory } from './history.js';
 
 // what goes into a project file: the project without savedToFile (it only matters on this computer)
 const fileCopy = ({ savedToFile, ...project }) => project;
@@ -218,18 +219,21 @@ export async function openProjectList() {
   search?.focus();
 }
 
-// a project opened from a file the person picked: Save writes back to it (handle: null for an imported workbook)
+// a project opened from a file the person picked: Save writes back to it (handle: null for an imported workbook).
+// true when it opened
 async function openedFile(file, handle) {
-  if (!(await openProjectFile(file))) return;
+  if (!(await openProjectFile(file))) return false;
   $('#collabDialog').close();
   await rememberFile(handle);
   state.fileName = handle?.name || '';
   renderChrome();
+  return true;
 }
 
-async function openListedFile(entry) {
-  if (!okToReplace()) return;
-  try { await openedFile(await entry.handle.getFile(), entry.handle); } catch (err) { toast(`Couldn't open ${entry.name}: ${err.message}`, 'bad'); }
+// a project file from the Projects folder (entry: from listProjectFiles); true when it opened
+export async function openListedFile(entry) {
+  if (!okToReplace()) return false;
+  try { return await openedFile(await entry.handle.getFile(), entry.handle); } catch (err) { toast(`Couldn't open ${entry.name}: ${err.message}`, 'bad'); return false; }
 }
 
 // Browse… in the Open window: the browser's file picker (starting in the Projects folder)
@@ -271,6 +275,7 @@ export function initFileMenu() {
   $('#btnShare').hidden = !canUseFolder;
   $('#btnShare').onclick = shareProject;
   $('#btnLeaveShared').onclick = leaveCollab;
+  $('#btnHistory').onclick = openHistory;
   $('#saveState').onclick = clickSaveState;
   $('#peopleChip').onclick = openPeople;
   $('#collabClose').onclick = () => $('#collabDialog').close();

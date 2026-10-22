@@ -27,12 +27,15 @@ export function recompute() {
 }
 
 // Rows already in the Google Sheet (Data tab): one more input for the report, the last in line. They are
-// read with the columns shown on the Final Report (of the chosen output), the way they get pasted back.
-function readSheet() {
-  const text = state.project.inputs.sheet;
+// read with the columns shown on the Final Report (of the project's output), the way they get pasted back.
+function readSheet(project = state.project) {
+  const text = project.inputs.sheet;
   if (!text.trim()) return null;
-  return readSheetRows({ sheetText: text, cols: exportCols(mainKind()), prefix: state.project.settings.prefix, itemPrefix: state.config.texts.itemPrefix });
+  return readSheetRows({ sheetText: text, cols: exportCols(mainKind(project.settings.output)), prefix: project.settings.prefix, itemPrefix: state.config.texts.itemPrefix });
 }
+
+// the Audit Report rows of a project that isn't open (Tools › Find a device)
+export const reportRowsOf = project => buildReport(project, state.models, state.config, readSheet(project)?.records ?? null).rows;
 
 // the rows of the chosen output (Shuru and Google: the Audit Report, SIMS: the SIMS rows)
 export const outputRows = () => state.sims?.rows ?? state.report.rows;

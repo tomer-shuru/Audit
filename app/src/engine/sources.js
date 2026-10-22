@@ -263,6 +263,8 @@ export function blanccoRecords(blanccoRows, macSerials, lk, blanccoResult) {
       disk: disks.join(', '),
       diagnostics: eqi(type, 'Laptop') ? joinNonEmpty(', ', grade(b1), grade(b2), comments) : joinNonEmpty(', ', comments),
       blancco: blanccoResult(r.serial), locked: '',
+      // the Models list is for Macs: an Apple model that isn't in it is listed in the Dictionary to be added
+      unknownModel: !known && /apple/i.test(str(r.make)) && !isBlank(rawModel) ? rawModel : '',
     });
   }
   return out;

@@ -26,6 +26,7 @@ const CHECK_LIST = [
   ['farNumber', 'error', 'An item number is far above the others (more than 200), probably a typo'],
   ['itemGroups', 'info', 'Extra item groups were found (codes that start with the prefix and more letters, e.g. MS-M01)'],
   ['unknownMacModel', 'warn', "A Mac model isn't in the Dictionary"],
+  ['unknownBlanccoModel', 'info', "Apple models from Blancco (no Mac report) that aren't in the Dictionary"],
   ['cpuNotShortened', 'warn', "A Blancco CPU name couldn't be shortened"],
   ['erasureFailed', 'error', 'An erasure failed'],
   ['noErasureMac', 'warn', 'No Blancco erasure for a Mac (or a device from Blancco only)'],

@@ -192,3 +192,20 @@ test('Blancco models get the Dictionary\'s Model cleanup, like Windows reports',
   const r = buildReport(project({ inputs: { reports: '', blanccoFiles: [{ name: 'b.csv', table }] } }), models);
   assert.deepEqual(r.rows.map(x => x.model), ['ZBook Firefly 14 inch G11', 'ThinkPad P14s Gen 3']);
 });
+
+test('Mac models not in the Dictionary are listed: from Mac reports, and Apple ones from Blancco', () => {
+  const head = ['System manufacturer', 'System chassis type', 'Device Identifier', 'Asset Tag', 'Erasure state', 'System serial', 'System version', 'System model',
+    'Capacity', 'Comment', 'CPU model', 'Total Memory', 'Memory type', 'Disk capacity', 'Disk interface type', 'Disk serial'];
+  const row = (item, sn, make, model) => [make, 'Notebook', item, '', 'Successful', sn, '', model, '90', 'ok', '', '8 GiB', 'DDR4', '256 GB', 'NVMe', 'D' + sn];
+  const table = [head, row('GG02', 'S2', 'Apple, Inc.', 'MacBook Air (M9, 15-inch, 2031)'), row('GG03', 'S3', 'Apple, Inc.', 'MacBook Air (M9, 15-inch, 2031)'),
+    row('GG04', 'S4', 'HP', 'HP Unknown 1'), row('GG05', 'S5', 'Apple, Inc.', 'MacBookPro18,3')];
+  const mac = 'GG01*C02X*-*Laptop*Apple*MacBookPro99,1*M1*16 GB*512 GB*Normal*Disabled*Disabled*No*90*D1*2026*ok';
+  const r = buildReport(project({ inputs: { reports: mac, blanccoFiles: [{ name: 'b.csv', table }] } }), models);
+  assert.deepEqual(r.unknownModels.map(u => [u.id, u.source, u.items]), [
+    ['MacBookPro99,1', 'Mac report', ['GG01']],
+    ['MacBook Air (M9, 15-inch, 2031)', 'Blancco', ['GG02', 'GG03']],
+  ]);
+  const note = r.warnings.find(w => w.text.startsWith('Apple models from Blancco'));
+  assert.equal(note.level, 'info');
+  assert.match(note.text, /MacBook Air \(M9, 15-inch, 2031\) \(GG02, GG03\)/);
+});

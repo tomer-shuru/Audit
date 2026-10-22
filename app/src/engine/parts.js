@@ -10,6 +10,8 @@
 //   cells: { manual | overrides | simsOverrides: { [code]: { [field]: { v, at, prev } } } }
 //          every cell this person changed; v '' = cleared. at = when, prev = the time of the value it replaced
 //          (so two people changing one cell without seeing each other's change can be told apart from a correction)
+//   log: [{ at, … }]                    this person's changes one by one, for the change history (see addToLog);
+//          the cells above only keep each cell's latest value
 // Combining the parts takes the newest change of every cell.
 
 export const COLLECTIONS = ['manual', 'overrides', 'simsOverrides'];
@@ -19,6 +21,7 @@ export const emptyPart = (person, device = '') => ({
   inputs: { reports: '', blanccoFiles: [], bios: null },
   sheet: null, items: {},
   cells: { manual: {}, overrides: {}, simsOverrides: {} },
+  log: [],
 });
 
 // fills in what an older or damaged part file leaves out
@@ -26,6 +29,7 @@ export function normalizePart(p) {
   const blank = emptyPart('');
   const part = { ...blank, ...p, inputs: { ...blank.inputs, ...p?.inputs }, cells: { ...blank.cells, ...p?.cells } };
   part.items = part.items || {};
+  part.log = Array.isArray(part.log) ? part.log : [];
   return part;
 }
 
@@ -84,14 +88,17 @@ export function patchShared(view, ops) {
 // Writes this person's changes into their part. stamps (from combineParts) say when each cell last changed;
 // they are updated here, so quick changes in a row follow each other even before the next combine.
 // A change always gets a later time than the value it replaces, even if another computer's clock is ahead.
-export function recordOps(part, ops, stamps, now = Date.now()) {
+// before: the view the changes were made on, so the change history can say what a cell was (left out: not logged)
+export function recordOps(part, ops, stamps, now = Date.now(), before = null) {
   const person = part.person;
+  const log = entry => { if (before) addToLog(part, entry); };
   for (const op of ops) {
     if (op.c === 'sheet') {
       const prev = stamps.sheet?.at ?? 0;
       const at = Math.max(now, prev + 1);
       part.sheet = { v: op.v, at, prev };
       stamps.sheet = { at, person };
+      log({ at, c: 'sheet', cleared: op.v === '' }); // the rows themselves are too big to keep twice
       continue;
     }
     const itemAt = stamps[itemStamp(op.code)]?.at ?? 0;
@@ -100,6 +107,7 @@ export function recordOps(part, ops, stamps, now = Date.now()) {
       part.items[op.code] = op.del ? { at, deleted: true } : { at };
       if (op.del) delete part.cells.manual[op.code]; // older than the delete: not needed any more
       stamps[itemStamp(op.code)] = { at, person };
+      log({ at, c: 'manual', code: op.code, ...(op.del ? { del: true } : { add: true }) });
       continue;
     }
     const k = cellKey(op.c, op.code, op.f);
@@ -108,9 +116,60 @@ export function recordOps(part, ops, stamps, now = Date.now()) {
     ((part.cells[op.c] ??= {})[op.code] ??= {})[op.f] = { v: op.v, at, prev };
     stamps[k] = { at, person };
     if (op.c === 'manual') stamps[itemStamp(op.code)] = { at, person };
+    log({ at, c: op.c, code: op.code, f: op.f, v: op.v, was: String(before?.[op.c]?.[op.code]?.[op.f] ?? '') });
   }
   part.updatedAt = Math.max(part.updatedAt || 0, now);
   return part;
+}
+
+// ---------- change history ----------
+// The log entries in a part (each also has at = when):
+//   { c: 'manual' | 'overrides' | 'simsOverrides', code, f, v, was }   a cell changed (v '' = cleared)
+//   { c: 'manual', code, add: true } / { c: 'manual', code, del: true }  a manual entry added / deleted
+//   { c: 'sheet', cleared }                                             the Google Sheet rows pasted (or cleared)
+//   { c: 'reports', lines }                                             their Mac / Windows report lines changed
+//   { c: 'blancco', added: [names], removed: [names] }                  Blancco files added / removed
+//   { c: 'bios', file }                                                 a BIOS password file loaded (file '' = removed)
+// Only the newest LOG_MAX are kept, so a part file stays small enough to save every few seconds.
+export const LOG_MAX = 5000;
+function addToLog(part, entry) {
+  part.log.push(entry);
+  if (part.log.length > LOG_MAX) part.log.splice(0, part.log.length - LOG_MAX);
+}
+
+// what changed in this person's own inputs (before / after: { reports, blanccoFiles, bios }), into their log
+export function logInputs(part, before, after, now = Date.now()) {
+  const lines = text => String(text ?? '').split(/\r?\n/).filter(l => l.trim()).length;
+  if (String(before.reports ?? '') !== String(after.reports ?? '')) addToLog(part, { at: now, c: 'reports', lines: lines(after.reports) });
+  const names = files => (files || []).map(f => f.name);
+  const had = names(before.blanccoFiles), has = names(after.blanccoFiles);
+  const added = has.filter(n => !had.includes(n)), removed = had.filter(n => !has.includes(n));
+  if (added.length || removed.length) addToLog(part, { at: now, c: 'blancco', added, removed });
+  if ((before.bios?.at ?? 0) !== (after.bios?.at ?? 0)) addToLog(part, { at: now, c: 'bios', file: after.bios?.fileName || '' });
+}
+
+// Everyone's changes, newest first, each with the person who made it.
+// Parts saved before there was a log only have each cell's latest value: those come in as entries without "was".
+export function changeHistory(parts) {
+  const out = [];
+  for (const p of parts) {
+    const logged = new Set();
+    const key = (c, code, f, at) => `${c}|${code ?? ''}|${f ?? ''}|${at}`;
+    for (const e of p.log || []) {
+      out.push({ ...e, person: p.person });
+      logged.add(key(e.c, e.code, e.f, e.at));
+    }
+    const notLogged = e => { if (!logged.has(key(e.c, e.code, e.f, e.at))) out.push({ ...e, person: p.person }); };
+    for (const c of COLLECTIONS) {
+      for (const [code, rec] of Object.entries(p.cells?.[c] || {})) {
+        for (const [f, cell] of Object.entries(rec)) notLogged({ at: cell.at, c, code, f, v: String(cell.v ?? '') });
+      }
+    }
+    for (const [code, it] of Object.entries(p.items || {})) notLogged({ at: it.at, c: 'manual', code, ...(it.deleted ? { del: true } : { add: true }) });
+    if (p.sheet) notLogged({ at: p.sheet.at, c: 'sheet', cleared: p.sheet.v === '' });
+  }
+  // changes made at the same moment: the one recorded last first, as with the rest
+  return out.map((e, i) => [e, i]).sort(([a, i], [b, j]) => b.at - a.at || j - i).map(([e]) => e);
 }
 
 // Everyone's parts → the shared view { manual, overrides, simsOverrides, sheet }, plus
@@ -176,5 +235,15 @@ export function combinedInputs(parts) {
     bios,
     reports: parts.map(p => String(p.inputs?.reports ?? '').trim()).filter(Boolean).join('\n'),
     blanccoFiles: parts.flatMap(p => (p.inputs?.blanccoFiles || []).map(f => ({ ...f, by: p.person }))),
+  };
+}
+
+// everyone's work together as one project (settings: from project.json), e.g. to search it without opening it
+export function combinedProject(settings, parts) {
+  const { view } = combineParts(parts);
+  return {
+    settings,
+    inputs: { ...combinedInputs(parts), sheet: view.sheet },
+    manual: view.manual, overrides: view.overrides, simsOverrides: view.simsOverrides,
   };
 }

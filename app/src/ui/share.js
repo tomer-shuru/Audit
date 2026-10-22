@@ -11,6 +11,7 @@ import { thisDevice, sharedView, collabRoot, collabUnsaved, reportProject, newCo
 import { okToReplace, forgetProjectFile, withoutOwners } from './project.js';
 import { openSetup } from './setup.js';
 import { parseReports } from './data-tab.js';
+import { openHistory } from './history.js';
 
 // connects the shared folder if needed (only from a click: the browser may ask); the folder, or null
 export async function collabRootAsk() {
@@ -62,7 +63,7 @@ export async function shareProject() {
     if (!dir) throw new Error('couldn\'t make the project folder');
     const c = newCollab({ dir: name, owner: me, me, mine: emptyPart(me, thisDevice), base: sharedView(emptyProject()) });
     setCollab(c);
-    recordMine(); // everything in the project so far is this person's
+    recordMine({ log: false }); // everything in the project so far is this person's (not a change to list in the history)
     c.dirty = true; // their file is written even while the project is still empty
     clearHistory();
     forgetProjectFile();
@@ -73,11 +74,11 @@ export async function shareProject() {
   } catch (err) { toast(`Couldn't share the project: ${err.message}`, 'bad'); }
 }
 
-// opens a shared project from the Open window (entry: from listSharedProjects)
+// opens a shared project from the Open window (entry: from listSharedProjects); true when it opened
 export async function joinShared(entry, { again = false } = {}) {
-  if (!okToReplace()) return;
+  if (!okToReplace()) return false;
   const me = await askName({ again });
-  if (!me) return;
+  if (!me) return false;
   try {
     const dir = entry.dir, mineFile = partFileName(me);
     const own = await readJson(dir, mineFile);
@@ -109,7 +110,8 @@ export async function joinShared(entry, { again = false } = {}) {
     if (state.collab.dirty) saveMine();
     const names = Object.values(others).map(o => o.part.person);
     toast(`Opened ${entry.name}${names.length ? `, shared with ${names.join(', ')}` : ''}`);
-  } catch (err) { toast(`Couldn't open the shared project: ${err.message}`, 'bad'); }
+    return true;
+  } catch (err) { toast(`Couldn't open the shared project: ${err.message}`, 'bad'); return false; }
 }
 
 // what one person has added to the shared project
@@ -137,7 +139,8 @@ export function openPeople() {
         <span class="muted">${you ? (collabUnsaved() ? 'saving…' : `saved ${ago(c.savedAt || p.updatedAt)}`) : `saved ${ago(p.updatedAt)}`}</span></li>`).join('')}
     </ul>
     <p class="hint">${c.readAt ? `Checked for changes ${ago(c.readAt)}.` : ''}</p>`;
-  $('#collabActions').innerHTML = '<button class="btn" id="collabRefresh">Refresh now</button><button class="btn ghost" id="collabLeave">Leave shared project…</button>';
+  $('#collabActions').innerHTML = '<button class="btn" id="collabHistory">Change history</button><button class="btn" id="collabRefresh">Refresh now</button><button class="btn ghost" id="collabLeave">Leave shared project…</button>';
+  $('#collabHistory').onclick = openHistory;
   $('#collabRefresh').onclick = async () => { await refreshCollab(); openPeople(); toast('Up to date'); };
   $('#collabLeave').onclick = () => { $('#collabDialog').close(); leaveCollab(); };
   if (!$('#collabDialog').open) $('#collabDialog').showModal();

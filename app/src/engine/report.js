@@ -125,6 +125,13 @@ export function buildReport(project, models, config, sheet = null) {
   for (const k of outside) add('outsideNumbering', { item: k, text: `${k}: item code doesn't follow this project's numbering (${itemCode(settings, firstNumber)}, ${itemCode(settings, firstNumber + 1)}…)` });
   warnings.push(...numberingChecks(settings, sorted, cfg));
 
+  // Mac models that aren't in the Dictionary's Models list: { [model ID]: { id, type, source, items } }
+  const unknownModels = {};
+  const noteUnknown = (id, type, source, code) => {
+    const u = (unknownModels[id.toLowerCase()] ??= { id, type: str(type), source, items: [] });
+    u.items.push(code);
+  };
+
   const rows = sorted.map(k => {
     const man = manBy.get(k) || {};
     const m = macBy.get(k), w = winBy.get(k), c = csvBy.get(k), sh = sheetBy.get(k);
@@ -184,6 +191,9 @@ export function buildReport(project, models, config, sheet = null) {
     if (row._edited.includes('diagnostics') && !row._edited.includes('locked')) row.locked = withLockedDiagnostics(lockedBase, row.diagnostics, isLockedWord);
 
     if (m?.unknownModel) add('unknownMacModel', { item: code, text: `${code}: Mac model "${m.unknownModel}" isn't in the Models list` });
+    // (the model shown comes from the Mac report when there is one, so Blancco's only counts without it)
+    if (m?.unknownModel) noteUnknown(m.unknownModel, row.type, 'Mac report', code);
+    else if (!m && c?.unknownModel) noteUnknown(c.unknownModel, row.type, 'Blancco', code);
     if (c && isBlank(row.cpu) && !isBlank(c.rawCpu)) add('cpuNotShortened', { item: code, text: `${code}: couldn't shorten CPU "${c.rawCpu}"` });
     if (resultFailed(row.blancco, cfg.erasure)) add('erasureFailed', { item: code, text: `${code}: erasure failed (${row.blancco})` });
     if ((m || w) && isBlank(row.blancco)) {
@@ -219,7 +229,12 @@ export function buildReport(project, models, config, sheet = null) {
     wiped: passed(r.blancco) ? 'Yes' : 'No',
   }));
 
-  return { rows, lockedFaulty, warnings, counts: { mac: mac.length, win: win.length, blancco: csv.length, blanccoRows: blanccoTable.rows.length, manual: manBy.size, sheet: sheetBy.size } };
+  const blanccoOnly = Object.values(unknownModels).filter(u => u.source === 'Blancco');
+  if (blanccoOnly.length) {
+    add('unknownBlanccoModel', { text: `Apple models from Blancco that aren't in the Dictionary yet: ${blanccoOnly.map(u => `${u.id} (${u.items.join(', ')})`).join('; ')}. Add them in Settings › Dictionary › Models.` });
+  }
+
+  return { rows, lockedFaulty, warnings, unknownModels: Object.values(unknownModels), counts: { mac: mac.length, win: win.length, blancco: csv.length, blanccoRows: blanccoTable.rows.length, manual: manBy.size, sheet: sheetBy.size } };
 }
 
 // The item group and number of an item code in this project's numbering (GG07 -> { group: 'GG', n: 7 }), or null.
