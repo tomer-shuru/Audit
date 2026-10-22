@@ -2,7 +2,7 @@
 // (columns D to T of their template), with our diagnostics turned into SIMS diagnostic codes.
 // The Dictionary holds the SIMS lists: simsCodes (category, code, description), simsAliases (our diagnostics
 // per SIMS issue number), simsIgnore (diagnostics left out) and simsCategories (our type -> SIMS category).
-import { str, isBlank, joinNonEmpty, escapeRegExp } from './rules.js';
+import { str, low, isBlank, joinNonEmpty, escapeRegExp, commaParts, wordMatcher, isLockedOrFaulty } from './rules.js';
 import { DEFAULT_CONFIG, withDefaults, warnAdder } from './config.js';
 import { itemKey, resultPassed, resultFailed } from './sources.js';
 
@@ -19,6 +19,37 @@ export const SIMS_FIRST_COLUMN = 'D'; // where the columns start in the SIMS tem
 // SIMS columns that are the same field as in the Audit Report: editing them changes both
 export const SIMS_SHARED = new Set(['sn', 'asset', 'diagnostics', 'weight']);
 export const simsEditable = key => key !== 'item';
+
+// The SIMS "Locked devices request" (their own workbook, tab "2. Locked devices request", columns B to H):
+// one row per lock of a device that is locked now, columns C (Lock Type) to H. Model No. is the SIMS Model column as
+// shown; Project No. (B) is already in their file and stays as it is; Password is for them to fill in.
+export const LOCK_REQUEST_COLUMNS = [
+  ['lockType', 'Lock Type'], ['asset', 'Client asset tag'], ['sn', 'Serial No.'],
+  ['imei', 'IMEI No. (for mobile devices)'], ['modelNo', 'Model No.:'], ['password', 'Password'],
+];
+
+// their Lock Type drop-down list (the hidden Data tab of the workbook)
+export const SIMS_LOCK_TYPE_LIST = [
+  'Apple DEP', 'Apple Find My', 'Apple Firmware Password', 'Apple MDM (Mobile Device Management)', 'Apple Startup Security',
+  'Asset Tags', 'Bios Password', 'Chrome OS Enterprise', 'Computrace', 'Dell iDRAC', 'HP iLO', 'IBM IMM', 'Microsoft SEMM',
+  'Windows Autopilot/Azure',
+];
+
+// config simsLockTypes -> lockTypes(locked, make): the Lock Types of a Locked or Faulty text (each part takes the
+// first row that matches it and is for its make; each type once) and the parts that say "lock" but got none
+const saysLock = wordMatcher(['lock', 'locked']);
+function lockTyper(cfg) {
+  const rules = cfg.simsLockTypes.map(r => ({ make: low(r.make), type: str(r.type).trim(), matches: wordMatcher(commaParts(r.words)) }));
+  return (locked, make) => {
+    const types = [], unknown = [];
+    for (const part of commaParts(locked)) {
+      const rule = rules.find(r => (!r.make || r.make === low(make)) && r.matches(part));
+      if (rule && !types.includes(rule.type)) types.push(rule.type);
+      else if (!rule && saysLock(part)) unknown.push(part);
+    }
+    return { types, unknown };
+  };
+}
 
 // "Screen scratches -b" = "screen scratches b": capitals, dashes and extra spaces don't matter
 export const normDiag = s => str(s).toLowerCase().replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
@@ -220,7 +251,22 @@ export function buildSims(report, project, models, config, sheet = null) {
     const issue = nos.map(no => `${lk.description.get(no) || ''} (${no})`).join(' / ');
     add('simsNoCode', { item: items[0], items, text: `SIMS: "${diag}" is ${issue}, but ${category} has no code for it, so it went to Item Remark (${list(items)})` });
   }
-  return { rows, warnings };
+  // the Locked devices request: a row per lock of each device; a lock with no Lock Type gets a note
+  const lockRequest = [], noType = new Map(), lockTypes = lockTyper(cfg);
+  const makeOf = new Map(report.rows.map(x => [x.itemLookup, x.make])); // the SIMS row has the make only inside Model
+  for (const row of rows) {
+    if (!isLockedOrFaulty(row.locked)) continue;
+    const { types, unknown } = lockTypes(row.locked, makeOf.get(row.itemLookup));
+    types.forEach((lockType, i) => lockRequest.push({
+      itemLookup: row.itemLookup, _key: `${row.itemLookup}#${i}`, lockType,
+      asset: row.asset, sn: row.sn, imei: row.imei, modelNo: row.modelLine, password: '',
+    }));
+    for (const u of unknown) note(noType, normDiag(u), row.itemLookup, { text: u });
+  }
+  for (const { items, text } of noType.values()) {
+    add('simsNoLockType', { item: items[0], items, text: `SIMS: "${text}" has no Lock Type, so it isn't on the Locked devices request (${list(items)}). Add it in DevMode › Locked and Faulty › SIMS Lock Types.` });
+  }
+  return { rows, warnings, lockRequest };
 }
 
 // The HDD sheet: one row per data carrier serial in "S.N. Data carrier" (several can be separated by commas,

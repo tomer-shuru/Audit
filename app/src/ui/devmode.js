@@ -3,6 +3,7 @@
 // in the open project, and they only apply when saved (to the shared rules file, see config-file.js).
 import { DEFAULT_CONFIG, CHECKS, CHECK_LEVELS, withDefaults, validateConfig, rulesOf } from '../engine/config.js';
 import { buildReport, exportColumns, lockedColumns } from '../engine/report.js';
+import { SIMS_LOCK_TYPE_LIST } from '../engine/sims.js';
 import { writeFile, readFileText } from './filesave.js';
 import { downloadJson, readJsonFile } from './io.js';
 import { state } from './state.js';
@@ -96,6 +97,9 @@ const BLANCCO = {
 const LEVELS = { error: 'Problem (red)', warn: 'Warning (yellow)', info: 'Note (gray)', sims: 'SIMS (blue)', off: 'Off' };
 const defaultLabel = (k, key) => DEFAULT_CONFIG[k].find(x => x.key === key)?.label ?? key;
 
+// SIMS Lock Types: their drop-down list, plus any other type already in the rules (so it isn't changed by showing it)
+const lockTypeOptions = () => [...new Set([...SIMS_LOCK_TYPE_LIST, ...dev.draft.simsLockTypes.map(r => r.type).filter(Boolean)])].map(t => [t, t]);
+
 const SECTIONS = {
   battery: { label: 'Battery', keys: ['battery'], html: () => `
     <p class="hint">The battery % from the Mac, Windows and Blancco reports gets the first grade whose limit it falls under, top to bottom.
@@ -122,6 +126,19 @@ const SECTIONS = {
     <p class="hint">Blancco's disk interface type becomes the disk name in the Disk column (e.g. "512 GB NVMe"): the first row whose text it contains, top to bottom.
     If none matches, the interface is written as Blancco has it.</p>
     ${table('diskKinds', [{ k: 'match', label: 'Interface contains' }, { k: 'name', label: 'Written as' }], { add: { match: '', name: '' } })}` },
+  locked: { label: 'Locked and Faulty', keys: ['lockedWords', 'simsLockTypes'], html: () => `
+    <p class="hint">A diagnostic containing one of these words goes to the Locked or Faulty column too (and so to the Locked and Faulty list),
+    from any input: Mac and Windows reports, Blancco, manual entries, the Google Sheet rows and Final Report edits.
+    Whole words only, capitals don't matter: "RM" counts on its own but not inside a word (ARM, RMA), and "BIOS lock" doesn't catch "Key Capslock defect".
+    Spaces and dashes between words don't matter. The whole diagnostic is written, e.g. "MB defect - slow".
+    To take a device off the list, type "-" in its Locked or Faulty cell on the Final Report.</p>
+    ${table('lockedWords', [{ k: '_', label: 'Word or words' }], { add: '' })}
+    <h3>SIMS Lock Types</h3>
+    <p class="hint">For SIMS projects: the Lock Type on the Locked devices request. A device whose Locked or Faulty text has one of the words (whole words, any capitals,
+    separate several with commas) gets that Lock Type; "Make" limits a row to one make (empty = any). Checked top to bottom; a device with two locks gets a row for each.
+    Faulty devices that match nothing (Dead, MB defect…) aren't on the request.</p>
+    ${table('simsLockTypes', [{ k: 'words', label: 'Locked or Faulty has' }, { k: 'make', label: 'Make' }, { k: 'type', label: 'Lock Type', type: 'select', options: lockTypeOptions() }],
+      { add: { words: '', make: '', type: 'Bios Password' } })}` },
   texts: { label: 'Texts', keys: ['texts', 'noAssetTag', 'modelFromVersion'], html: d => `
     ${Object.entries(TEXTS).map(([k, [l, h]]) => field('texts', k, l, h, 'text', d.texts[k])).join('')}
     <div class="dev-cols">

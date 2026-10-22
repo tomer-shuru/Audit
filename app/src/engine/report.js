@@ -1,6 +1,6 @@
 // Merges every source into the final Audit Report and Locked and Faulty lists.
 // Replaces sheets: Audit Report, Locked and Faulty, My_Audit (manual entries).
-import { str, isBlank, pushTo, joinNonEmpty, expandDiagCodes, formatDiagnostics, proper } from './rules.js';
+import { str, isBlank, pushTo, joinNonEmpty, expandDiagCodes, formatDiagnostics, proper, wordMatcher, withLockedDiagnostics, isLockedOrFaulty } from './rules.js';
 import {
   itemKey, makeLookups, mergeTables, parseMacLines, parseWindowsLines, sortReportLines, normalizeBlancco, erasureSummary,
   resultPassed, resultFailed, macRecord, windowsRecord, blanccoRecords,
@@ -71,6 +71,7 @@ const first = (...vals) => { for (const v of vals) if (!isBlank(v)) return v; re
 export function buildReport(project, models, config, sheet = null) {
   const cfg = withDefaults(config);
   const lk = makeLookups(models, cfg);
+  const isLockedWord = wordMatcher(cfg.lockedWords); // diagnostics that also go to Locked or Faulty
   const { settings, inputs = {}, manual = {}, overrides = {} } = project;
   const warnings = [];
   // a check's level (red / yellow / gray, or off) comes from the config
@@ -156,6 +157,8 @@ export function buildReport(project, models, config, sheet = null) {
       itemStatus: typed('itemStatus'), estValue: typed('estValue'),
       locked: orSheet('locked', expandDiagCodes(joinNonEmpty(', ', man.locked, m?.locked, w?.locked), lk.diagCodes)),
     };
+    const lockedBase = row.locked;
+    row.locked = withLockedDiagnostics(lockedBase, row.diagnostics, isLockedWord);
     row.destruction = orSheet('destruction', first(man.destruction, passed(row.blancco) ? cfg.erasure.destruction : ''));
     // a weight in the sheet comes before the type's usual weight from the Dictionary
     row.weight = first(orSheet('weight', str(man.weight).trim()), lk.weight(row.type) ?? '');
@@ -176,6 +179,9 @@ export function buildReport(project, models, config, sheet = null) {
         row._fromSheet = row._fromSheet.filter(x => x !== f);
       }
     }
+
+    // Diagnostics changed in the table: Locked or Faulty follows (unless it was changed itself)
+    if (row._edited.includes('diagnostics') && !row._edited.includes('locked')) row.locked = withLockedDiagnostics(lockedBase, row.diagnostics, isLockedWord);
 
     if (m?.unknownModel) add('unknownMacModel', { item: code, text: `${code}: Mac model "${m.unknownModel}" isn't in the Models list` });
     if (c && isBlank(row.cpu) && !isBlank(c.rawCpu)) add('cpuNotShortened', { item: code, text: `${code}: couldn't shorten CPU "${c.rawCpu}"` });
@@ -208,7 +214,7 @@ export function buildReport(project, models, config, sheet = null) {
   sameOnSeveral('asset', 'duplicateAsset', 'Asset');
   sameOnSeveral('sn', 'duplicateSerial', 'S.N.');
 
-  const lockedFaulty = rows.filter(r => !isBlank(r.locked)).map(r => ({
+  const lockedFaulty = rows.filter(r => isLockedOrFaulty(r.locked)).map(r => ({
     itemLookup: r.itemLookup, sn: r.sn, type: r.type, make: r.make, model: r.model, issue: r.locked,
     wiped: passed(r.blancco) ? 'Yes' : 'No',
   }));

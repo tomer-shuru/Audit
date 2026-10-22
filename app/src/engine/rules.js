@@ -148,6 +148,36 @@ export function expandDiagCodes(txt, diagCodes) {
   return excelTrim(padded).split(' , ').join(', ');
 }
 
+// "Chassis damage C, RM" -> ["Chassis damage C", "RM"]
+export const commaParts = s => str(s).split(',').map(x => x.trim()).filter(Boolean);
+
+// a test for "does this text contain one of the words": whole words, any capitals, spaces and dashes between words
+// don't matter. "RM" matches "RM" and "rm" but not "ARM"; "Bios lock" doesn't match "Key Capslock defect".
+// Made once per list (the regexes are built here), then used for every text.
+export function wordMatcher(words) {
+  const res = words.map(w => str(w).trim().split(/[\s_-]+/).filter(Boolean).map(escapeRegExp).join('[\\s_-]+')).filter(Boolean)
+    .map(w => new RegExp(`(?<![\\p{L}\\p{N}])${w}(?![\\p{L}\\p{N}])`, 'iu'));
+  return text => res.some(re => re.test(str(text)));
+}
+
+// Locked or Faulty: "-" typed in the column means the device isn't locked or faulty
+export const NOT_LOCKED = '-';
+export const isLockedOrFaulty = v => !isBlank(v) && str(v).trim() !== NOT_LOCKED;
+// the Locked or Faulty value plus each diagnostic the matcher picks (config lockedWords), leaving out ones already
+// there (any capitals): ("Bios Locked", "Display B, BIOS locked, Dead") -> "Bios Locked, Dead". "-" stays "-".
+export function withLockedDiagnostics(locked, diagnostics, isLockedWord) {
+  if (str(locked).trim() === NOT_LOCKED) return NOT_LOCKED;
+  const norm = s => s.toLowerCase().replace(/\s+/g, ' ');
+  const have = new Set(commaParts(locked).map(norm));
+  const add = [];
+  for (const part of commaParts(diagnostics)) {
+    if (!isLockedWord(part) || have.has(norm(part))) continue;
+    have.add(norm(part));
+    add.push(part);
+  }
+  return joinNonEmpty(', ', locked, ...add);
+}
+
 // "display b, screen scratches b" -> "Display B, Screen scratches B":
 // each comma-separated part starts with a capital, and a trailing grade letter is upper-cased
 export function formatDiagnostics(txt) {

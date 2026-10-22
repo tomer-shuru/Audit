@@ -149,3 +149,38 @@ test('fills the SIMS template: rows in D to T, HDD, codes; old rows and their te
   XLSX.utils.book_append_sheet(moved, XLSX.utils.aoa_to_sheet([['', '', '', 'Item No', 'Serial No']]), 'Item per service project');
   assert.throws(() => fillSimsTemplate(new Uint8Array(XLSX.write(moved, { type: 'array', bookType: 'xlsx' })), {}), /columns .* have changed/);
 });
+
+test('Locked devices request: a row per lock of a device locked now, Lock Type from the locked text and the make', () => {
+  const p = project({
+    settings: { projectNumber: 'SHR1', prefix: 'GG', endClient: 'X', output: 'sims' },
+    manual: {
+      GG01: { asset: '14726592', sn: 'A1', make: 'Lenovo', model: 'ThinkPad P14s Gen 1', diagnostics: 'Bios Locked' },
+      GG02: { asset: '2677377', sn: 'A2', make: 'Apple', model: 'Pro A1706', diagnostics: 'Find My Locked, Remote locked' },
+      GG03: { asset: '555', sn: 'A3', make: 'Dell', model: 'Latitude 5420', diagnostics: 'Remote locked' },
+      GG04: { asset: '0777', sn: 'A4', make: 'HP', model: 'ZBook Firefly 14 G8', diagnostics: 'Display B' }, // in the BIOS file, but unlocked since: not on it
+      GG05: { asset: '888', sn: 'A5', diagnostics: 'Dead' },
+      GG06: { asset: '999', sn: 'A6', locked: 'Weird locked' },
+    },
+  });
+  p.inputs.bios = { fileName: 'b.txt', text: 'AssetNo;Password\n777;abc\n14726592;x\n', at: 1 };
+  const r = sims(p);
+  assert.deepEqual(r.lockRequest.map(x => [x.itemLookup, x.lockType]), [
+    ['GG01', 'Bios Password'], ['GG02', 'Apple Find My'], ['GG02', 'Apple DEP'], ['GG03', 'Windows Autopilot/Azure'],
+  ]);
+  assert.deepEqual(r.lockRequest[0], { itemLookup: 'GG01', _key: 'GG01#0', lockType: 'Bios Password', asset: '14726592', sn: 'A1', imei: '', modelNo: 'Lenovo,ThinkPad P14s Gen 1', password: '' });
+  assert.ok(r.warnings.some(w => w.item === 'GG06' && /"Weird locked" has no Lock Type/.test(w.text)));
+});
+
+test('fills the Locked devices request from Lock Type (C) to Password (H); Project No. and other tabs stay', async () => {
+  const XLSX = await import('xlsx');
+  const { fillLockTemplate } = await import('../src/ui/simstemplate.js');
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Welcome']]), '1. Instruction');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([[], [], ['', 'Project No.', 'Lock Type', 'Client asset tag', 'Serial No.', 'IMEI No. (for mobile devices)', 'Model No.:', 'Password'],
+    ['', 'EUS1', 'Bios Password', 111, 'OLD1', '', 'Old,Model', ''], ['', 'EUS1', 'Bios Password', 222, 'OLD2', '', 'Old,Model', '']]), '2. Locked devices request');
+  const out = fillLockTemplate(new Uint8Array(XLSX.write(wb, { type: 'array', bookType: 'xlsx' })), [['Apple Find My', 2677377, 'C02WROQ8HV2V', '', 'Apple,Pro A1706', '']]);
+  const back = XLSX.read(out, { type: 'array' });
+  const rows = XLSX.utils.sheet_to_json(back.Sheets['2. Locked devices request'], { header: 1, defval: '' }).filter(r => r.some(Boolean));
+  assert.deepEqual(rows.slice(1), [['', 'EUS1', 'Apple Find My', 2677377, 'C02WROQ8HV2V', '', 'Apple,Pro A1706', ''], ['', 'EUS1', '', '', '', '', '', '']]); // old row 2 emptied from C on, B kept
+  assert.deepEqual(back.SheetNames, ['1. Instruction', '2. Locked devices request']);
+});

@@ -16,7 +16,7 @@ const MODEL_TABS = {
     cols: [['blanccoType', 'Reported type'], ['type', 'Report type']] },
   typeWeights: { label: 'Weights', key: 'typeWeights', hint: 'Weight (kg) written in the report for each device type.',
     cols: [['type', 'Type'], ['weight', 'Weight']] },
-  cleanupRules: { label: 'Model cleanup', key: 'cleanupRules', hint: 'Text removed from Windows model names, top to bottom. Put longer phrases above shorter ones (e.g. "Notebook PC" before "PC"). Case-sensitive.',
+  cleanupRules: { label: 'Model cleanup', key: 'cleanupRules', hint: 'Text removed from model names (Windows reports and Blancco), top to bottom. Models in the Models list use their name from there instead. Put longer phrases above shorter ones (e.g. "Mobile Workstation PC" before "Mobile Workstation"). Case-sensitive: "HP" doesn’t remove "Hp".',
     cols: [['_', 'Remove this text']] },
   diagCodes: { label: 'Diagnostic codes', key: 'diagCodes', hint: 'Type a code (e.g. LM) in any diagnostics field and the report shows the description instead. Case-sensitive.',
     cols: [['code', 'Code'], ['description', 'Description']], unique: 'code' },

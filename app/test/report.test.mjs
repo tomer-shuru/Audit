@@ -155,3 +155,40 @@ test('Google output: their ITAD REPORT columns, Item to Weight (KG), all taken f
   const shuru = new Set(EXPORT_COLUMNS.map(c => c[0]));
   assert.deepEqual(GOOGLE_COLUMNS.filter(([k]) => !shuru.has(k)), []);
 });
+
+test('Locked and Faulty: diagnostics with a locked word go there too, whole words only', () => {
+  const r = buildReport(project({
+    manual: {
+      GG01: { diagnostics: 'Chassis damage C, Bios Locked' }, GG02: { diagnostics: 'Key Capslock Defect, Display B' },
+      GG03: { diagnostics: 'RM' }, GG09: { diagnostics: 'chassis damage B, rm' }, GG04: { diagnostics: 'ARM, RMA defect' }, GG05: { diagnostics: 'mb defect - slow, Dead' },
+      GG06: { locked: 'BIOS locked', diagnostics: 'Display B' }, GG07: { diagnostics: 'Dead' },
+      GG08: { diagnostics: 'Display B' },
+    },
+    overrides: { GG07: { locked: '-' }, GG08: { diagnostics: 'Remote locked' } },
+  }), models);
+  const locked = Object.fromEntries(r.rows.map(x => [x.itemLookup, x.locked]));
+  assert.equal(locked.GG01, 'Bios Locked');
+  assert.equal(locked.GG02, '');
+  assert.equal(locked.GG03, 'Remote Management'); // RM is a diagnostic code in the Dictionary
+  assert.equal(locked.GG04, '');
+  assert.equal(locked.GG09, 'Rm'); // codes are case-sensitive, the locked words aren't
+  assert.equal(locked.GG05, 'Mb defect - slow, Dead');
+  assert.equal(locked.GG06, 'BIOS locked'); // typed and in Diagnostics: once
+  assert.equal(locked.GG08, 'Remote locked'); // follows a Diagnostics edit
+  assert.deepEqual(r.lockedFaulty.map(x => x.itemLookup), ['GG01', 'GG03', 'GG05', 'GG06', 'GG08', 'GG09']); // GG07: "-" = not locked
+});
+
+test('Locked and Faulty words come from the config', () => {
+  const cfg = { lockedWords: ['Broken hinge'] };
+  const r = buildReport(project({ manual: { GG01: { diagnostics: 'Dead' }, GG02: { diagnostics: 'broken  HINGE, Display B' } } }), models, cfg);
+  assert.deepEqual(r.lockedFaulty.map(x => [x.itemLookup, x.issue]), [['GG02', 'Broken HINGE']]);
+});
+
+test('Blancco models get the Dictionary\'s Model cleanup, like Windows reports', () => {
+  const head = ['System manufacturer', 'System chassis type', 'Device Identifier', 'Asset Tag', 'Erasure state', 'System serial', 'System version', 'System model',
+    'Capacity', 'Comment', 'CPU model', 'Total Memory', 'Memory type', 'Disk capacity', 'Disk interface type', 'Disk serial'];
+  const row = (item, sn, make, version, model) => [make, 'Notebook', item, '', 'Successful', sn, version, model, '90', 'DI B', '', '32 GiB', 'DDR5', '1 TB', 'NVMe', 'D' + sn];
+  const table = [head, row('GG01', 'S1', 'HP', 'SBKPFV3', 'HP ZBook Firefly 14 inch G11 Mobile Workstation PC'), row('GG02', 'S2', 'LENOVO', 'ThinkPad P14s Gen 3', '21ALS0XP00')];
+  const r = buildReport(project({ inputs: { reports: '', blanccoFiles: [{ name: 'b.csv', table }] } }), models);
+  assert.deepEqual(r.rows.map(x => x.model), ['ZBook Firefly 14 inch G11', 'ThinkPad P14s Gen 3']);
+});

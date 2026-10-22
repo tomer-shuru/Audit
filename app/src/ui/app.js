@@ -3,7 +3,7 @@ import { buildReport, itemCode, itemName, numberingStart, codeGroup, compareGrou
 import { itemKey } from '../engine/sources.js';
 import { buildSims } from '../engine/sims.js';
 import { readSheetRows } from './merge.js';
-import { state, store, history, snapshot, clearHistory, isSims, canEditSettings, settingsComplete, STORE_PROJECT, STORE_TAB } from './state.js';
+import { state, store, history, snapshot, clearHistory, isSims, outputOf, OUTPUTS, canEditSettings, settingsComplete, STORE_PROJECT, STORE_TAB } from './state.js';
 import { $, esc, plural, toast, tableScroll, restoreTableScroll } from './util.js';
 import { reportProject, recordMine, conflictWarnings, renderPeopleChip } from './collab.js';
 import { scheduleAutosave, renderSaveState, saveProject } from './project.js';
@@ -115,9 +115,8 @@ export const undoEdit = () => restoreEdit(history.undo, history.redo, 'undo');
 export const redoEdit = () => restoreEdit(history.redo, history.undo, 'redo');
 
 // the Output picker in the top bar: a project setting
-const OUTPUTS = { shuru: 'Shuru', sims: 'SIMS', google: 'Google' };
 export function setOutput(value) {
-  if (!OUTPUTS[value] || value === (state.project.settings.output || 'shuru')) return;
+  if (!OUTPUTS[value] || value === outputOf()) return;
   if (!canEditSettings()) { renderChrome(); toast(`Only ${state.collab.owner} can change the output of this shared project`, 'bad'); return; }
   state.project.settings.output = value;
   changed();
@@ -138,8 +137,8 @@ export function renderChrome() {
     : '<b>No project set up</b>';
   renderSaveState($('#saveState'));
   renderPeopleChip();
-  document.querySelectorAll('select[data-output]').forEach(sel => { sel.value = s.output || 'shuru'; });
-  document.body.dataset.output = s.output || 'shuru'; // each output has its own soft color (styles.css)
+  document.querySelectorAll('select[data-output]').forEach(sel => { sel.value = outputOf(); });
+  document.body.dataset.output = outputOf(); // each output has its own color (styles.css)
   // the Final Report tab shows how many checks there are: red = problems, yellow = warnings, gray = notes
   const checks = Object.entries(LEVEL_WORDS).map(([l, word]) => {
     const n = levelCount(r.warnings, l);

@@ -4,7 +4,7 @@
 import { EDITABLE } from '../engine/report.js';
 import { itemKey } from '../engine/sources.js';
 import { SIMS_SHARED, simsEditable } from '../engine/sims.js';
-import { state, isSims, outputOf, recordEdit } from './state.js';
+import { state, isSims, outputOf, OUTPUTS, recordEdit } from './state.js';
 import { $, esc, plural, redrawKeepingCaret, flash } from './util.js';
 import { ICONS } from './icons.js';
 import { grid } from './grid.js';
@@ -19,7 +19,11 @@ import {
 // check levels, worst first: red = problems, yellow = warnings, blue = SIMS notes, gray = notes
 export const LEVEL_WORDS = { error: 'problem', warn: 'warning', sims: 'SIMS note', info: 'note' };
 const LEVEL_ICONS = { error: '✖', warn: '!', sims: 'S', info: 'i' };
-const OUTPUT_TAGS = { shuru: 'Shuru layout', sims: 'SIMS layout', google: 'Google layout' };
+// what the Final Report says about the layout of each output other than ours
+const LAYOUT_HINTS = {
+  sims: 'SIMS layout: columns D (Item No) to T (Blancco Result) of the SIMS sheet. Serial No, asset tag, Diagnostics and weight are the same as in the Shuru layout; changing another column only changes the SIMS output. Codes come from Dictionary › SIMS diagnostics.',
+  google: 'Google layout: their ITAD REPORT columns, Item to Weight (KG); the prices after it are filled in their sheet. It is the Shuru data, so an edit here changes Shuru too.',
+};
 export const levelCount = (warnings, level) => warnings.filter(w => w.level === level).length;
 
 export function renderReport(main) {
@@ -59,14 +63,16 @@ export function renderReport(main) {
   </section>` : ''}
   <section class="card">
     <div class="card-head">
-      <div><h2>Final Report <span class="output-tag" title="The Output picker in the top bar chooses the layout">${OUTPUT_TAGS[outputOf()] ?? ''}</span></h2><p class="hint">Works like a spreadsheet: arrow keys, Shift to select, type or double-click to change a cell, Ctrl+C / Ctrl+V, Ctrl+Z to undo.
+      <div><h2>Final Report <span class="output-tag" title="The Output picker in the top bar chooses the layout">${OUTPUTS[outputOf()]} layout</span></h2><p class="hint">Works like a spreadsheet: arrow keys, Shift to select, type or double-click to change a cell, Ctrl+C / Ctrl+V, Ctrl+Z to undo.
       Edited cells are highlighted; clear a cell (Delete) to go back to the calculated value.
-      ${sims ? 'SIMS layout: columns D (Item No) to T (Blancco Result) of the SIMS sheet. Serial No, asset tag, Diagnostics and weight are the same as in the Shuru layout; changing another column only changes the SIMS output. Codes come from Dictionary › SIMS diagnostics.' : outputOf() === 'google' ? 'Google layout: their ITAD REPORT columns, Item to Weight (KG); the prices after it are filled in their sheet. It is the Shuru data, so an edit here changes Shuru too.' : ''}
+      ${LAYOUT_HINTS[outputOf()] ?? ''}
       ${state.sheet ? 'Green cells come from the Google Sheet rows on the Data tab (the other inputs had nothing there).' : ''}
       Empty yellow rows are item numbers with no data yet; typing in one adds a manual entry.
       The arrow on a column header filters or hides it. <b>Copy and Download take what is shown.</b></p></div>
     </div>
     <div class="sheet-tabs" role="tablist">${sheetKinds().map(k => `<button role="tab" class="${k === kind ? 'active' : ''}" data-sheet="${k}">${SHEETS[k].title} <span class="count">${count(k)}</span></button>`).join('')}</div>
+    ${kind === 'lockRequest' ? `<p class="hint">SIMS Locked devices request: a row per lock of each device in Locked or Faulty (Lock Type from DevMode › Locked and Faulty › SIMS Lock Types).
+      Download › Locked devices request fills their workbook from Lock Type (column C); Project No. is left as it is there.</p>` : ''}
     <div class="report-bar">
       <input type="search" id="reportSearch" placeholder="Search…" value="${esc(view.search)}">
       ${mainSheet ? `<label class="check"><input type="checkbox" id="issuesOnly" ${view.issuesOnly ? 'checked' : ''}> Only items with issues</label>` : ''}
@@ -90,7 +96,7 @@ export function renderReport(main) {
       </table>
     </div>
     <p class="hint">${rows.length} of ${plural(allRows.length, 'row')} shown${rows.length < allRows.length ? ' (filtered)' : ''}</p>`
-    : `<p class="empty">${mainSheet ? 'Nothing to show yet. Add data on the Data tab or a manual entry.' : kind === 'locked' ? 'No locked or faulty devices in this project.' : 'No data carrier serials (S.N. Data carrier) in this project.'}</p>`}
+    : `<p class="empty">${mainSheet ? 'Nothing to show yet. Add data on the Data tab or a manual entry.' : kind === 'locked' ? 'No locked or faulty devices in this project.' : kind === 'lockRequest' ? 'No locked devices in this project.' : 'No data carrier serials (S.N. Data carrier) in this project.'}</p>`}
   </section>`;
 
   main.querySelectorAll('[data-sheet]').forEach(b => b.onclick = () => { view.sheet = b.dataset.sheet; closePopover(); render(); });
@@ -108,7 +114,8 @@ export function renderReport(main) {
     $('#dlMenu').onclick = e => menu(e.currentTarget, 'download', [
       ['SIMS file (fills the SIMS template)', () => downloadReport({ sims: true })],
       ['SIMS file from another template…', () => downloadReport({ sims: true, pick: true })],
-      ['Locked and Faulty (.xlsx)', () => downloadReport({ sims: true, lockedOnly: true })],
+      ['Locked devices request (fills its template)', () => downloadReport({ sims: true, lockRequest: true })],
+      ['Locked devices request from another template…', () => downloadReport({ sims: true, lockRequest: true, pick: true })],
     ]);
   } else $('#dlReport').onclick = () => downloadReport();
 

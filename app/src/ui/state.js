@@ -70,6 +70,8 @@ export const state = {
 
 export const settingsComplete = s => s.projectNumber.trim() && s.endClient.trim(); // the prefix may be empty (codes that are just numbers)
 export const isSims = () => state.project.settings.output === 'sims';
+// the outputs (sheet layouts) a project can have, by settings.output; each has its own color in styles.css
+export const OUTPUTS = { shuru: 'Shuru', sims: 'SIMS', google: 'Google' };
 export const outputOf = () => state.project.settings.output || 'shuru';
 // a shared project's settings are changed by the person who shared it
 export const canEditSettings = () => !state.collab || state.collab.owner === state.collab.me;

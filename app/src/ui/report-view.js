@@ -4,7 +4,8 @@
 // Hidden columns are remembered on this computer (they are also how the Google Sheet rows on the Data tab are read);
 // filters last while the app is open.
 import { exportColumns, lockedColumns, GOOGLE_COLUMNS } from '../engine/report.js';
-import { SIMS_COLUMNS, HDD_COLUMNS, hddRows } from '../engine/sims.js';
+import { isLockedOrFaulty } from '../engine/rules.js';
+import { SIMS_COLUMNS, HDD_COLUMNS, LOCK_REQUEST_COLUMNS, hddRows } from '../engine/sims.js';
 import { state, outputOf, load, store, STORE_EXPORT_COLS } from './state.js';
 import { reportRows } from './app.js';
 
@@ -15,12 +16,13 @@ export const SHEETS = {
   sims: { title: 'Item per service project', cols: () => SIMS_COLUMNS, rows: () => reportRows() },
   google: { title: 'ITAD Report', cols: () => GOOGLE_COLUMNS, rows: () => reportRows() },
   hdd: { title: 'HDD', cols: () => HDD_COLUMNS, rows: () => hddRows(state.report.rows) },
+  lockRequest: { title: 'Locked devices request', cols: () => LOCK_REQUEST_COLUMNS, rows: () => state.sims?.lockRequest ?? [] },
   locked: { title: 'Locked and Faulty', cols: () => lockedColumns(state.config), rows: () => state.report.lockedFaulty },
 };
 const MAIN = { shuru: 'report', sims: 'sims', google: 'google' };
 // the main sheet of the chosen output
 export const mainKind = () => MAIN[outputOf()] ?? 'report';
-export const sheetKinds = () => (mainKind() === 'sims' ? ['sims', 'hdd', 'locked'] : [mainKind(), 'locked']);
+export const sheetKinds = () => (mainKind() === 'sims' ? ['sims', 'hdd', 'lockRequest'] : [mainKind(), 'locked']);
 export const isMain = kind => Object.values(MAIN).includes(kind);
 export const rowKey = row => row._key ?? row.itemLookup; // HDD rows: one per serial, so several per item
 
@@ -68,7 +70,7 @@ export function shownRows(kind, { except = null } = {}) {
   const q = view.search.trim().toLowerCase();
   const issues = isMain(kind) && view.issuesOnly ? rowIssues() : null;
   return SHEETS[kind].rows().filter(row => (isMain(kind) && !except && view.keep.has(row.itemLookup)) || (
-    (!issues || issues.has(row.itemLookup) || row.locked || row._empty)
+    (!issues || issues.has(row.itemLookup) || isLockedOrFaulty(row.locked) || row._empty)
     && (!q || cols.some(([k]) => String(row[k] ?? '').toLowerCase().includes(q)))
     && filters.every(([k, out]) => !out.has(filterValue(row, k)))));
 }

@@ -35,6 +35,7 @@ const CHECK_LIST = [
   ['duplicateSerial', 'warn', 'The same serial number (S.N.) is on more than one item'],
   ['simsNoCode', 'sims', 'SIMS output: a diagnostic has no SIMS code (it goes to Item Remark)'],
   ['simsNoCategory', 'sims', 'SIMS output: a device type has no SIMS category or codes'],
+  ['simsNoLockType', 'sims', 'SIMS output: a locked device has no Lock Type, so it isn’t on the Locked devices request'],
 ];
 export const CHECKS = Object.fromEntries(CHECK_LIST.map(([key, , meaning]) => [key, meaning]));
 // sims (blue): SIMS output notes, kept apart from the warnings
@@ -86,8 +87,31 @@ export const DEFAULT_CONFIG = {
   },
   // asset tag values meaning "no tag" (dots, slashes, spaces and capitals don't matter; "-" covers any number of dashes)
   noAssetTag: ['-', 'N/A', 'none'],
+  // a diagnostic with one of these (whole words, any capitals) also goes to Locked or Faulty: "RM" counts on its own,
+  // not inside a word, and "Bios lock" doesn't catch "Key Capslock defect"
+  lockedWords: [
+    'BIOS locked', 'BIOS lock', 'Remote locked', 'Remote lock', 'Remote managed', 'Remote management', 'RM',
+    'Apple ID locked', 'Apple ID lock', 'iCloud locked', 'iCloud lock', 'Activation locked', 'Activation lock',
+    'Find My locked', 'Find My lock', 'MDM locked', 'MDM lock',
+    'Dead', 'MB defect', 'Bad MB', 'Motherboard defect',
+  ],
   // makes whose model comes from Blancco's "System version" instead of "System model"
   modelFromVersion: ['LENOVO'],
+  // SIMS Locked devices request: the Lock Type (their drop-down list) of a device whose Locked or Faulty text has one of
+  // the words (whole words, any capitals), top to bottom; make: only for that make (empty = any). A device with
+  // several locks gets a row per Lock Type; faulty devices that match nothing (Dead…) aren't on the request.
+  simsLockTypes: [
+    { words: 'Find My, Apple ID, iCloud, Activation lock, Activation locked', make: '', type: 'Apple Find My' },
+    { words: 'Firmware password', make: '', type: 'Apple Firmware Password' },
+    { words: 'Startup security', make: '', type: 'Apple Startup Security' },
+    { words: 'MDM', make: '', type: 'Apple MDM (Mobile Device Management)' },
+    { words: 'Remote, RM, ABM, DEP', make: 'Apple', type: 'Apple DEP' },
+    { words: 'Remote, RM, Autopilot, Azure, Intune', make: '', type: 'Windows Autopilot/Azure' },
+    { words: 'SEMM', make: '', type: 'Microsoft SEMM' },
+    { words: 'Computrace', make: '', type: 'Computrace' },
+    { words: 'Chrome OS', make: '', type: 'Chrome OS Enterprise' },
+    { words: 'BIOS', make: '', type: 'Bios Password' },
+  ],
   checks: Object.fromEntries(CHECK_LIST.map(([key, level]) => [key, level])),
   reportColumns: REPORT.map(([key, label]) => ({ key, label })),
   lockedColumns: LOCKED.map(([key, label]) => ({ key, label })),
@@ -126,6 +150,8 @@ export function withDefaults(cfg) {
     diskKinds: list('diskKinds', isObj),
     texts: obj('texts'),
     noAssetTag: list('noAssetTag', x => typeof x === 'string'),
+    lockedWords: list('lockedWords', x => typeof x === 'string'),
+    simsLockTypes: list('simsLockTypes', isObj),
     modelFromVersion: list('modelFromVersion', x => typeof x === 'string'),
     checks,
     reportColumns: columns('reportColumns'),
@@ -150,6 +176,7 @@ export function validateConfig(cfg) {
   if (!cfg.erasure.passWords.some(w => !empty(w))) out.push('Erasure: at least one word for a passed erasure is needed');
   if (empty(cfg.erasure.passText)) out.push('Erasure: the text for a passed erasure is empty');
   if (empty(cfg.erasure.failText)) out.push('Erasure: the text for a failed erasure is empty');
+  cfg.simsLockTypes.forEach((x, i) => { if (empty(x.words) || empty(x.type)) out.push(`SIMS Lock Types row ${i + 1}: the words and the Lock Type are both needed`); });
   cfg.diskKinds.forEach((x, i) => { if (empty(x.match)) out.push(`Disk types row ${i + 1}: the text to look for is empty`); });
   for (const k of ['reportColumns', 'lockedColumns']) {
     cfg[k].forEach(x => { if (empty(x.label)) out.push(`${k === 'reportColumns' ? 'Report' : 'Locked and Faulty'} columns: the header for "${x.key}" is empty`); });

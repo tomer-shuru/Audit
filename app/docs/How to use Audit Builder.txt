@@ -137,6 +137,13 @@ DOING A PROJECT
    blue, and clearing a cell (Delete) goes back to the calculated value.
    Diagnostic codes (like LM or CD) work in the Diagnostics and Locked or
    Faulty cells too.
+   Locked or Faulty fills itself: a diagnostic from any input that says
+   BIOS locked, Remote locked, Remote managed, RM, Apple ID / Find My /
+   iCloud / MDM locked, Dead, MB defect, Bad MB... is also written there,
+   so the device is on the Locked and Faulty list. Capitals don't matter,
+   but only whole words count ("RM" on its own, not inside ARM or RMA).
+   To take a device off the list, type "-" in its Locked or Faulty cell.
+   The words are kept in Settings > DevMode > Locked and Faulty.
 
 The Final Report and Manual entries tables work like a spreadsheet:
    - Click a cell, or move with the arrow keys, Tab, Enter, Home / End,
@@ -251,8 +258,8 @@ the Manual entries stay exactly the same; only the output changes.
    to the Dictionary. "Ok" is left out.
 4. The Final Report has three lists (tabs above the table): Item per service
    project (paste at the Item No cell, column D, of the first item row), HDD
-   (one row per data carrier serial from "S.N. Data carrier") and Locked and
-   Faulty. Filters and hidden columns work the same. Download > "SIMS file"
+   (one row per data carrier serial from "S.N. Data carrier") and Locked
+   devices request. Filters and hidden columns work the same. Download > "SIMS file"
    fills the SIMS template with the rows shown,
    so their logos, comments and Summary stay as they are; the Summary
    counts itself when you open the file. The template is
@@ -260,6 +267,20 @@ the Manual entries stay exactly the same; only the output changes.
    template, empty it of data and save it over that file.
 5. Rows already in the SIMS sheet can be pasted in "Rows already in the
    Google Sheet" on the Data tab (copy columns D to T), like for our sheet.
+6. Locked devices request (instead of our Locked and Faulty): SIMS's own
+   workbook, columns Lock Type, Client asset tag, Serial No., IMEI No.,
+   Model No. and Password (left empty for them). Project No. is already in
+   their file and is left as it is.
+   - A row per lock of each device that is locked now (Locked or Faulty). The Lock Type (from
+     their drop-down list) comes from DevMode > Locked and Faulty > SIMS Lock
+     Types, e.g. "Bios Locked" = Bios Password, "Find My Locked" / "Apple ID
+     Locked" = Apple Find My, "Remote Locked" = Apple DEP on a Mac and
+     Windows Autopilot/Azure on anything else. Faulty devices that aren't
+     locked (Dead, MB defect) aren't on it. A lock with no Lock Type gets a
+     blue SIMS note.
+   - Download > "Locked devices request" fills their workbook
+     (G:\My Drive\Audit Builder\Templates\Locked devices request.xlsx), so
+     their instructions, lock descriptions and drop-down stay.
 
 The SIMS lists are in the Dictionary (after "SIMS output:"):
 - SIMS diagnostics: one row per SIMS issue. Write our diagnostics next to
@@ -396,7 +417,8 @@ If the Dictionary window says "Not shared", your changes stay on your computer
 only. Connect the folder as above.
 
 Settings > DevMode... is for the person who maintains the rules and asks for
-a password.
+a password. Its "Locked and Faulty" page holds the words that put a
+diagnostic on the Locked and Faulty list: change, remove or add them there.
 
 
 MICROSOFT BIOS PASSWORDS (Tools menu)

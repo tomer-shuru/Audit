@@ -762,6 +762,8 @@
   }
  ],
  "cleanupRules": [
+  "Mobile Workstation PC",
+  "Mobile Workstation",
   "Notebook PC",
   "All-in-One PC",
   "Desktop Mini",

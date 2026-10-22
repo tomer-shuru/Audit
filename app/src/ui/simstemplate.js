@@ -8,6 +8,8 @@ const CFB = XLSX.CFB;
 const dec = new TextDecoder(), enc = new TextEncoder();
 
 export const SIMS_TEMPLATE = { folder: 'Templates', file: 'SIMS.xlsx' }; // in the shared Audit Builder folder
+export const LOCK_TEMPLATE = { folder: 'Templates', file: 'Locked devices request.xlsx' };
+const LOCK_SHEET = '2. Locked devices request';
 const SHEETS = { items: 'Item per service project', hdd: 'HDD', codes: 'Diagnostic codes' };
 
 const colIndex = letters => [...letters].reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0);
@@ -111,17 +113,21 @@ function readSst(zip) {
  * bytes: the template .xlsx; items: rows of the 17 values for columns D to T; hdd: [item, serial] rows;
  * codes: [category, code, description] rows. Returns the filled .xlsx as a Uint8Array.
  */
-export function fillSimsTemplate(bytes, { items = [], hdd = [], codes = [] }) {
+function openTemplate(bytes) {
   const zip = CFB.read(bytes, { type: 'array' });
   if (!entry(zip, 'xl/workbook.xml')) throw new Error('this isn\'t an Excel (.xlsx) file');
   const paths = sheetPaths(zip);
-  const sst = readSst(zip);
   const sheet = name => {
     const path = paths.get(name);
     const e = path && entry(zip, path);
     if (!e) throw new Error(`the template has no "${name}" tab`);
     return e;
   };
+  return { zip, paths, sst: readSst(zip), sheet };
+}
+
+export function fillSimsTemplate(bytes, { items = [], hdd = [], codes = [] }) {
+  const { zip, paths, sst, sheet } = openTemplate(bytes);
 
   const itemsSheet = sheet(SHEETS.items);
   itemsSheet.set(fillSheet(itemsSheet.get(), sst.list, {
@@ -137,6 +143,33 @@ export function fillSimsTemplate(bytes, { items = [], hdd = [], codes = [] }) {
   const codesSheet = sheet(SHEETS.codes);
   codesSheet.set(fillSheet(codesSheet.get(), sst.list, { name: SHEETS.codes, firstCol: 1, from: 1, to: 3, data: codes, isHeader: h => /^category$/i.test(h.A || '') && /^code$/i.test(h.B || '') }));
 
+  // the item tab's filter range grows with the rows
+  const end = items.length + 1;
+  return finish(zip, paths, sst, wbXml => wbXml.replace(/(<definedName\b[^>]*>'?Item per service project'?!\$?[A-Z]+\$?\d+:\$?[A-Z]+\$?)(\d+)/, (m, a, n) => a + Math.max(Number(n), end)));
+}
+
+/**
+ * The SIMS Locked devices request: bytes = their workbook; rows = the 6 values for columns C to H (Lock Type to
+ * Password). Project No. (B), their instructions, lock descriptions and the Lock Type drop-down stay; the drop-down covers the rows.
+ */
+export function fillLockTemplate(bytes, rows) {
+  const { zip, paths, sst, sheet } = openTemplate(bytes);
+  const e = sheet(LOCK_SHEET);
+  const xml = fillSheet(e.get(), sst.list, {
+    name: LOCK_SHEET, firstCol: 3, from: 3, to: 8, data: rows,
+    isHeader: h => {
+      if (h.B !== 'Project No.') return false;
+      if (h.C !== 'Lock Type' || h.E !== 'Serial No.') throw new Error(`the columns of the "${LOCK_SHEET}" tab have changed (expected Project No., Lock Type, Client asset tag, Serial No. from column B)`);
+      return true;
+    },
+  });
+  // the Lock Type drop-down (C<first row>:C<last row>): as far down as the rows go
+  e.set(xml.replace(/(<dataValidation\b[^>]*\bsqref="\$?C\$?(\d+):\$?C\$?)(\d+)/, (m, a, first, last) => a + Math.max(Number(last), Number(first) + rows.length - 1)));
+  return finish(zip, paths, sst);
+}
+
+// fixWorkbook: a last change to workbook.xml
+function finish(zip, paths, sst, fixWorkbook = x => x) {
   // every sheet: drop the old results of formulas (they're recalculated when the file opens) and
   // keep only the shared strings still in use, so nothing of an earlier project stays hidden in the file
   const used = new Map();
@@ -163,10 +196,7 @@ export function fillSimsTemplate(bytes, { items = [], hdd = [], codes = [] }) {
   wbXml = /<calcPr\b/.test(wbXml)
     ? wbXml.replace(/<calcPr\b([^>]*?)(\/?)>/, (m, a, close) => `<calcPr${a.replace(/\s+fullCalcOnLoad="[^"]*"/, '')} fullCalcOnLoad="1"${close}>`)
     : wbXml.replace(/(<\/definedNames>|<\/sheets>)/, '$1<calcPr fullCalcOnLoad="1"/>');
-  // the item tab's filter range grows with the rows
-  const end = items.length + 1;
-  wbXml = wbXml.replace(/(<definedName\b[^>]*>'?Item per service project'?!\$?[A-Z]+\$?\d+:\$?[A-Z]+\$?)(\d+)/, (m, a, n) => a + Math.max(Number(n), end));
-  wb.set(wbXml);
+  wb.set(fixWorkbook(wbXml));
   // an old calculation chain would point at cells that changed
   if (CFB.find(zip, '/xl/calcChain.xml')) {
     CFB.utils.cfb_del(zip, '/xl/calcChain.xml');
