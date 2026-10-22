@@ -10,7 +10,7 @@ import { folder, allowFolder } from './folder.js';
 import { SHEETS, sheetKinds, exportCols, hiddenCols, shownRows, isFiltered } from './report-view.js';
 
 // if red problems are still open on the Final Report, ask first
-const okToExport = () => {
+export const okToExport = () => {
   const errors = state.report.warnings.filter(w => w.level === 'error').length;
   return !errors || confirm(`${errors === 1 ? '1 problem is' : `${errors} problems are`} still open on the Final Report. Export anyway?`);
 };

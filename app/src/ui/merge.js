@@ -1,7 +1,7 @@
 // Rows that are already in the project's Google Sheet, pasted on the Data tab.
 // They are one more input for the report, the last in line: every other input (Mac / Windows reports,
 // Blancco, manual entries) wins where it has a value, and the sheet fills in the rest.
-import { itemKey } from '../engine/sources.js';
+import { itemCodeReader } from '../engine/gsheet.js';
 
 // Tab-separated text as Google Sheets / Excel copy it (cells with tabs, line breaks or quotes come in "quotes")
 export function parseTsv(text) {
@@ -23,8 +23,6 @@ export function parseTsv(text) {
   return rows;
 }
 
-const escRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
 // sheetText: rows copied from the Google Sheet (same columns as the Final Report shows, starting at the first item row)
 // cols: the columns shown (not hidden) on the Final Report; prefix: the project's item code prefix;
 // itemPrefix: the start of the ITEM column ("ITD", from the config)
@@ -33,19 +31,12 @@ const escRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 export function readSheetRows({ sheetText, cols, prefix, itemPrefix = 'ITD' }) {
   const table = parseTsv(sheetText);
   const itemCol = cols.findIndex(([k]) => k === 'item');
-  // "ITD-SHR11734-BM20" or just "BM20"; extra item groups too (MS-M20, MSM20 with prefix MS) in the ITEM column
-  // or as a whole ITEM value. Without a prefix a bare number is only taken from the ITEM column,
-  // so serials, years and weights in other columns aren't mistaken for item codes.
-  const p = escRe(String(prefix ?? '').trim().toUpperCase());
-  const any = p ? `${p}[A-Z-]*\\d+` : '\\d+';
-  const item = new RegExp(`(?:^|-)(${any})$`);
-  const whole = new RegExp(`^${escRe(String(itemPrefix).trim().toUpperCase())}-.+-(${any})$`), plain = p && new RegExp(`(?:^|-)(${p}\\d+)$`);
+  const read = itemCodeReader(prefix, itemPrefix);
   const codeOf = cells => {
     const order = itemCol >= 0 && itemCol < cells.length ? [itemCol, ...cells.keys()] : [...cells.keys()];
     for (const j of order) {
-      const v = String(cells[j] ?? '').trim().toUpperCase();
-      const m = j === itemCol ? v.match(item) : v.match(whole) || (plain && v.match(plain));
-      if (m) return itemKey(m[1]);
+      const key = read(cells[j], j === itemCol);
+      if (key) return key;
     }
     return null;
   };

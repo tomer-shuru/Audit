@@ -1,5 +1,6 @@
-// The project setup window: project number, end client, item code prefix and first item number
+// The project setup window: project number, end client, item code prefix, first item number and the Google Sheet link
 import { itemCode, itemName } from '../engine/report.js';
+import { sheetLink } from '../engine/gsheet.js';
 import { state, canEditSettings } from './state.js';
 import { $, esc } from './util.js';
 import { changed } from './app.js';
@@ -20,6 +21,7 @@ export function openSetup({ force = false, onSave = null, start: startWith = nul
   const s = state.project.settings;
   const f = $('#setupForm');
   f.projectNumber.value = s.projectNumber; f.prefix.value = s.prefix; f.endClient.value = s.endClient; f.startNumber.value = s.startNumber ?? 1;
+  f.sheetUrl.value = s.sheetUrl ?? ''; f.sheetUrl.setCustomValidity('');
   // a shared project's settings are changed by the person who shared it
   const locked = !canEditSettings();
   for (const el of f.querySelectorAll('input')) el.disabled = locked;
@@ -51,6 +53,11 @@ export function initSetup() {
   $('#projectChip').onclick = () => openSetup();
   const f = $('#setupForm');
   f.oninput = updatePreview;
+  // the Google Sheet link is optional, but when there is one it must be a Google Sheets link
+  f.sheetUrl.oninput = () => {
+    const v = f.sheetUrl.value.trim();
+    f.sheetUrl.setCustomValidity(v && !sheetLink(v) ? 'Paste the link of a Google Sheet (https://docs.google.com/spreadsheets/d/…)' : '');
+  };
   $('#setupContinue').onclick = () => { const s = start; start = null; afterSave = null; $('#setupDialog').dataset.start = ''; $('#setupDialog').close(); s.onContinue(); };
   $('#setupOpen').onclick = () => start?.onOpen();
   f.onsubmit = e => {
@@ -62,6 +69,7 @@ export function initSetup() {
     s.prefix = f.prefix.value.trim().toUpperCase();
     s.endClient = f.endClient.value.trim();
     s.startNumber = Number(f.startNumber.value) || 0;
+    s.sheetUrl = f.sheetUrl.value.trim();
     $('#setupDialog').close();
     changed();
     const run = afterSave; afterSave = null;

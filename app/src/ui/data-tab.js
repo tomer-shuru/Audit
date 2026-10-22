@@ -5,6 +5,7 @@ import { readTableFiles, parsePastedTable } from './io.js';
 import { state, outputOf, OUTPUTS, otherParts } from './state.js';
 import { $, esc, plural, toast, dropZone } from './util.js';
 import { changed } from './app.js';
+import { projectSheet, loadFromSheet } from './gsheet.js';
 
 // where the rows already in the sheet are copied from, for the outputs other than ours
 const SHEET_FROM = { sims: 'the SIMS sheet, columns D (Item No) to T (Blancco Result)', google: 'the ITAD REPORT sheet, from Item to Weight (KG)' };
@@ -68,7 +69,10 @@ export function renderData(main) {
       <p class="hint">If some items are already filled in the project's Google Sheet, copy those rows there (from the first item row down past the last filled one,
       same columns as the Final Report shows) and paste them here. They are used like the other inputs, last in line: Blancco, the Mac and Windows reports and manual entries
       win wherever they have a value, and the sheet fills in what they leave empty (green cells on the Final Report). Edits there and manual entries can change them.${SHEET_FROM[outputOf()] ? ` This project's output is ${OUTPUTS[outputOf()]}, so copy them from ${SHEET_FROM[outputOf()]}.` : ''}${state.collab ? ' Shared project: everyone sees the same rows here, and the newest paste counts.' : ''} </p></div>
-      ${inp.sheet.trim() ? '<div class="actions"><button class="btn ghost" id="sheetClear">Clear</button></div>' : ''}
+      <div class="actions">
+        ${projectSheet() ? '<button class="btn" id="sheetLoad" title="Read the item rows from the project\'s Google Sheet into this box">Load from Google Sheet</button>' : ''}
+        ${inp.sheet.trim() ? '<button class="btn ghost" id="sheetClear">Clear</button>' : ''}
+      </div>
     </div>
     <textarea id="sheetInput" class="mono" rows="4" spellcheck="false" placeholder="Paste the Google Sheet rows here">${esc(inp.sheet)}</textarea>
     <div class="status" id="sheetStatus">${sheetStatus()}</div>
@@ -128,6 +132,7 @@ export function renderData(main) {
   typedInto('#sheetInput', 'sheet', '#sheetStatus', sheetStatus);
   const sheetClear = $('#sheetClear');
   if (sheetClear) sheetClear.onclick = () => { inp.sheet = ''; changed(); };
+  $('#sheetLoad')?.addEventListener('click', loadFromSheet);
 }
 
 // the Mac and Windows report lines in a text, and the lines that are neither

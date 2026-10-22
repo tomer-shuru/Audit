@@ -114,6 +114,9 @@ export const DEFAULT_CONFIG = {
     { words: 'BIOS', make: '', type: 'Bios Password' },
   ],
   checks: Object.fromEntries(CHECK_LIST.map(([key, level]) => [key, level])),
+  // Send to / Load from Google Sheet: the Apps Script web app (google-sheets/AuditBuilderSheets.gs) and its key;
+  // empty = not set up
+  googleSheets: { scriptUrl: '', key: '' },
   reportColumns: REPORT.map(([key, label]) => ({ key, label })),
   lockedColumns: LOCKED.map(([key, label]) => ({ key, label })),
   // DevMode password (SHA-256 of "audit-builder:" + password)
@@ -155,6 +158,7 @@ export function withDefaults(cfg) {
     simsLockTypes: list('simsLockTypes', isObj),
     modelFromVersion: list('modelFromVersion', x => typeof x === 'string'),
     checks,
+    googleSheets: obj('googleSheets'),
     reportColumns: columns('reportColumns'),
     lockedColumns: columns('lockedColumns'),
     passwordHash: typeof c.passwordHash === 'string' && c.passwordHash ? c.passwordHash : d.passwordHash,
@@ -178,6 +182,9 @@ export function validateConfig(cfg) {
   if (empty(cfg.erasure.passText)) out.push('Erasure: the text for a passed erasure is empty');
   if (empty(cfg.erasure.failText)) out.push('Erasure: the text for a failed erasure is empty');
   cfg.simsLockTypes.forEach((x, i) => { if (empty(x.words) || empty(x.type)) out.push(`SIMS Lock Types row ${i + 1}: the words and the Lock Type are both needed`); });
+  const url = String(cfg.googleSheets.scriptUrl ?? '').trim();
+  if (url && !/^https:\/\/script\.google\.com\/.+\/exec$/.test(url)) out.push('Google Sheets: the web app URL should start with https://script.google.com/ and end in /exec');
+  if (url && empty(cfg.googleSheets.key)) out.push('Google Sheets: the key is empty');
   cfg.diskKinds.forEach((x, i) => { if (empty(x.match)) out.push(`Disk types row ${i + 1}: the text to look for is empty`); });
   for (const k of ['reportColumns', 'lockedColumns']) {
     cfg[k].forEach(x => { if (empty(x.label)) out.push(`${k === 'reportColumns' ? 'Report' : 'Locked and Faulty'} columns: the header for "${x.key}" is empty`); });

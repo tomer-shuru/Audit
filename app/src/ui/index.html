@@ -85,6 +85,8 @@
     <p class="hint">Leave the prefix empty if the item codes are just numbers (01, 02…).</p>
     <label>First item number<input name="startNumber" type="number" min="0" step="1" required value="1"></label>
     <p class="hint">Usually 1. Some clients number their items from somewhere else, e.g. 4000.</p>
+    <label>Google Sheet link <span class="muted">optional</span><input name="sheetUrl" type="url" placeholder="https://docs.google.com/spreadsheets/d/…" autocomplete="off"></label>
+    <p class="hint">The link of the project's Google Sheet, copied with the tab the rows go to open. It adds Send to Google Sheet (Final Report) and Load from Google Sheet (Data tab).</p>
     <p id="setupPreview" class="preview"></p>
     <p id="setupLocked" class="warn-text" hidden></p>
     <div class="dialog-actions">

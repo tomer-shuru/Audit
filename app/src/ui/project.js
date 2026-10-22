@@ -278,6 +278,7 @@ export function initFileMenu() {
   $('#btnHistory').onclick = openHistory;
   $('#saveState').onclick = clickSaveState;
   $('#peopleChip').onclick = openPeople;
-  $('#collabClose').onclick = () => $('#collabDialog').close();
+  // (Send to Google Sheet calls this button Cancel while it is open; the other windows expect Done)
+  $('#collabClose').onclick = () => { $('#collabDialog').close(); $('#collabClose').textContent = 'Done'; };
   $('#openFile').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) openProjectFile(f); };
 }

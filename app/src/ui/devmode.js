@@ -167,6 +167,12 @@ const SECTIONS = {
     <table class="grid dev-table"><thead><tr><th>Used for</th><th>Column name in the export</th></tr></thead><tbody>
       ${Object.keys(DEFAULT_CONFIG.blanccoColumns).map(k => `<tr><td>${esc(BLANCCO[k] || k)}</td><td><input data-o="blanccoColumns" data-k="${k}" value="${esc(d.blanccoColumns[k])}"></td></tr>`).join('')}
     </tbody></table>` },
+  googleSheets: { label: 'Google Sheets', keys: ['googleSheets'], html: d => `
+    <p class="hint">For Send to Google Sheet (Final Report) and Load from Google Sheet (Data tab). They go through a small Google Apps Script
+    that runs as the person who deployed it, so it reaches every sheet that person can edit. How to set it up: Help › How to use Audit Builder, "GOOGLE SHEETS".
+    Leave the link empty to turn both buttons off.</p>
+    ${field('googleSheets', 'scriptUrl', 'Web app URL', 'From Deploy › Manage deployments, ends in /exec', 'text', d.googleSheets.scriptUrl)}
+    ${field('googleSheets', 'key', 'Key', 'The same text as KEY in the script', 'text', d.googleSheets.key)}` },
   more: { label: 'Password & backups', keys: [], html: d => `
     <h3>DevMode password</h3>
     <form class="dev-password" id="devPassword">

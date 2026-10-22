@@ -10,6 +10,14 @@ import { load, store, STORE_PROJECT } from './state.js';
 import { $, esc, plural } from './util.js';
 
 export const UPDATES = [
+  { id: 9, date: '2026-10-22', items: [
+    '<b>Send to Google Sheet</b> opens at once: the Final Report reads the sheet in the background. If someone changed a cell in the sheet since then, nothing is written; the window shows what the sheet has now, to check and send again.',
+    'New rows added by Send look like the sheet\'s normal rows (not like its header).',
+  ] },
+  { id: 8, date: '2026-10-22', items: [
+    'New, optional: a <b>Google Sheet link</b> in Project setup. With it, the Final Report has <b>Send to Google Sheet</b>: each row goes to its item\'s row in the sheet, new items are added in order, and cells the sheet already has differently are listed first, to overwrite or skip. Copy all rows works as before.',
+    'With the link, the Data tab also has <b>Load from Google Sheet</b>, instead of copying the sheet\'s rows by hand.',
+  ] },
   { id: 7, date: '2026-10-22', items: [
     'New: Tools › <b>Find a device</b>. Search every project in the Projects folder by item code (GG07), item number, serial number or asset tag, and open the project right at that device.',
     'New for shared projects: File › <b>Change history</b> (also in the "Shared · people" window). Who changed what and when, with what it was before. Click an item to see it on the Final Report.',

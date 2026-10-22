@@ -81,6 +81,10 @@ dialog.collab .project-list { max-height: 40vh; overflow: auto; }
 .unknown-models table { margin-top: 6px; border-collapse: collapse; }
 .unknown-models td { padding: 2px 12px 2px 0; }
 .unknown-models .muted { color: inherit; opacity: .8; }
+/* Final Report › Send to Google Sheet */
+.send-plan { margin: 10px 0; padding-left: 20px; line-height: 1.6; }
+dialog.collab .send-collisions { max-height: 40vh; }
+dialog.collab .banner { margin: 8px 0; }
 /* Tools › Find a device */
 dialog.collab .find-results { max-height: 50vh; margin-top: 8px; }
 .find-results td.find-hit { font-weight: 600; background: var(--accent-soft); }

@@ -23,7 +23,8 @@ export const store = (key, val) => { try { localStorage.setItem(key, JSON.string
 export const emptyProject = () => ({
   version: 2,
   // output: which sheet layout the Final Report uses ('shuru', 'sims' or 'google')
-  settings: { projectNumber: '', prefix: '', endClient: '', startNumber: 1, output: 'shuru' },
+  // sheetUrl: the project's Google Sheet (optional; Send to / Load from Google Sheet)
+  settings: { projectNumber: '', prefix: '', endClient: '', startNumber: 1, output: 'shuru', sheetUrl: '' },
   inputs: { reports: '', blanccoFiles: [], sheet: '', bios: null }, // bios: the Microsoft BIOS password file { fileName, text, at }
   manual: {}, overrides: {},
   simsOverrides: {}, // edits of SIMS-only columns, made in the Final Report table in SIMS layout

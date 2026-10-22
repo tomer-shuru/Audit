@@ -183,6 +183,9 @@ The Final Report and Manual entries tables work like a spreadsheet:
    - The tabs above the table switch between the Audit Report and Locked
      and Faulty (send that list along with the report).
    - Download Excel saves both lists, as shown, in one .xlsx file.
+   - Send to Google Sheet (only when the project has a Google Sheet link in
+     Project setup): puts the rows straight into the sheet, each on its
+     item's row. See "SENDING TO THE GOOGLE SHEET" below.
    If problems (red) are still open, the app asks before copying or
    downloading. While filters are on, a row you change stays in view until
    you change the filters, even if it no longer matches them.
@@ -216,6 +219,66 @@ by hand):
    e. On the Final Report click "Copy all rows", click the ITEM cell of
       the first item row in the Google Sheet and paste. The sheet's values
       are included, so they aren't lost (formulas become plain values).
+With a Google Sheet link in Project setup, "Load from Google Sheet" on the
+Data tab does a and b for you, and Send to Google Sheet does e.
+
+
+SENDING TO THE GOOGLE SHEET (optional)
+--------------------------------------
+
+Instead of copying and pasting, the app can put the rows into the project's
+Google Sheet itself. Copy all rows keeps working as before.
+
+1. In Project setup (click the project name at the top), paste the sheet's
+   link in "Google Sheet link". Open the sheet on the tab the rows go to
+   and copy the link from the address bar (it ends in #gid=..., which says
+   the tab). Leave it empty to not use this.
+2. Final Report > "Send to Google Sheet". The app reads the sheet first and
+   shows what it would do. Nothing is changed yet:
+   - Each row goes to the sheet row with the same item code, so gaps in the
+     sheet or in the project don't matter.
+   - Empty cells here never clear anything in the sheet, and columns after
+     ours (prices...) aren't touched.
+   - Items that aren't in the sheet yet become new rows, in item order
+     (GG12 between GG11 and GG13).
+   - Cells that already have something different in the sheet are listed:
+     choose "Overwrite them and send" or "Skip them and send". Cancel sends
+     nothing.
+   - A yellow note warns if the sheet's headers don't match the columns
+     shown (hide the columns the sheet doesn't have, like for a paste).
+   It sends what the Final Report shows: with filters on, only those rows.
+3. Each request to Google takes a second or two (mostly Google starting the
+   script). So while the Final Report is open, the app reads the sheet in
+   the background, and Send shows what it would change at once. If someone
+   changes a cell Send would write (in the sheet, after it was read),
+   nothing is written: the window reads the sheet again and shows what it
+   has now, so you can check and send again.
+4. Data tab > "Load from Google Sheet" reads the sheet's item rows into
+   "Rows already in the Google Sheet" (instead of copying them).
+A mistake can be undone in the sheet: File > Version history.
+
+It needs a real Google Sheet. An Excel file (.xlsx) kept in Drive, like
+the SIMS template, can't be changed by it: open it, choose File > Save as
+Google Sheets, and use the new sheet's link.
+
+Setting it up (once, by Tomer; nobody else needs to do anything):
+The app is opened as a file, so it can't sign in to Google itself. A small
+Google Apps Script does the reading and writing instead, as the account that
+set it up (so it reaches every sheet that account can edit).
+   a. Go to script.google.com > New project. Name it "Audit Builder Sheets".
+   b. Delete what is in the editor and paste in the whole file
+      app\google-sheets\AuditBuilderSheets.gs (from the Audit repository).
+   c. Change PUT-YOUR-KEY-HERE to a long text of your own (letters and
+      numbers, no spaces). Save (Ctrl+S).
+   d. Deploy > New deployment > the gear > Web app. Execute as: Me. Who has
+      access: Anyone. Deploy, then allow access with your Google account
+      (on "Google hasn't verified this app": Advanced > Go to Audit Builder
+      Sheets).
+   e. Copy the Web app URL (ends in /exec).
+   f. In Audit Builder: Settings > DevMode > Google Sheets: paste the URL
+      and the same key, then save for everyone.
+After changing the script later: Deploy > Manage deployments > pencil >
+Version: New version > Deploy. The URL stays the same.
 
 
 GOOGLE PROJECTS (THEIR ITAD REPORT LAYOUT)

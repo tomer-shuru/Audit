@@ -10,6 +10,7 @@ import { ICONS } from './icons.js';
 import { grid } from './grid.js';
 import { changed, recompute, render, setTab, undoEdit, redoEdit } from './app.js';
 import { copySheet, downloadReport } from './export.js';
+import { projectSheet, sendToSheet, readAhead } from './gsheet.js';
 import { openPopover, closePopover } from './popover.js';
 import {
   SHEETS, view, sheetKinds, currentSheet, isMain, rowKey, viewColumns, colName, hiddenCols, setHidden,
@@ -81,6 +82,7 @@ export function renderReport(main) {
       ${hidden.size ? `<button class="btn small ghost" id="showCols" title="${esc([...hidden].join(', '))}">${plural(hidden.size, 'hidden column')} · Show all</button>` : ''}
       <span class="spacer"></span>
       <span class="split${filtered ? ' filtered' : ''}"><button class="btn primary" id="copyRows" ${rows.length ? '' : 'disabled'} title="Copy the ${filtered ? `${plural(rows.length, 'row')} the filters show` : 'rows'} and the columns shown, to paste into the Google Sheet">${filtered ? 'Copy filtered rows' : 'Copy all rows'}</button><button class="btn primary" id="copyMenu" data-popover="copy" ${rows.length ? '' : 'disabled'} title="More ways to copy">${ICONS.menu}</button></span>
+      ${mainSheet && projectSheet() ? `<button class="btn" id="sendSheet" ${rows.length ? '' : 'disabled'} title="Put the ${filtered ? 'rows the filters show' : 'rows'} into the project's Google Sheet, each on its item's row. Shows what would change first.">Send to Google Sheet</button>` : ''}
       ${sims ? `<button class="btn" id="dlMenu" data-popover="download" ${r.rows.length ? '' : 'disabled'}>Download ${ICONS.menu}</button>`
         : `<button class="btn" id="dlReport" ${r.rows.length ? '' : 'disabled'} title="An Excel file with the ${SHEETS[sheetKinds()[0]].title} and Locked and Faulty, as shown">Download Excel</button>`}
     </div>
@@ -109,6 +111,8 @@ export function renderReport(main) {
   if (showCols) showCols.onclick = () => { setHidden(kind, []); recompute(); render(); };
   main.querySelectorAll('[data-filter]').forEach(b => b.onclick = () => openFilterMenu(b, kind, b.dataset.filter, cols));
   $('#copyRows').onclick = () => copySheet(kind);
+  $('#sendSheet')?.addEventListener('click', () => sendToSheet());
+  if (mainSheet) readAhead(); // so Send shows what it would change at once
   $('#copyMenu').onclick = e => menu(e.currentTarget, 'copy', [['Copy with headers', () => copySheet(kind, { withHeader: true })]]);
   if (sims) {
     $('#dlMenu').onclick = e => menu(e.currentTarget, 'download', [
