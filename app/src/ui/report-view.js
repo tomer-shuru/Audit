@@ -44,15 +44,18 @@ export const viewColumns = kind => [LOOKUP, ...exportCols(kind)];
 export const colName = ([, label, name]) => name ?? label;
 
 // ---------- rows ----------
-// items with a red or yellow check: { [item]: { level, texts } } (notes don't count)
+// items with a red or yellow check: { [item]: { level, texts } } (notes don't count).
+// A check about several items (items: Diagnostics is empty) counts for each of them.
 export function rowIssues() {
   const issues = new Map();
   for (const w of state.report.warnings) {
     if (!w.item || w.level === 'info' || w.level === 'sims') continue;
-    const cur = issues.get(w.item) || { level: 'warn', texts: [] };
-    if (w.level === 'error') cur.level = 'error';
-    cur.texts.push(w.text);
-    issues.set(w.item, cur);
+    for (const item of w.items ?? [w.item]) {
+      const cur = issues.get(item) || { level: 'warn', texts: [] };
+      if (w.level === 'error') cur.level = 'error';
+      cur.texts.push(w.text);
+      issues.set(item, cur);
+    }
   }
   return issues;
 }

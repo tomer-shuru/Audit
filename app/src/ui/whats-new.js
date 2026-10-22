@@ -10,6 +10,9 @@ import { load, store, STORE_PROJECT } from './state.js';
 import { $, esc, plural } from './util.js';
 
 export const UPDATES = [
+  { id: 10, date: '2026-10-22', items: [
+    'The Final Report lists items with empty Diagnostics in one line, as ranges: "Diagnostics is empty: GG01–GG05, GG09 (6 items)". Their rows are still marked, and clicking the line shows the first one.',
+  ] },
   { id: 9, date: '2026-10-22', items: [
     '<b>Send to Google Sheet</b> opens at once: the Final Report reads the sheet in the background. If someone changed a cell in the sheet since then, nothing is written; the window shows what the sheet has now, to check and send again.',
     'New rows added by Send look like the sheet\'s normal rows (not like its header).',

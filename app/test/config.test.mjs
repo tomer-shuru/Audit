@@ -98,9 +98,9 @@ test('Mac remote lock: "Remote Lock", "Remote Locked" and any case count', () =>
 test('checks can change level or be turned off', () => {
   const p = project({ manual: { GG01: { sn: 'A' }, GG03: { sn: 'B', diagnostics: 'ok' } } });
   const levels = r => r.warnings.map(w => [w.text.replace(/:.*/, ''), w.level]);
-  assert.deepEqual(levels(buildReport(p, models)), [['No data yet for', 'warn'], ['GG01', 'warn']]);
+  assert.deepEqual(levels(buildReport(p, models)), [['No data yet for', 'warn'], ['Diagnostics is empty', 'warn']]);
   const r = buildReport(p, models, cfg(c => { c.checks.diagnosticsEmpty = 'error'; c.checks.numberingGaps = 'off'; }));
-  assert.deepEqual(levels(r), [['GG01', 'error']]);
+  assert.deepEqual(levels(r), [['Diagnostics is empty', 'error']]);
 });
 
 test('asset tags meaning "no tag"', () => {

@@ -12,7 +12,7 @@ const texts = r => r.warnings.map(w => w.text);
 
 test('warns when Diagnostics is empty, until it is filled in', () => {
   const r1 = buildReport(project({ manual: { GG01: { sn: 'A1' } } }), models);
-  assert.ok(texts(r1).includes('GG01: Diagnostics is empty'));
+  assert.ok(texts(r1).includes('Diagnostics is empty: GG01'));
   const r2 = buildReport(project({ manual: { GG01: { sn: 'A1' } }, overrides: { GG01: { diagnostics: 'ok' } } }), models);
   assert.ok(!texts(r2).some(t => t.includes('Diagnostics is empty')));
 });
@@ -208,4 +208,16 @@ test('Mac models not in the Dictionary are listed: from Mac reports, and Apple o
   const note = r.warnings.find(w => w.text.startsWith('Apple models from Blancco'));
   assert.equal(note.level, 'info');
   assert.match(note.text, /MacBook Air \(M9, 15-inch, 2031\) \(GG02, GG03\)/);
+});
+
+test('Diagnostics is empty: one check for all items, as ranges per item group', () => {
+  const m = {};
+  for (const c of ['GG01', 'GG02', 'GG03', 'GG05', 'GG07', 'GG08', 'GG-M01', 'GG-M02', 'X9']) m[c] = { sn: c };
+  m.GG04 = { sn: 'GG04', diagnostics: 'ok' }; m.GG06 = { sn: 'GG06', diagnostics: 'ok' };
+  const r = buildReport(project({ manual: m }), models);
+  const empty = r.warnings.filter(w => w.text.startsWith('Diagnostics is empty'));
+  assert.equal(empty.length, 1);
+  assert.equal(empty[0].text, 'Diagnostics is empty: GG01–GG03, GG05, GG07–GG08, GG-M01–GG-M02, X9 (9 items)');
+  assert.equal(empty[0].item, 'GG01'); // clicking it shows the first
+  assert.deepEqual(empty[0].items, ['GG01', 'GG02', 'GG03', 'GG05', 'GG07', 'GG08', 'GG-M01', 'GG-M02', 'X9']);
 });

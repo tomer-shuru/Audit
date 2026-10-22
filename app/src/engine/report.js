@@ -125,6 +125,8 @@ export function buildReport(project, models, config, sheet = null) {
   for (const k of outside) add('outsideNumbering', { item: k, text: `${k}: item code doesn't follow this project's numbering (${itemCode(settings, firstNumber)}, ${itemCode(settings, firstNumber + 1)}…)` });
   warnings.push(...numberingChecks(settings, sorted, cfg));
 
+  const noDiagnostics = []; // items whose Diagnostics is empty
+
   // Mac models that aren't in the Dictionary's Models list: { [model ID]: { id, type, source, items } }
   const unknownModels = {};
   const noteUnknown = (id, type, source, code) => {
@@ -201,9 +203,15 @@ export function buildReport(project, models, config, sheet = null) {
       if (w && !m) add('noErasureWindows', { item: code, text: `${code}: no Blancco erasure (Windows report, S.N. ${row.sn})` });
       else add('noErasureMac', { item: code, text: `${code}: no Blancco erasure found for S.N. ${row.sn}` });
     }
-    if (isBlank(row.diagnostics)) add('diagnosticsEmpty', { item: code, text: `${code}: Diagnostics is empty` });
+    if (isBlank(row.diagnostics)) noDiagnostics.push(code);
     return row;
   });
+
+  // one check for all of them, as ranges (GG01–GG05, GG09); items: every one, for their rows on the Final Report
+  if (noDiagnostics.length) {
+    add('diagnosticsEmpty', { item: noDiagnostics[0], items: noDiagnostics,
+      text: `Diagnostics is empty: ${codeRanges(settings, noDiagnostics).join(', ')}${noDiagnostics.length > 1 ? ` (${noDiagnostics.length} items)` : ''}` });
+  }
 
   // Asset tags and serial numbers are unique per device: flag any used by more than one item (a device scanned
   // twice, or two tools giving it different item codes). Dashes, N/A, none… mean there is none: config "No asset tag" values
@@ -312,6 +320,24 @@ export function numberingChecks(settings, keys, config) {
     if (gaps.length) push('numberingGaps', { item: name(gaps[0]), text: `No data yet for: ${compressRanges(gaps).map(([a, b]) => a === b ? name(a) : `${name(a)}–${name(b)}`).join(', ')}` });
   }
   return out;
+}
+
+// Item codes written as ranges, each item group on its own in the usual order: GG01–GG05, GG09, MS-M02–MS-M03.
+// Codes outside the numbering come last, as they are.
+export function codeRanges(settings, codes) {
+  const main = itemKey(settings.prefix);
+  const byGroup = new Map(), rest = [];
+  for (const code of codes) {
+    const c = codeGroup(settings, itemKey(code));
+    if (c) pushTo(byGroup, c.group, c.n); else rest.push(code);
+  }
+  const out = [];
+  for (const group of [...byGroup.keys()].sort(compareGroups(settings))) {
+    const name = n => itemCode(settings, n, group === main ? undefined : group);
+    const nums = [...new Set(byGroup.get(group))].sort((a, b) => a - b);
+    out.push(...compressRanges(nums).map(([a, b]) => (a === b ? name(a) : `${name(a)}–${name(b)}`)));
+  }
+  return [...out, ...rest];
 }
 
 function compressRanges(nums) {
